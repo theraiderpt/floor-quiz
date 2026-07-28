@@ -1,0 +1,30 @@
+{
+  "name": "floor-quiz",
+  "version": "1.0.0",
+  "description": "Live team quiz for contact centre floors. Host screen plus phones, real-time over WebSockets.",
+  "type": "module",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "smoke": "node test/smoke.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.5.0",
+    "compression": "^1.7.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^8.0.0",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.1"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
+  }
+}
