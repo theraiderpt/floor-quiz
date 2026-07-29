@@ -1,7 +1,7 @@
 {
   "name": "floor-quiz",
   "version": "1.0.0",
-  "description": "Live team quiz for contact centre floors. Host screen plus phones, real-time over WebSockets.",
+  "description": "CX Quiz: live team quiz for contact centre floors. Host screen plus phones, real-time over WebSockets.",
   "type": "module",
   "main": "server/index.js",
   "engines": {

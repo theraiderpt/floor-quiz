@@ -13,13 +13,14 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fq-load-"));
 process.env.NODE_ENV = "test";
 process.env.PORT = "0";
 process.env.HOST = "127.0.0.1";
-process.env.HOST_PASSWORD = "load-test";
 process.env.SESSION_SECRET = "0".repeat(64);
 process.env.DB_PATH = path.join(tmp, "load.db");
 process.env.PUBLIC_URL = "http://127.0.0.1";
 process.env.MAX_PLAYERS = String(COUNT + 10);
 
 const { server } = await import("../server/index.js");
+const { store } = await import("../server/db.js");
+const { hashPassword } = await import("../server/auth.js");
 const { io: ioc } = await import("socket.io-client");
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -29,10 +30,13 @@ const mb = b => (b / 1024 / 1024).toFixed(1);
 await new Promise(r => (server.listening ? r() : server.once("listening", r)));
 const base = "http://127.0.0.1:" + server.address().port;
 
+/* Host accounts live in the database now, not a shared .env password. */
+const loadHost = store.hosts.create("load-test@smoke.test", COUNT + 10);
+store.hosts.setPassword(loadHost.id, hashPassword("load-test-pass"));
 const login = await fetch(base + "/api/login", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ password: "load-test" })
+  body: JSON.stringify({ email: "load-test@smoke.test", password: "load-test-pass" })
 });
 const cookie = login.headers.get("set-cookie").split(";")[0];
 

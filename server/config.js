@@ -11,7 +11,6 @@ export const config = {
   env: process.env.NODE_ENV || "development",
   port: Number(process.env.PORT || 3000),
   host: process.env.HOST || "127.0.0.1",
-  hostPassword: process.env.HOST_PASSWORD || "",
   sessionSecret: process.env.SESSION_SECRET || "",
   publicUrl: (process.env.PUBLIC_URL || "").replace(/\/+$/, ""),
   dbPath: process.env.DB_PATH || path.join(ROOT, "data", "floor-quiz.db"),
@@ -30,11 +29,20 @@ export const SCORING = {
   STREAK_CAP: 5
 };
 
-/* Fail loudly rather than booting a public server with default secrets. */
+/* How long the room sits on the reveal (answer breakdown) and the standings
+   screen before the game moves on by itself. A host click still jumps ahead
+   immediately; these just mean nobody has to. */
+export const FLOW = {
+  revealMs: Number(process.env.REVEAL_MS || 6000),
+  scoresMs: Number(process.env.SCORES_MS || 5000)
+};
+
+/* Fail loudly rather than booting a public server with default secrets.
+   HOST_PASSWORD is no longer read anywhere: host and admin accounts live in
+   the database now, hashed with server/auth.js. */
 const weak = ["", "change-me-before-you-deploy", "change-me-too"];
 if (config.isProd) {
   const problems = [];
-  if (weak.includes(config.hostPassword)) problems.push("HOST_PASSWORD");
   if (weak.includes(config.sessionSecret) || config.sessionSecret.length < 32) problems.push("SESSION_SECRET");
   if (!config.publicUrl) problems.push("PUBLIC_URL");
   if (problems.length) {

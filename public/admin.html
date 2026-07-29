@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101828">
+<title>CX Quiz — admin</title>
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<section class="screen on" id="s-login">
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><span class="k">admin console</span></span></div>
+  <div class="stage center">
+    <h1>Admin sign in</h1>
+    <div class="field" style="width:min(340px,88vw)">
+      <label for="aEmail">Email</label>
+      <input class="inp" id="aEmail" type="email" autocomplete="username">
+    </div>
+    <div class="field" style="width:min(340px,88vw)">
+      <label for="aPw">Password</label>
+      <input class="inp" id="aPw" type="password" autocomplete="current-password">
+    </div>
+    <p class="err" id="loginErr"></p>
+    <button class="btn big" id="loginGo">Sign in</button>
+  </div>
+</section>
+
+<!-- DASHBOARD (shared strip + tabs) -->
+<section class="screen" id="s-dash">
+  <div class="strip">
+    <span class="dot idle"></span>
+    <span class="cell"><span class="v">CX Quiz admin</span></span>
+    <span class="spacer"></span>
+    <span class="cell"><button class="k tab" data-tab="overview" style="text-transform:uppercase;letter-spacing:.09em">Overview</button></span>
+    <span class="cell"><button class="k tab" data-tab="hosts" style="text-transform:uppercase;letter-spacing:.09em">Hosts</button></span>
+    <span class="cell"><button class="k tab" data-tab="categories" style="text-transform:uppercase;letter-spacing:.09em">Categories</button></span>
+    <span class="cell"><button class="k tab" data-tab="bank" style="text-transform:uppercase;letter-spacing:.09em">Question bank</button></span>
+    <span class="cell"><button class="k" id="logout" style="text-transform:uppercase;letter-spacing:.09em">Sign out</button></span>
+  </div>
+
+  <!-- overview -->
+  <div class="stage tabpage" id="tab-overview">
+    <div><p class="eyebrow">Overview</p><h2>Everything running right now</h2></div>
+    <div class="picker" id="statCards"></div>
+    <hr class="divider">
+    <div><p class="eyebrow">Recent games</p><h2>Across all hosts</h2></div>
+    <div class="qlist" id="gamesList"></div>
+  </div>
+
+  <!-- hosts -->
+  <div class="stage tabpage" id="tab-hosts">
+    <div class="row between">
+      <div><p class="eyebrow">Hosts</p><h2>Who can run games</h2></div>
+    </div>
+    <div class="panel">
+      <div class="editgrid">
+        <div class="field">
+          <label for="hEmail">Email</label>
+          <input class="inp" id="hEmail" type="email" placeholder="host@company.com">
+        </div>
+        <div class="field">
+          <label for="hMax">Player limit</label>
+          <input class="inp" id="hMax" type="number" min="1" max="2000" value="400">
+        </div>
+      </div>
+      <div class="row"><button class="btn" id="hCreate">+ Create host</button></div>
+      <p class="note" id="hInviteNote"></p>
+    </div>
+    <div class="qlist" id="hostsList"></div>
+  </div>
+
+  <!-- categories -->
+  <div class="stage tabpage" id="tab-categories">
+    <div><p class="eyebrow">Categories</p><h2>Organize the quiz library</h2></div>
+    <div class="row">
+      <input class="inp" id="cName" placeholder="Category name" style="max-width:260px">
+      <button class="btn" id="cCreate">+ Add category</button>
+    </div>
+    <div class="qlist" id="categoriesList"></div>
+  </div>
+
+  <!-- bank -->
+  <div class="stage tabpage" id="tab-bank">
+    <div class="row between">
+      <div><p class="eyebrow">Question bank</p><h2>Pre-written questions hosts can pull in</h2></div>
+      <select class="inp" id="bFilter" style="max-width:260px"></select>
+    </div>
+    <div class="panel">
+      <div class="field">
+        <label for="bQ">Question</label>
+        <textarea class="inp" id="bQ" rows="2" maxlength="200"></textarea>
+      </div>
+      <div class="editgrid">
+        <div class="field">
+          <label for="bCategory">Category</label>
+          <select class="inp" id="bCategory"></select>
+        </div>
+        <div class="field">
+          <label for="bTime">Seconds to answer</label>
+          <select class="inp" id="bTime"><option>10</option><option selected>20</option><option>30</option><option>45</option><option>60</option></select>
+        </div>
+        <div class="field">
+          <label for="bType">Answer options</label>
+          <select class="inp" id="bType"><option value="4">Four choices</option><option value="2">True / false</option></select>
+        </div>
+      </div>
+      <div class="qlist" id="bOpts"></div>
+      <div class="row"><button class="btn" id="bAdd">+ Add to bank</button></div>
+    </div>
+    <div class="qlist" id="bankList"></div>
+  </div>
+</section>
+
+<div class="offline" id="offline" style="display:none"></div>
+
+<script src="/js/admin.js"></script>
+</body>
+</html>

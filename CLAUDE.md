@@ -1,4 +1,4 @@
-# Floor Quiz
+# CX Quiz
 
 Live team quiz. Host screen on a projector, players answer on phones over WebSockets.
 Production domain: **cxquiz.tech**. Runs on a Hostinger KVM 2 VPS, Ubuntu 24.04.
@@ -40,7 +40,7 @@ Production domain: **cxquiz.tech**. Runs on a Hostinger KVM 2 VPS, Ubuntu 24.04.
 ## Commands
 
 ```bash
-npm run smoke            # full game, 3 players, 36 assertions. Run before every restart.
+npm run smoke            # full game + admin/host/invite/quota checks, 58 assertions. Run before every restart.
 node test/load.js 150    # concurrent player load test
 sudo -u deploy -i pm2 logs floor-quiz --lines 50 --nostream
 sudo -u deploy -i pm2 restart floor-quiz
