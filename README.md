@@ -1,4 +1,4 @@
-# Floor Quiz
+# CX Quiz
 
 A self-hosted live team quiz. One screen at the front, everyone else answers on their phone, fastest correct answer scores highest. Built to replace a third-party quiz tool for internal engagement sessions, with all data staying on your own server.
 
@@ -6,7 +6,12 @@ Live at **cxquiz.tech**. Deployment: run `bash deploy/setup.sh` on the VPS, or f
 
 ## What it does
 
-- Host console with a saved quiz library, question editor, and CSV or JSON import
+- Admin panel to create host accounts (email invite link, per-host player quota),
+  manage quiz categories, and see an overview of every host's games
+- A pre-written question bank (Contact Center Industry, Customer Experience,
+  Foundever) hosts can pull from, on top of writing their own
+- Host console with a saved quiz library, Kahoot-style question editor, and CSV or
+  JSON import
 - Four-choice and true/false questions, per-question time limits from 5 to 120 seconds
 - Room PIN plus a QR code on the lobby screen so a large room joins in seconds
 - Live answered counter while a question is open, answer distribution on reveal
@@ -27,16 +32,22 @@ Live game state is deliberately in memory. A quiz session lasts fifteen minutes 
 
 ```
 server/
-  config.js   env loading, scoring constants, refuses to boot on weak secrets
-  db.js       SQLite schema and prepared statements
-  game.js     Game state machine and the room registry
-  index.js    HTTP routes, auth, and the socket event handlers
+  config.js               env loading, scoring constants, refuses to boot on weak secrets
+  auth.js                 password hashing (scrypt) and invite tokens
+  db.js                   SQLite schema and prepared statements
+  question-bank-seed.js   starter question bank, seeded once on first boot
+  game.js                 Game state machine and the room registry
+  index.js                HTTP routes, auth, and the socket event handlers
 public/
-  index.html  player app: join, answer, result
-  host.html   host console: library, editor, lobby, game screens
+  index.html   player app: join, answer, result
+  host.html    host console: library, editor, lobby, game screens
+  admin.html   admin panel: hosts, categories, question bank, games overview
+  invite.html  invite link landing page: new host sets their password
+scripts/
+  create-admin.mjs  bootstrap or reset the admin account, run manually over SSH
 deploy/       nginx config, PM2 config, deployment runbook
 test/
-  smoke.js    end-to-end game, 36 assertions
+  smoke.js    end-to-end game plus admin/host/invite/quota checks, 58 assertions
   load.js     concurrent player load test
 ```
 
@@ -52,16 +63,20 @@ Scoring happens on the server and nowhere else. The correct answer is not sent t
 
 ```bash
 npm install
-cp .env.example .env      # set HOST_PASSWORD, leave NODE_ENV unset
+cp .env.example .env         # leave NODE_ENV unset
 npm run dev
+node scripts/create-admin.mjs you@example.com    # bootstrap your admin login
 ```
 
-Host console at `http://localhost:3000/host`, player app at `http://localhost:3000`. To test properly, open the player app on your phone using your laptop's LAN address with both on the same wifi.
+Admin panel at `http://localhost:3000/admin` to create host accounts. Host console at
+`http://localhost:3000/host`, player app at `http://localhost:3000`. To test properly,
+open the player app on your phone using your laptop's LAN address with both on the
+same wifi.
 
 ## Tests
 
 ```bash
-npm run smoke          # full game with three players, 36 assertions
+npm run smoke          # full game with three players, plus admin/host/invite/quota checks, 58 assertions
 node test/load.js 150  # 150 concurrent players
 node test/load.js 400  # headroom check
 ```
@@ -95,5 +110,6 @@ Leave C and D blank for a two-option question. JSON export from the host console
 
 - Single process. Game state is in memory, so this does not cluster without a Redis adapter.
 - A server restart ends any game in progress.
-- Anyone with the host password can run games. It is one shared password, not per-user accounts. If you need an audit trail of who ran what, that is the first thing to add.
+- Host invites are links the admin generates and sends manually; there is no email-sending
+  integration yet, so that step is on you.
 - Names are free text and are stored in the results table. Tell people to use a first name and team.

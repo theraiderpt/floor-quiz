@@ -1,10 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { SCORING, config } from "./config.js";
+import { SCORING, FLOW, config } from "./config.js";
 import { store } from "./db.js";
 
 export const PHASES = ["lobby", "question", "reveal", "scores", "final"];
 
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+const isValidEmail = s => typeof s === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
+
+/* ~350KB of base64, comfortably under a resized/compressed photo, while
+   keeping a whole image-heavy quiz well inside the raised body/socket limits
+   in server/index.js. */
+const MAX_IMG_CHARS = 350_000;
 
 /* Scoring lives server side and nowhere else. The client is never told the
    correct answer until the question is closed, and never computes its own
@@ -36,19 +42,28 @@ export function sanitiseQuiz(input) {
       const text = String(q?.q || "").trim().slice(0, 200);
       const seconds = clamp(Number(q?.t) || 20, 5, 120);
       const correct = clamp(Number(q?.correct) || 0, 0, Math.max(0, opts.length - 1));
-      return opts.length >= 2 && text ? { q: text, t: seconds, opts, correct } : null;
+      const img = typeof q?.img === "string" && q.img.startsWith("data:image/") && q.img.length <= MAX_IMG_CHARS
+        ? q.img : null;
+      return opts.length >= 2 && text ? { q: text, t: seconds, opts, correct, img } : null;
     })
     .filter(Boolean)
     .slice(0, 100);
-  return { title, questions };
+  const joinMode = input?.joinMode === "name_email" ? "name_email" : "name";
+  return { title, questions, joinMode };
 }
 
 export class Game {
-  constructor({ pin, quiz, quizId, io }) {
+  constructor({ pin, quiz, quizId, io, hostId, maxPlayers }) {
     this.pin = pin;
     this.io = io;
     this.quiz = quiz;
     this.quizId = quizId || null;
+    this.hostId = hostId;
+    /* 'name_email' means the host wants a real identity on file, not just a
+       display name - checked at join time in addPlayer(). */
+    this.joinMode = quiz.joinMode === "name_email" ? "name_email" : "name";
+    /* The host's own quota, but never above the process-wide safety ceiling. */
+    this.maxPlayers = Math.min(maxPlayers || config.maxPlayers, config.maxPlayers);
     this.phase = "lobby";
     this.qIndex = -1;
     this.players = new Map();      // playerId -> player
@@ -57,7 +72,7 @@ export class Game {
     this.questionEndsAt = 0;
     this.createdAt = Date.now();
     this.touchedAt = Date.now();
-    this.sessionId = store.sessions.open(pin, this.quizId, quiz.title);
+    this.sessionId = store.sessions.open(pin, this.quizId, quiz.title, hostId);
     this.finished = false;
   }
 
@@ -70,7 +85,7 @@ export class Game {
 
   /* ------------------------------------------------ players ------------- */
 
-  addPlayer(socket, rawName, existingId) {
+  addPlayer(socket, rawName, existingId, rawEmail) {
     this.touch();
     if (existingId && this.players.has(existingId)) {
       const p = this.players.get(existingId);
@@ -79,10 +94,15 @@ export class Game {
       return { player: p, rejoined: true };
     }
     if (this.phase !== "lobby") return { error: "That game has already started." };
-    if (this.players.size >= config.maxPlayers) return { error: "This game is full." };
+    if (this.players.size >= this.maxPlayers) return { error: "This game is full." };
 
     let name = cleanName(rawName);
     if (!name) return { error: "Add a name so the host can see you." };
+
+    const email = String(rawEmail || "").trim().toLowerCase();
+    if (this.joinMode === "name_email" && !isValidEmail(email)) {
+      return { error: "This quiz needs your email to join." };
+    }
 
     const taken = new Set([...this.players.values()].map(p => p.name.toLowerCase()));
     if (taken.has(name.toLowerCase())) {
@@ -94,6 +114,7 @@ export class Game {
     const player = {
       id: randomUUID(),
       name,
+      email: isValidEmail(email) ? email : null,
       socketId: socket.id,
       connected: true,
       score: 0,
@@ -137,6 +158,7 @@ export class Game {
       .map(p => ({
         id: p.id,
         name: p.name,
+        email: p.email || null,
         score: p.score,
         correctCount: p.correctCount,
         answered: p.answered
@@ -171,7 +193,7 @@ export class Game {
 
   broadcastLobby() {
     this.io.to(this.hostRoom).emit("lobby", {
-      players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, connected: p.connected })),
+      players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, email: p.email || null, connected: p.connected })),
       count: this.players.size
     });
   }
@@ -195,6 +217,10 @@ export class Game {
     this.questionEndsAt = Date.now() + q.t * 1000;
     this.broadcastState();
     this.io.to(this.hostRoom).emit("answered", { answered: 0, connected: this.connectedCount() });
+    /* Sent only to the host/projector screen, on its own channel, never as
+       part of the shared player "state" event - phones never pull down the
+       image bytes for a picture they don't display. */
+    if (q.img) this.io.to(this.hostRoom).emit("question:image", { qIndex: index, img: q.img });
     this.timer = setTimeout(() => this.closeQuestion(), q.t * 1000 + 250);
   }
 
@@ -280,15 +306,21 @@ export class Game {
         of: board.length
       });
     }
+
+    /* Auto-advance by default so the host never has to touch the console
+       mid-game; a manual "next" click (below) just gets there sooner. */
+    this.timer = setTimeout(() => this.next(), FLOW.revealMs);
   }
 
   next() {
     this.touch();
+    this.clearTimer();
     if (this.phase === "reveal") {
       if (this.qIndex + 1 < this.total) {
         this.phase = "scores";
         this.broadcastState();
         this.io.to(this.hostRoom).emit("scores", { board: this.standings().slice(0, 10) });
+        this.timer = setTimeout(() => this.next(), FLOW.scoresMs);
       } else {
         this.end();
       }
@@ -358,9 +390,9 @@ export class Rooms {
     throw new Error("No free PINs. Too many games are running at once.");
   }
 
-  create(quiz, quizId) {
+  create(quiz, quizId, hostId, maxPlayers) {
     const pin = this.newPin();
-    const game = new Game({ pin, quiz, quizId, io: this.io });
+    const game = new Game({ pin, quiz, quizId, io: this.io, hostId, maxPlayers });
     this.games.set(pin, game);
     return game;
   }

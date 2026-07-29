@@ -34,6 +34,17 @@ let rafId = null;
 const prefill = new URLSearchParams(location.search).get("pin");
 if (prefill && /^\d{4}$/.test(prefill)) $("jPin").value = prefill;
 
+/* Purely a fun display-name suggestion, never the identity key - a host
+   that requires email still gets a real identity via the email field. */
+const NICK_ADJ = ["Turbo", "Sneaky", "Bubbly", "Zesty", "Mighty", "Chatty", "Breezy", "Cosmic", "Plucky", "Jolly", "Nifty", "Swift", "Dapper", "Spicy", "Loyal", "Clever"];
+const NICK_NOUN = ["Panda", "Llama", "Waffle", "Falcon", "Otter", "Comet", "Ninja", "Biscuit", "Penguin", "Rocket", "Walrus", "Yeti", "Koala", "Pretzel", "Badger", "Narwhal"];
+function randomNickname() {
+  const a = NICK_ADJ[Math.floor(Math.random() * NICK_ADJ.length)];
+  const n = NICK_NOUN[Math.floor(Math.random() * NICK_NOUN.length)];
+  return `${a} ${n}`;
+}
+$("jNick").addEventListener("click", () => { $("jName").value = randomNickname(); });
+
 $("jPin").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); });
 $("jName").addEventListener("keydown", e => { if (e.key === "Enter") join(); });
 $("jGo").addEventListener("click", () => join());
@@ -42,13 +53,14 @@ $("fAgain").addEventListener("click", () => { Session.clear(); location.href = "
 function join(rejoinWith) {
   const pin = rejoinWith ? rejoinWith.pin : $("jPin").value.trim();
   const name = rejoinWith ? rejoinWith.name : $("jName").value.trim();
+  const email = rejoinWith ? rejoinWith.email : $("jEmail").value.trim();
   $("jErr").textContent = "";
 
   if (!/^\d{4}$/.test(pin)) return ($("jErr").textContent = "The PIN is four digits.");
   if (!name) return ($("jErr").textContent = "Add a name so the host can see you.");
 
   $("jGo").disabled = true;
-  socket.emit("player:join", { pin, name, playerId: rejoinWith?.playerId }, res => {
+  socket.emit("player:join", { pin, name, email, playerId: rejoinWith?.playerId }, res => {
     $("jGo").disabled = false;
     if (!res || res.error) {
       Session.clear();
@@ -60,7 +72,7 @@ function join(rejoinWith) {
     me.playerId = res.playerId;
     me.name = res.name;
     me.score = res.score || 0;
-    Session.save({ pin, name: res.name, playerId: res.playerId });
+    Session.save({ pin, name: res.name, email, playerId: res.playerId });
 
     $("wName").textContent = me.name;
     $("rName").textContent = me.name;

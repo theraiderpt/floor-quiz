@@ -1,6 +1,8 @@
-/* End-to-end check: boots the real server, signs in as host, joins three
-   players, plays a two-question game and verifies scoring, ordering and the
-   CSV export. Run with `npm run smoke`. Uses a throwaway database. */
+/* End-to-end check: boots the real server, signs in as admin and as host,
+   walks the invite lifecycle, checks cross-host isolation and quota
+   enforcement, then plays a two-question game with three players and
+   verifies scoring, ordering and the CSV export. Run with `npm run smoke`.
+   Uses a throwaway database. */
 
 import fs from "node:fs";
 import os from "node:os";
@@ -10,13 +12,19 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fq-"));
 process.env.NODE_ENV = "test";
 process.env.PORT = "0";
 process.env.HOST = "127.0.0.1";
-process.env.HOST_PASSWORD = "test-password";
 process.env.SESSION_SECRET = "0".repeat(64);
 process.env.DB_PATH = path.join(tmp, "test.db");
 process.env.PUBLIC_URL = "http://127.0.0.1";
 
 const { server } = await import("../server/index.js");
+const { store } = await import("../server/db.js");
+const { hashPassword } = await import("../server/auth.js");
+const { FLOW } = await import("../server/config.js");
 const { io: ioc } = await import("socket.io-client");
+
+/* Smallest possible valid PNG (1x1 transparent), used to check picture
+   questions round-trip without needing a real image file on disk. */
+const TINY_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
 let failures = 0;
 const check = (label, cond, extra = "") => {
@@ -24,6 +32,7 @@ const check = (label, cond, extra = "") => {
   else { failures++; console.log("  FAIL " + label + (extra ? "  → " + extra : "")); }
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const cookieOf = res => res.headers.get("set-cookie").split(";")[0];
 
 /* once() would be consumed by the first state event of any phase, and lobby
    traffic from joins and disconnects races us. Listen until the predicate
@@ -44,41 +53,185 @@ await new Promise(r => (server.listening ? r() : server.once("listening", r)));
 const base = "http://127.0.0.1:" + server.address().port;
 console.log("server up on " + base + "\n");
 
-/* ---- host signs in ---- */
+/* ---- seed one admin and one active host directly (test setup, not the
+   behavior under test - the invite lifecycle itself gets its own coverage
+   below with a second host) ---- */
+store.admins.upsert("admin@smoke.test", hashPassword("admin-pass-123"));
+const hostA = store.hosts.create("hosta@smoke.test", 400);
+store.hosts.setPassword(hostA.id, hashPassword("hosta-pass-123"));
+
+/* ---- admin auth ---- */
+const adminBad = await fetch(base + "/api/admin/login", {
+  method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email: "admin@smoke.test", password: "wrong" })
+});
+check("wrong admin password rejected", adminBad.status === 401, "got " + adminBad.status);
+
+const adminLogin = await fetch(base + "/api/admin/login", {
+  method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email: "admin@smoke.test", password: "admin-pass-123" })
+});
+check("admin login returns 200", adminLogin.status === 200, "got " + adminLogin.status);
+const adminCookie = cookieOf(adminLogin);
+
+const overview = await (await fetch(base + "/api/admin/overview", { headers: { Cookie: adminCookie } })).json();
+check("overview reports the seeded host", overview.hosts >= 1, JSON.stringify(overview));
+check("question bank was seeded on first boot", overview.bankQuestions >= 20, JSON.stringify(overview));
+
+const seedCategories = await (await fetch(base + "/api/admin/categories", { headers: { Cookie: adminCookie } })).json();
+check("three starter categories were seeded", seedCategories.length >= 3, JSON.stringify(seedCategories.map(c => c.name)));
+const seedCategoryId = seedCategories[0].id;
+
+/* ---- host A signs in ---- */
 const login = await fetch(base + "/api/login", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ password: "test-password" })
+  method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email: "hosta@smoke.test", password: "hosta-pass-123" })
 });
 check("host login returns 200", login.status === 200, "got " + login.status);
-const cookie = login.headers.get("set-cookie").split(";")[0];
+const cookie = cookieOf(login);
 
 const bad = await fetch(base + "/api/login", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ password: "wrong" })
+  method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email: "hosta@smoke.test", password: "wrong" })
 });
 check("wrong password rejected", bad.status === 401, "got " + bad.status);
 
 const noAuth = await fetch(base + "/api/quizzes");
 check("quiz list needs auth", noAuth.status === 401, "got " + noAuth.status);
 
-/* ---- host socket ---- */
-const host = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
-await new Promise(r => host.on("connect", r));
+/* ---- invite lifecycle: admin creates host B, host B completes it ---- */
+const created = await (await fetch(base + "/api/admin/hosts", {
+  method: "POST", headers: { "Content-Type": "application/json", Cookie: adminCookie },
+  body: JSON.stringify({ email: "hostb@smoke.test", maxPlayers: 2 })
+})).json();
+const token = created.inviteLink.split("/invite/")[1];
+check("invite link was generated", Boolean(token), JSON.stringify(created));
+
+const inviteCheck = await (await fetch(base + "/api/invite/" + token)).json();
+check("invite reports the right email", inviteCheck.valid && inviteCheck.email === "hostb@smoke.test", JSON.stringify(inviteCheck));
+
+const completed = await fetch(base + "/api/invite/" + token + "/complete", {
+  method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ password: "hostb-pass-123" })
+});
+check("invite completion succeeds", completed.status === 200, "got " + completed.status);
+
+const loginB = await fetch(base + "/api/login", {
+  method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email: "hostb@smoke.test", password: "hostb-pass-123" })
+});
+check("newly invited host can log in", loginB.status === 200, "got " + loginB.status);
+const cookieB = cookieOf(loginB);
+
+/* ---- cross-host isolation ---- */
+const quizA = await (await fetch(base + "/api/quizzes", {
+  method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie },
+  body: JSON.stringify({ title: "Host A's quiz", questions: [{ q: "q", t: 10, opts: ["a", "b"], correct: 0 }] })
+})).json();
+const crossEdit = await fetch(base + "/api/quizzes/" + quizA.id, {
+  method: "PUT", headers: { "Content-Type": "application/json", Cookie: cookieB },
+  body: JSON.stringify({ title: "hijacked", questions: quizA.questions })
+});
+check("host B cannot edit host A's quiz", crossEdit.status === 404, "got " + crossEdit.status);
+
+/* ---- category CRUD ---- */
+const newCat = await (await fetch(base + "/api/admin/categories", {
+  method: "POST", headers: { "Content-Type": "application/json", Cookie: adminCookie },
+  body: JSON.stringify({ name: "Smoke Category" })
+})).json();
+const hostCats = await (await fetch(base + "/api/categories", { headers: { Cookie: cookie } })).json();
+check("new category visible to hosts", hostCats.some(c => c.id === newCat.id), JSON.stringify(hostCats));
+const catDel = await (await fetch(base + "/api/admin/categories/" + newCat.id, { method: "DELETE", headers: { Cookie: adminCookie } })).json();
+check("category deleted", catDel.ok === true);
+
+/* ---- bank CRUD ---- */
+const bankQ = await (await fetch(base + "/api/admin/bank", {
+  method: "POST", headers: { "Content-Type": "application/json", Cookie: adminCookie },
+  body: JSON.stringify({ categoryId: seedCategoryId, q: "Smoke bank question", t: 15, opts: ["Right", "Wrong"], correct: 0 })
+})).json();
+const hostBank = await (await fetch(base + "/api/bank?category=" + seedCategoryId, { headers: { Cookie: cookie } })).json();
+check("new bank question visible to hosts", hostBank.some(b => b.id === bankQ.id), JSON.stringify(hostBank.map(b => b.id)));
+const bankDel = await (await fetch(base + "/api/admin/bank/" + bankQ.id, { method: "DELETE", headers: { Cookie: adminCookie } })).json();
+check("bank question deleted", bankDel.ok === true);
+
+/* ---- quota enforcement: host B is capped at 2 players ---- */
+const hostBSocket = ioc(base, { extraHeaders: { Cookie: cookieB }, transports: ["websocket"] });
+await new Promise(r => hostBSocket.on("connect", r));
+const quotaGame = await new Promise(r => hostBSocket.emit("host:create", {
+  quiz: { title: "Quota Test", questions: [{ q: "q", t: 10, opts: ["a", "b"], correct: 0 }] }
+}, r));
+check("quota game opens", /^\d{4}$/.test(quotaGame.pin || ""), JSON.stringify(quotaGame));
+
+const quotaSockets = [];
+const joinResults = [];
+for (let i = 0; i < 3; i++) {
+  const s = ioc(base, { transports: ["websocket"] });
+  await new Promise(r => s.on("connect", r));
+  quotaSockets.push(s);
+  joinResults.push(await new Promise(r => s.emit("player:join", { pin: quotaGame.pin, name: "P" + i }, r)));
+}
+check("first two players admitted under the cap", joinResults[0].playerId && joinResults[1].playerId, JSON.stringify(joinResults));
+check("third player refused once the host's cap is hit", Boolean(joinResults[2].error), JSON.stringify(joinResults[2]));
+hostBSocket.emit("host:end");
+quotaSockets.forEach(s => s.disconnect());
+hostBSocket.disconnect();
+
+/* ---- join modes: "name_email" rejects a join with no/bad email, and a
+   valid email survives into results/CSV. The default "name" mode is
+   covered below by host A's game, where players join with a name only. ---- */
+const hostBSocket2 = ioc(base, { extraHeaders: { Cookie: cookieB }, transports: ["websocket"] });
+await new Promise(r => hostBSocket2.on("connect", r));
+const formalGame = await new Promise(r => hostBSocket2.emit("host:create", {
+  quiz: { title: "Formal Test", joinMode: "name_email", questions: [{ q: "q", t: 10, opts: ["a", "b"], correct: 0 }] }
+}, r));
+check("formal-mode game opens", /^\d{4}$/.test(formalGame.pin || ""), JSON.stringify(formalGame));
+
+const noEmailSocket = ioc(base, { transports: ["websocket"] });
+await new Promise(r => noEmailSocket.on("connect", r));
+const noEmailRes = await new Promise(r => noEmailSocket.emit("player:join", { pin: formalGame.pin, name: "NoEmail" }, r));
+check("formal mode rejects a join with no email", Boolean(noEmailRes.error), JSON.stringify(noEmailRes));
+
+const badEmailRes = await new Promise(r => noEmailSocket.emit("player:join", { pin: formalGame.pin, name: "BadEmail", email: "not-an-email" }, r));
+check("formal mode rejects a join with an invalid email", Boolean(badEmailRes.error), JSON.stringify(badEmailRes));
+
+const formalSocket = ioc(base, { transports: ["websocket"] });
+await new Promise(r => formalSocket.on("connect", r));
+const formalJoin = await new Promise(r => formalSocket.emit("player:join", { pin: formalGame.pin, name: "Emailed Player", email: "Player@Smoke.Test" }, r));
+check("formal mode admits a join with a valid email", Boolean(formalJoin.playerId), JSON.stringify(formalJoin));
+
+const formalFinal = waitFor(hostBSocket2, "final", () => true);
+const formalQ = waitFor(formalSocket, "state", s => s.phase === "question");
+hostBSocket2.emit("host:start");
+await formalQ;
+await sleep(120);
+await new Promise(r => formalSocket.emit("player:answer", { choice: 0 }, r));
+const formalResult = await formalFinal;
+
+const formalCsv = await fetch(base + "/api/sessions/" + formalResult.sessionId + "/csv", { headers: { Cookie: cookieB } });
+const formalCsvText = await formalCsv.text();
+check("email is lower-cased and persisted into the CSV export",
+  formalCsvText.includes("player@smoke.test"), JSON.stringify(formalCsvText));
+
+noEmailSocket.disconnect();
+formalSocket.disconnect();
+hostBSocket2.disconnect();
+
+/* ---- host socket, host A ---- */
+const hostSocket = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
+await new Promise(r => hostSocket.on("connect", r));
 
 const quiz = {
   title: "Smoke Test",
   questions: [
-    { q: "Fast one", t: 6, opts: ["Right", "Wrong", "Also wrong", "Nope"], correct: 0 },
+    { q: "Fast one", t: 6, opts: ["Right", "Wrong", "Also wrong", "Nope"], correct: 0, img: TINY_PNG },
     { q: "Second one", t: 6, opts: ["True", "False"], correct: 1 }
   ]
 };
 
-const created = await new Promise(r => host.emit("host:create", { quiz }, r));
-check("lobby opens with a 4-digit PIN", /^\d{4}$/.test(created.pin || ""), JSON.stringify(created));
-check("QR code generated", typeof created.qr === "string" && created.qr.startsWith("data:image"));
-const PIN = created.pin;
+const gameCreated = await new Promise(r => hostSocket.emit("host:create", { quiz }, r));
+check("lobby opens with a 4-digit PIN", /^\d{4}$/.test(gameCreated.pin || ""), JSON.stringify(gameCreated));
+check("QR code generated", typeof gameCreated.qr === "string" && gameCreated.qr.startsWith("data:image"));
+const PIN = gameCreated.pin;
 
 /* ---- three players join ---- */
 const names = ["Ana", "Kostas", "Marta"];
@@ -107,16 +260,21 @@ ghost.disconnect();
 
 /* ---- question one ---- */
 const reveals = [];
-host.on("reveal", d => reveals.push(d));
+hostSocket.on("reveal", d => reveals.push(d));
 const scoreEvents = [];
-host.on("scores", d => scoreEvents.push(d));
+hostSocket.on("scores", d => scoreEvents.push(d));
 const finals = [];
-host.on("final", d => finals.push(d));
+hostSocket.on("final", d => finals.push(d));
+const questionImages = [];
+hostSocket.on("question:image", d => questionImages.push(d));
 
 const q1 = waitFor(players[0].socket, "state", s => s.phase === "question");
-host.emit("host:start");   // deliberately no ack: guards the short-circuit bug
+hostSocket.emit("host:start");   // deliberately no ack: guards the short-circuit bug
 await q1;
 await sleep(120);
+
+check("a question's picture is sent to the host on its own channel",
+  questionImages.some(d => d.qIndex === 0 && d.img === TINY_PNG), JSON.stringify(questionImages));
 
 /* Ana answers correctly and fast, Kostas correctly but slow, Marta wrong. */
 await new Promise(r => players[0].socket.emit("player:answer", { choice: 0 }, r));
@@ -141,13 +299,13 @@ check("player is told the correct index", marR.correctIndex === 0 && marR.correc
 check("leader is ranked first", anaR.rank === 1, "rank " + anaR.rank);
 
 /* ---- standings, then question two ---- */
-host.emit("host:next");    // deliberately no ack
+hostSocket.emit("host:next");    // deliberately no ack
 await sleep(300);
 check("standings emitted", scoreEvents.length === 1);
 check("standings ordered by score", scoreEvents[0]?.board[0]?.name === "Ana", JSON.stringify(scoreEvents[0]?.board.map(p => p.name)));
 
 const q2 = waitFor(players[0].socket, "state", s => s.phase === "question" && s.qIndex === 1);
-host.emit("host:next");
+hostSocket.emit("host:next");
 await q2;
 await sleep(120);
 
@@ -158,9 +316,10 @@ await sleep(900);
 check("all-answered closes the question early", Date.now() - t0 < 3000 && reveals.length === 2,
   "elapsed=" + (Date.now() - t0) + "ms reveals=" + reveals.length);
 
-host.emit("host:next");
-await sleep(400);
-check("final emitted", finals.length === 1);
+/* No host:next here on purpose. The reveal-to-final transition should
+   happen on its own after FLOW.revealMs, with no click at all. */
+await sleep(FLOW.revealMs + 500);
+check("game auto-advances to final with no host click", finals.length === 1, "finals=" + finals.length);
 const board = finals[0]?.board || [];
 check("final board holds every player", board.length === 3, "got " + board.length);
 check("board is sorted high to low", board.every((p, i) => i === 0 || board[i - 1].score >= p.score));
@@ -198,9 +357,21 @@ check("correct index clamped into range", dirty.questions[0].correct === 3, Stri
 check("control characters stripped from names", cleanName("Ru\u0000i\nSilva") === "RuiSilva" || cleanName("Ru\u0000i\nSilva") === "Rui Silva",
   JSON.stringify(cleanName("Ru\u0000i\nSilva")));
 
+const withImages = sanitiseQuiz({
+  title: "Pictures",
+  questions: [
+    { q: "valid image", opts: ["a", "b"], correct: 0, img: TINY_PNG },
+    { q: "bogus image", opts: ["a", "b"], correct: 0, img: "not-a-data-uri" },
+    { q: "oversized image", opts: ["a", "b"], correct: 0, img: "data:image/png;base64," + "A".repeat(400_000) }
+  ]
+});
+check("a valid data-URI image is kept", withImages.questions[0].img === TINY_PNG);
+check("a non-image string is dropped", withImages.questions[1].img === null, String(withImages.questions[1].img));
+check("an oversized image is dropped", withImages.questions[2].img === null, String(withImages.questions[2].img));
+
 /* ---- done ---- */
 players.forEach(p => p.socket.disconnect());
-host.disconnect();
+hostSocket.disconnect();
 server.close();
 fs.rmSync(tmp, { recursive: true, force: true });
 

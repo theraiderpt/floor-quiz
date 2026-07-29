@@ -1,4 +1,4 @@
-# Deploying Floor Quiz on a Hostinger VPS
+# Deploying CX Quiz on a Hostinger VPS
 
 Written to be followed top to bottom. Every command runs on the VPS over SSH unless it says otherwise. Budget an hour the first time.
 
@@ -115,7 +115,7 @@ Confirm it runs before adding anything in front of it:
 
 ```bash
 node server/index.js
-# expect: Floor Quiz listening on http://127.0.0.1:3000 (production)
+# expect: CX Quiz listening on http://127.0.0.1:3000 (production)
 # Ctrl-C to stop
 ```
 

@@ -27,7 +27,7 @@ async function api(path, opts = {}) {
 const socket = io({ transports: ["websocket", "polling"], reconnectionDelayMax: 4000 });
 
 const S = {
-  quiz: null,        // { id, title, questions }
+  quiz: null,        // { id, title, questions, categoryId }
   editing: -1,
   pin: null,
   players: [],
@@ -36,6 +36,12 @@ const S = {
   raf: null,
   sessionId: null
 };
+
+let CATEGORIES = [];
+async function loadCategories() {
+  if (!CATEGORIES.length) CATEGORIES = await api("/categories");
+  return CATEGORIES;
+}
 
 const SAMPLE = {
   title: "CX Fundamentals",
@@ -59,7 +65,7 @@ $("pw").addEventListener("keydown", e => { if (e.key === "Enter") login(); });
 async function login() {
   $("loginErr").textContent = "";
   try {
-    await api("/login", { method: "POST", body: { password: $("pw").value } });
+    await api("/login", { method: "POST", body: { email: $("email").value, password: $("pw").value } });
     $("pw").value = "";
     socket.disconnect().connect();   // reconnect so the handshake carries the cookie
     await openLibrary();
@@ -109,7 +115,7 @@ async function openLibrary() {
   show("s-library");
 }
 
-$("libNew").addEventListener("click", () => { S.quiz = { id: null, title: "New quiz", questions: [] }; openSetup(); });
+$("libNew").addEventListener("click", () => { S.quiz = { id: null, title: "New quiz", questions: [], categoryId: null, joinMode: "name" }; openSetup(); });
 $("libSample").addEventListener("click", async () => {
   const saved = await api("/quizzes", { method: "POST", body: SAMPLE });
   S.quiz = saved;
@@ -135,8 +141,12 @@ $("fileIn").addEventListener("change", e => {
 
 /* ------------------------------------------------------------- setup ---- */
 
-function openSetup() {
+async function openSetup() {
   $("quizTitle").value = S.quiz.title;
+  const cats = await loadCategories();
+  $("quizCategory").innerHTML = `<option value="">None</option>` + cats.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+  $("quizCategory").value = S.quiz.categoryId || "";
+  $("quizJoinMode").value = S.quiz.joinMode || "name";
   renderSetup();
   show("s-setup");
 }
@@ -181,8 +191,11 @@ function renderSetup() {
 }
 
 $("quizTitle").addEventListener("input", e => { S.quiz.title = e.target.value; $("setupTitle").textContent = e.target.value; });
+$("quizCategory").addEventListener("change", e => { S.quiz.categoryId = e.target.value ? Number(e.target.value) : null; });
+$("quizJoinMode").addEventListener("change", e => { S.quiz.joinMode = e.target.value; });
 $("setupBack").addEventListener("click", openLibrary);
 $("addQ").addEventListener("click", () => openEditor(-1));
+$("browseBank").addEventListener("click", openBank);
 
 $("saveQuiz").addEventListener("click", async () => {
   await persistQuiz();
@@ -200,7 +213,12 @@ $("exportBtn").addEventListener("click", () => {
 });
 
 async function persistQuiz() {
-  const body = { title: S.quiz.title || "Quiz", questions: S.quiz.questions };
+  const body = {
+    title: S.quiz.title || "Quiz",
+    questions: S.quiz.questions,
+    categoryId: S.quiz.categoryId || null,
+    joinMode: S.quiz.joinMode || "name"
+  };
   S.quiz = S.quiz.id
     ? await api("/quizzes/" + S.quiz.id, { method: "PUT", body })
     : await api("/quizzes", { method: "POST", body });
@@ -209,14 +227,64 @@ async function persistQuiz() {
 
 /* ------------------------------------------------------------ editor --- */
 
+let editingImg = null;
+
+function setEditorImage(dataUrl) {
+  editingImg = dataUrl || null;
+  $("eImgPreview").src = editingImg || "";
+  $("eImgPreview").hidden = !editingImg;
+  $("eImgClear").hidden = !editingImg;
+}
+
+/* Resized and re-encoded client side so a phone photo (often several MB)
+   never has to round-trip at full size. Falls back to a lower quality pass
+   if it's still too big for the server's per-image cap. */
+function readImageResized(file, maxDim = 900) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read that file."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("That doesn't look like an image."));
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        let out = canvas.toDataURL("image/jpeg", 0.72);
+        if (out.length > 340_000) out = canvas.toDataURL("image/jpeg", 0.5);
+        if (out.length > 340_000) return reject(new Error("That image is too large even after compression. Try a smaller photo."));
+        resolve(out);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+$("eImgPick").addEventListener("click", () => $("eImgFile").click());
+$("eImgFile").addEventListener("change", async e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    setEditorImage(await readImageResized(file));
+  } catch (err) {
+    alert(err.message);
+  }
+});
+$("eImgClear").addEventListener("click", () => setEditorImage(null));
+
 function openEditor(i) {
   S.editing = i;
-  const q = i >= 0 ? S.quiz.questions[i] : { q: "", t: 20, opts: ["", "", "", ""], correct: 0 };
+  const q = i >= 0 ? S.quiz.questions[i] : { q: "", t: 20, opts: ["", "", "", ""], correct: 0, img: null };
   $("editTitle").textContent = i >= 0 ? "Edit question" : "New question";
   $("editIdx").textContent = i >= 0 ? String(i + 1).padStart(2, "0") : "new";
   $("eQ").value = q.q;
   $("eTime").value = String(q.t);
   $("eType").value = q.opts.length === 2 ? "2" : "4";
+  setEditorImage(q.img || null);
   renderOpts(q.opts, q.correct);
   show("s-edit");
   $("eQ").focus();
@@ -257,11 +325,50 @@ $("eSave").addEventListener("click", () => {
   if (!text) return alert("Add the question text.");
   if (opts.some(o => !o)) return alert("Fill in every answer option.");
   if (!picked) return alert("Mark one option as correct.");
-  const q = { q: text, t: parseInt($("eTime").value, 10), opts, correct: parseInt(picked.value, 10) };
+  const q = { q: text, t: parseInt($("eTime").value, 10), opts, correct: parseInt(picked.value, 10), img: editingImg };
   if (S.editing >= 0) S.quiz.questions[S.editing] = q; else S.quiz.questions.push(q);
   renderSetup();
   show("s-setup");
 });
+
+/* --------------------------------------------------------- bank picker --- */
+
+async function openBank() {
+  const cats = await loadCategories();
+  $("bankFilter").innerHTML = `<option value="">All categories</option>` + cats.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+  await renderBankPick();
+  show("s-bank");
+}
+
+$("bankFilter").addEventListener("change", renderBankPick);
+$("bankBack").addEventListener("click", () => { renderSetup(); show("s-setup"); });
+
+async function renderBankPick() {
+  const cat = $("bankFilter").value;
+  const list = await api("/bank" + (cat ? "?category=" + cat : ""));
+  const wrap = $("bankPickList");
+  wrap.innerHTML = "";
+  if (!list.length) wrap.appendChild(el("p", "note", "Nothing in this category yet."));
+  list.forEach(q => {
+    const item = el("div", "qitem");
+    item.appendChild(el("span", "idx", q.t + "s"));
+    const body = el("div", "body");
+    body.appendChild(el("p", "qt", q.q));
+    const meta = el("div", "meta");
+    meta.append(el("span", null, q.categoryName), el("span", null, q.opts.length + " options"));
+    body.appendChild(meta);
+    item.appendChild(body);
+    const add = el("button", "iconbtn", "+"); add.title = "Add to quiz";
+    add.addEventListener("click", () => {
+      S.quiz.questions.push({ q: q.q, t: q.t, opts: [...q.opts], correct: q.correct });
+      add.textContent = "✓";
+      add.disabled = true;
+    });
+    const acts = el("div", "acts"); acts.appendChild(add);
+    item.appendChild(acts);
+    wrap.appendChild(item);
+  });
+}
 
 /* -------------------------------------------------------------- game ---- */
 
@@ -271,7 +378,7 @@ $("openLobby").addEventListener("click", async () => {
 });
 
 function createGame() {
-  socket.emit("host:create", { quiz: { title: S.quiz.title, questions: S.quiz.questions }, quizId: S.quiz.id }, res => {
+  socket.emit("host:create", { quiz: { title: S.quiz.title, questions: S.quiz.questions, joinMode: S.quiz.joinMode }, quizId: S.quiz.id }, res => {
     if (!res || res.error) return alert((res && res.error) || "Could not open a lobby.");
     S.pin = res.pin;
     S.players = [];
@@ -298,7 +405,7 @@ socket.on("lobby", d => {
   r.innerHTML = "";
   d.players.forEach(p => {
     const c = el("span", "chip" + (p.connected ? "" : " off"), p.name);
-    c.title = "Click to remove";
+    c.title = (p.email ? p.email + " — " : "") + "Click to remove";
     c.addEventListener("click", () => { if (confirm("Remove " + p.name + "?")) socket.emit("host:kick", { playerId: p.id }); });
     r.appendChild(c);
   });
@@ -334,6 +441,8 @@ function renderQuestion(s) {
   $("pNext").hidden = true;
   $("pSkip").hidden = false;
   $("pTimerWrap").style.visibility = "visible";
+  $("pImg").hidden = true;
+  $("pImg").src = "";
 
   const wrap = $("pAnswers");
   wrap.innerHTML = "";
@@ -347,6 +456,14 @@ function renderQuestion(s) {
 }
 
 socket.on("answered", d => { $("pAnswered").textContent = d.answered; });
+
+/* Arrives on its own channel, host-only, so player phones never pull down
+   image bytes for a picture only the projector screen shows. */
+socket.on("question:image", d => {
+  if (d.qIndex !== S.qIndex) return;
+  $("pImg").src = d.img;
+  $("pImg").hidden = false;
+});
 
 socket.on("reveal", d => {
   stopClock();

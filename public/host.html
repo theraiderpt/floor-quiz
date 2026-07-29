@@ -4,18 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#101828">
-<title>Floor Quiz — host</title>
+<title>CX Quiz — host</title>
 <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
 
 <!-- LOGIN -->
 <section class="screen on" id="s-login">
-  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="v">Floor Quiz</span></span><span class="spacer"></span><span class="cell"><span class="k">host console</span></span></div>
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><span class="k">host console</span></span></div>
   <div class="stage center">
     <h1>Host sign in</h1>
     <div class="field" style="width:min(340px,88vw)">
-      <label for="pw">Host password</label>
+      <label for="email">Email</label>
+      <input class="inp" id="email" type="email" autocomplete="username">
+    </div>
+    <div class="field" style="width:min(340px,88vw)">
+      <label for="pw">Password</label>
       <input class="inp" id="pw" type="password" autocomplete="current-password">
     </div>
     <p class="err" id="loginErr"></p>
@@ -47,13 +51,27 @@
       <div><p class="eyebrow">Build</p><h2>Questions</h2></div>
       <button class="btn ghost" id="setupBack">Back to library</button>
     </div>
-    <div class="field" style="max-width:460px">
-      <label for="quizTitle">Quiz name</label>
-      <input class="inp" id="quizTitle" maxlength="60">
+    <div class="editgrid" style="max-width:640px">
+      <div class="field">
+        <label for="quizTitle">Quiz name</label>
+        <input class="inp" id="quizTitle" maxlength="60">
+      </div>
+      <div class="field">
+        <label for="quizCategory">Category</label>
+        <select class="inp" id="quizCategory"><option value="">None</option></select>
+      </div>
+      <div class="field">
+        <label for="quizJoinMode">Joining this quiz</label>
+        <select class="inp" id="quizJoinMode">
+          <option value="name">Just a name, nicknames welcome (fun)</option>
+          <option value="name_email">Name + work email required (formal)</option>
+        </select>
+      </div>
     </div>
     <div class="qlist" id="qlist"></div>
     <div class="row">
       <button class="btn ghost" id="addQ">+ Add question</button>
+      <button class="btn ghost" id="browseBank">+ From question bank</button>
       <button class="btn ghost" id="exportBtn">Export JSON</button>
       <button class="btn ghost danger" id="deleteQuiz">Delete quiz</button>
     </div>
@@ -78,6 +96,15 @@
         <label for="eQ">Question</label>
         <textarea class="inp" id="eQ" rows="2" maxlength="200" placeholder="What does FCR measure?"></textarea>
       </div>
+      <div class="field">
+        <label>Picture (optional)</label>
+        <div class="row">
+          <button class="btn ghost" id="eImgPick">+ Add picture</button>
+          <button class="btn ghost danger" id="eImgClear" hidden>Remove picture</button>
+        </div>
+        <img id="eImgPreview" class="qimg small" hidden alt="">
+        <input type="file" id="eImgFile" accept="image/*" hidden>
+      </div>
       <div class="editgrid">
         <div class="field">
           <label for="eTime">Seconds to answer</label>
@@ -96,6 +123,19 @@
       <button class="btn ghost" id="eCancel">Cancel</button>
       <button class="btn" id="eSave">Save question</button>
     </div>
+  </div>
+</section>
+
+<!-- QUESTION BANK -->
+<section class="screen" id="s-bank">
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">question bank</span></span></div>
+  <div class="stage">
+    <div class="row between">
+      <div><p class="eyebrow">Pick from the bank</p><h2>Pre-written questions</h2></div>
+      <button class="btn ghost" id="bankBack">Back to quiz</button>
+    </div>
+    <select class="inp" id="bankFilter" style="max-width:300px"><option value="">All categories</option></select>
+    <div class="qlist" id="bankPickList"></div>
   </div>
 </section>
 
@@ -124,6 +164,7 @@
   <div class="strip"><span class="dot"></span><span class="cell"><span class="k">pin</span><span class="v" id="pPin">0000</span></span><span class="cell"><span class="k">q</span><span class="v" id="pQn">1/1</span></span><span class="cell"><span class="k">players</span><span class="v" id="pPlayers">0</span></span><span class="cell"><span class="k">answered</span><span class="v" id="pAnswered">0</span></span><span class="spacer"></span><span class="cell"><button class="k" id="pSkip" style="text-transform:uppercase;letter-spacing:.09em">Close early</button></span></div>
   <div class="stage">
     <p class="qtext" id="pQ">…</p>
+    <img id="pImg" class="qimg" hidden alt="">
     <div class="timerwrap" id="pTimerWrap"><div class="track"><div class="fill" id="pFill"></div></div><div class="clock" id="pClock">—</div></div>
     <div class="answers" id="pAnswers"></div>
     <p class="counter" id="pFoot">—</p>

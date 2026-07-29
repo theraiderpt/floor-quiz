@@ -10,13 +10,17 @@ import QRCode from "qrcode";
 import { config, PUBLIC_DIR } from "./config.js";
 import { store } from "./db.js";
 import { Rooms, sanitiseQuiz, cleanName } from "./game.js";
+import { hashPassword, verifyPassword, randomToken } from "./auth.js";
 
 const app = express();
 const server = http.createServer(app);
 const io = new IOServer(server, {
   pingInterval: 20000,
   pingTimeout: 25000,
-  maxHttpBufferSize: 1e5
+  /* Raised from the 100KB default so a quiz whose questions carry pictures
+     (base64, capped per-image in sanitiseQuiz) can still travel in one
+     host:create payload. */
+  maxHttpBufferSize: 8e6
 });
 const rooms = new Rooms(io);
 
@@ -25,7 +29,9 @@ app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
 app.use(compression());
-app.use(express.json({ limit: "512kb" }));
+/* Raised to match maxHttpBufferSize above, so saving a quiz with pictures
+   over plain HTTP (PUT/POST /api/quizzes) isn't rejected either. */
+app.use(express.json({ limit: "8mb" }));
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -44,9 +50,16 @@ app.use(
   })
 );
 
-/* ---------------------------------------------------------------- auth --- */
+const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+const isEmail = s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
-const COOKIE = "fq_host";
+/* ---------------------------------------------------------------- auth --- */
+/* Two roles, one signed cookie. Admin accounts manage hosts/categories/the
+   question bank; host accounts build and run quizzes. Password hashing lives
+   in ./auth.js (node:crypto scrypt, no native dependency to compile). */
+
+const COOKIE = "fq_auth";
+const INVITE_TTL_MS = 48 * 60 * 60 * 1000;
 
 function sign(payload) {
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -78,12 +91,41 @@ function readCookie(header, name) {
   return null;
 }
 
-function isHost(req) {
-  return Boolean(verify(readCookie(req.headers.cookie, COOKIE)));
+function currentAuth(req) {
+  return verify(readCookie(req.headers.cookie, COOKIE));
+}
+
+/* Keyed off the real request scheme, not NODE_ENV. Hard-coding Secure in
+   production would make login fail silently in the window between the site
+   coming up on port 80 and certbot issuing the certificate, because the
+   browser accepts the response and then discards the cookie. `trust proxy`
+   means req.secure already reflects X-Forwarded-Proto. */
+function setAuthCookie(req, res, payload) {
+  const token = sign({ ...payload, exp: Date.now() + 12 * 60 * 60 * 1000 });
+  const secure = req.secure ? "; Secure" : "";
+  res.setHeader(
+    "Set-Cookie",
+    `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=${12 * 60 * 60}; SameSite=Lax${secure}`
+  );
+}
+
+function clearAuthCookie(res) {
+  res.setHeader("Set-Cookie", `${COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
 }
 
 function requireHost(req, res, next) {
-  if (!isHost(req)) return res.status(401).json({ error: "Sign in first." });
+  const payload = currentAuth(req);
+  const host = payload?.role === "host" ? store.hosts.get(payload.id) : null;
+  if (!host || host.status !== "active") return res.status(401).json({ error: "Sign in first." });
+  req.hostAccount = { id: host.id, email: host.email, maxPlayers: host.max_players };
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  const payload = currentAuth(req);
+  const admin = payload?.role === "admin" ? store.admins.get(payload.id) : null;
+  if (!admin) return res.status(401).json({ error: "Sign in first." });
+  req.admin = { id: admin.id, email: admin.email };
   next();
 }
 
@@ -94,75 +136,222 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many attempts. Wait fifteen minutes." }
 });
+const adminLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many attempts. Wait fifteen minutes." }
+});
+const inviteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many attempts. Wait fifteen minutes." }
+});
 
 app.post("/api/login", loginLimiter, (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
   const given = String(req.body?.password || "");
-  const expected = config.hostPassword;
-  const a = crypto.createHash("sha256").update(given).digest();
-  const b = crypto.createHash("sha256").update(expected).digest();
-  if (!expected || !crypto.timingSafeEqual(a, b)) {
-    return res.status(401).json({ error: "That password is not right." });
+  const host = store.hosts.getByEmail(email);
+  if (!host || host.status !== "active" || !host.password_hash || !verifyPassword(given, host.password_hash)) {
+    return res.status(401).json({ error: "That email or password is not right." });
   }
-  const token = sign({ role: "host", exp: Date.now() + 12 * 60 * 60 * 1000 });
-  /* Keyed off the real request scheme, not NODE_ENV. Hard-coding Secure in
-     production would make host login fail silently in the window between the
-     site coming up on port 80 and certbot issuing the certificate, because
-     the browser accepts the response and then discards the cookie.
-     `trust proxy` means req.secure already reflects X-Forwarded-Proto. */
-  const secure = req.secure ? "; Secure" : "";
-  res.setHeader(
-    "Set-Cookie",
-    `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=${12 * 60 * 60}; SameSite=Lax${secure}`
-  );
+  setAuthCookie(req, res, { role: "host", id: host.id });
   res.json({ ok: true });
 });
 
-app.post("/api/logout", (req, res) => {
-  res.setHeader("Set-Cookie", `${COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
+app.post("/api/logout", (req, res) => { clearAuthCookie(res); res.json({ ok: true }); });
+
+app.get("/api/me", (req, res) => {
+  const payload = currentAuth(req);
+  const host = payload?.role === "host" ? store.hosts.get(payload.id) : null;
+  res.json(host && host.status === "active" ? { host: true, email: host.email } : { host: false });
+});
+
+app.post("/api/admin/login", adminLoginLimiter, (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const given = String(req.body?.password || "");
+  const admin = store.admins.getByEmail(email);
+  if (!admin || !verifyPassword(given, admin.password_hash)) {
+    return res.status(401).json({ error: "That email or password is not right." });
+  }
+  setAuthCookie(req, res, { role: "admin", id: admin.id });
   res.json({ ok: true });
 });
 
-app.get("/api/me", (req, res) => res.json({ host: isHost(req) }));
+app.post("/api/admin/logout", (req, res) => { clearAuthCookie(res); res.json({ ok: true }); });
+
+app.get("/api/admin/me", (req, res) => {
+  const payload = currentAuth(req);
+  const admin = payload?.role === "admin" ? store.admins.get(payload.id) : null;
+  res.json(admin ? { admin: true, email: admin.email } : { admin: false });
+});
+
+/* ------------------------------------------------------------- invites --- */
+/* Public, unauthenticated: a host completes their own invite with just the
+   token from the link the admin sent them. */
+
+function inviteStatus(token) {
+  const inv = store.invites.getByToken(token);
+  const valid = Boolean(inv && !inv.used_at && new Date(inv.expires_at) > new Date());
+  return { inv, valid };
+}
+
+app.get("/api/invite/:token", inviteLimiter, (req, res) => {
+  const { inv, valid } = inviteStatus(req.params.token);
+  res.json({ valid, email: valid ? inv.host_email : null });
+});
+
+app.post("/api/invite/:token/complete", inviteLimiter, (req, res) => {
+  const { inv, valid } = inviteStatus(req.params.token);
+  if (!valid) return res.status(400).json({ error: "That invite link is invalid or has expired." });
+  const password = String(req.body?.password || "");
+  if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters." });
+  store.hosts.setPassword(inv.host_id, hashPassword(password));
+  store.invites.markUsed(inv.id);
+  res.json({ ok: true });
+});
+
+/* --------------------------------------------------------- admin: hosts --- */
+
+app.get("/api/admin/hosts", requireAdmin, (req, res) => res.json(store.hosts.list()));
+
+app.post("/api/admin/hosts", requireAdmin, (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  if (!isEmail(email)) return res.status(400).json({ error: "Enter a valid email." });
+  if (store.hosts.getByEmail(email)) return res.status(409).json({ error: "A host with that email already exists." });
+  const maxPlayers = clamp(Number(req.body?.maxPlayers) || 400, 1, 2000);
+  const host = store.hosts.create(email, maxPlayers);
+  const token = randomToken();
+  store.invites.create(host.id, token, new Date(Date.now() + INVITE_TTL_MS).toISOString());
+  res.status(201).json({ host, inviteLink: `${config.publicUrl || ""}/invite/${token}` });
+});
+
+app.post("/api/admin/hosts/:id/reinvite", requireAdmin, (req, res) => {
+  const host = store.hosts.get(Number(req.params.id));
+  if (!host) return res.status(404).json({ error: "No such host." });
+  const token = randomToken();
+  store.invites.create(host.id, token, new Date(Date.now() + INVITE_TTL_MS).toISOString());
+  res.json({ inviteLink: `${config.publicUrl || ""}/invite/${token}` });
+});
+
+app.patch("/api/admin/hosts/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  if (!store.hosts.get(id)) return res.status(404).json({ error: "No such host." });
+  if (req.body?.maxPlayers != null) store.hosts.updateQuota(id, clamp(Number(req.body.maxPlayers) || 400, 1, 2000));
+  if (["active", "disabled"].includes(req.body?.status)) store.hosts.setStatus(id, req.body.status);
+  res.json(store.hosts.get(id));
+});
+
+app.delete("/api/admin/hosts/:id", requireAdmin, (req, res) => {
+  res.json({ ok: store.hosts.remove(Number(req.params.id)) });
+});
+
+/* ---------------------------------------------------- admin: categories --- */
+
+app.get("/api/admin/categories", requireAdmin, (req, res) => res.json(store.categories.list()));
+
+app.post("/api/admin/categories", requireAdmin, (req, res) => {
+  const name = String(req.body?.name || "").trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: "Name a category." });
+  try {
+    res.status(201).json(store.categories.create(name));
+  } catch {
+    res.status(409).json({ error: "That category already exists." });
+  }
+});
+
+app.delete("/api/admin/categories/:id", requireAdmin, (req, res) => {
+  res.json({ ok: store.categories.remove(Number(req.params.id)) });
+});
+
+/* ---------------------------------------------------- admin: bank & overview --- */
+
+app.get("/api/admin/bank", requireAdmin, (req, res) =>
+  res.json(store.bank.list(req.query.category ? Number(req.query.category) : null, req.query.q || null))
+);
+
+app.post("/api/admin/bank", requireAdmin, (req, res) => {
+  const categoryId = Number(req.body?.categoryId);
+  if (!store.categories.get(categoryId)) return res.status(400).json({ error: "Pick a valid category." });
+  const q = String(req.body?.q || "").trim().slice(0, 200);
+  const opts = (Array.isArray(req.body?.opts) ? req.body.opts : [])
+    .map(o => String(o || "").trim().slice(0, 120)).filter(Boolean).slice(0, 4);
+  if (!q || opts.length < 2) return res.status(400).json({ error: "Add question text and at least two options." });
+  const t = clamp(Number(req.body?.t) || 20, 5, 120);
+  const correct = clamp(Number(req.body?.correct) || 0, 0, opts.length - 1);
+  res.status(201).json(store.bank.create(categoryId, q, t, opts, correct));
+});
+
+app.delete("/api/admin/bank/:id", requireAdmin, (req, res) => {
+  res.json({ ok: store.bank.remove(Number(req.params.id)) });
+});
+
+app.get("/api/admin/games", requireAdmin, (req, res) => res.json(store.sessions.listAll(100)));
+
+app.get("/api/admin/overview", requireAdmin, (req, res) => {
+  const hosts = store.hosts.list();
+  res.json({
+    hosts: hosts.length,
+    activeHosts: hosts.filter(h => h.status === "active").length,
+    invitedHosts: hosts.filter(h => h.status === "invited").length,
+    categories: store.categories.list().length,
+    bankQuestions: store.bank.list(null, null).length,
+    completedGames: store.sessions.count(),
+    live: rooms.stats()
+  });
+});
+
+/* ---------------------------------------------------- host-facing reads --- */
+
+app.get("/api/categories", requireHost, (req, res) => res.json(store.categories.list()));
+app.get("/api/bank", requireHost, (req, res) =>
+  res.json(store.bank.list(req.query.category ? Number(req.query.category) : null, req.query.q || null))
+);
 
 /* ------------------------------------------------------------ quizzes --- */
 
-app.get("/api/quizzes", requireHost, (req, res) => res.json(store.quizzes.list()));
+app.get("/api/quizzes", requireHost, (req, res) => res.json(store.quizzes.list(req.hostAccount.id)));
 
 app.post("/api/quizzes", requireHost, (req, res) => {
-  const { title, questions } = sanitiseQuiz(req.body);
+  const { title, questions, joinMode } = sanitiseQuiz(req.body);
   if (!questions.length) return res.status(400).json({ error: "Add at least one usable question." });
-  res.status(201).json(store.quizzes.create(title, questions));
+  const categoryId = req.body?.categoryId ? Number(req.body.categoryId) : null;
+  res.status(201).json(store.quizzes.create(title, questions, req.hostAccount.id, categoryId, joinMode));
 });
 
 app.put("/api/quizzes/:id", requireHost, (req, res) => {
   const id = Number(req.params.id);
-  if (!store.quizzes.get(id)) return res.status(404).json({ error: "No such quiz." });
-  const { title, questions } = sanitiseQuiz(req.body);
+  if (!store.quizzes.get(id, req.hostAccount.id)) return res.status(404).json({ error: "No such quiz." });
+  const { title, questions, joinMode } = sanitiseQuiz(req.body);
   if (!questions.length) return res.status(400).json({ error: "Add at least one usable question." });
-  res.json(store.quizzes.update(id, title, questions));
+  const categoryId = req.body?.categoryId ? Number(req.body.categoryId) : null;
+  res.json(store.quizzes.update(id, title, questions, categoryId, req.hostAccount.id, joinMode));
 });
 
 app.delete("/api/quizzes/:id", requireHost, (req, res) => {
-  res.json({ ok: store.quizzes.remove(Number(req.params.id)) });
+  res.json({ ok: store.quizzes.remove(Number(req.params.id), req.hostAccount.id) });
 });
 
 /* ----------------------------------------------------------- sessions --- */
 
-app.get("/api/sessions", requireHost, (req, res) => res.json(store.sessions.list(40)));
+app.get("/api/sessions", requireHost, (req, res) => res.json(store.sessions.list(req.hostAccount.id, 40)));
 
 app.get("/api/sessions/:id", requireHost, (req, res) => {
-  const s = store.sessions.get(Number(req.params.id));
+  const s = store.sessions.get(Number(req.params.id), req.hostAccount.id);
   if (!s) return res.status(404).json({ error: "No such session." });
   res.json(s);
 });
 
 app.get("/api/sessions/:id/csv", requireHost, (req, res) => {
-  const s = store.sessions.get(Number(req.params.id));
+  const s = store.sessions.get(Number(req.params.id), req.hostAccount.id);
   if (!s) return res.status(404).send("No such session.");
-  const cell = v => `"${String(v).replace(/"/g, '""')}"`;
-  const lines = [["Rank", "Name", "Score", "Correct", "Answered"].map(cell).join(",")];
+  const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines = [["Rank", "Name", "Email", "Score", "Correct", "Answered"].map(cell).join(",")];
   s.results.forEach(r =>
-    lines.push([r.rank, r.name, r.score, r.correct_count, r.answered].map(cell).join(","))
+    lines.push([r.rank, r.name, r.email, r.score, r.correct_count, r.answered].map(cell).join(","))
   );
   const slug = s.title.replace(/[^\w]+/g, "_").slice(0, 40);
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -176,13 +365,21 @@ app.get("/api/health", (req, res) => res.json({ ok: true, ...rooms.stats(), upti
 
 app.use(express.static(PUBLIC_DIR, { maxAge: config.isProd ? "1h" : 0, extensions: ["html"] }));
 app.get("/host", (req, res) => res.sendFile("host.html", { root: PUBLIC_DIR }));
+app.get("/admin", (req, res) => res.sendFile("admin.html", { root: PUBLIC_DIR }));
+app.get("/invite/:token", (req, res) => res.sendFile("invite.html", { root: PUBLIC_DIR }));
 app.get("/play", (req, res) => res.sendFile("index.html", { root: PUBLIC_DIR }));
 app.use((req, res) => res.status(404).sendFile("index.html", { root: PUBLIC_DIR }));
 
 /* ----------------------------------------------------------- realtime --- */
 
 io.use((socket, next) => {
-  socket.data.isHost = Boolean(verify(readCookie(socket.handshake.headers.cookie, COOKIE)));
+  const payload = verify(readCookie(socket.handshake.headers.cookie, COOKIE));
+  const host = payload?.role === "host" ? store.hosts.get(payload.id) : null;
+  if (host && host.status === "active") {
+    socket.data.isHost = true;
+    socket.data.hostId = host.id;
+    socket.data.hostMaxPlayers = host.max_players;
+  }
   next();
 });
 
@@ -193,9 +390,11 @@ io.on("connection", socket => {
     if (!socket.data.isHost) return ack?.({ error: "Sign in first." });
     const quiz = sanitiseQuiz(payload?.quiz);
     if (!quiz.questions.length) return ack?.({ error: "That quiz has no usable questions." });
+    /* Only stamp the session with a quizId this host actually owns. */
+    const ownedQuizId = payload?.quizId && store.quizzes.get(payload.quizId, socket.data.hostId) ? payload.quizId : null;
     let game;
     try {
-      game = rooms.create(quiz, payload?.quizId);
+      game = rooms.create(quiz, ownedQuizId, socket.data.hostId, socket.data.hostMaxPlayers);
     } catch (err) {
       return ack?.({ error: err.message });
     }
@@ -262,11 +461,11 @@ io.on("connection", socket => {
 
   /* ---- player side ---- */
 
-  socket.on("player:join", ({ pin, name, playerId } = {}, ack) => {
+  socket.on("player:join", ({ pin, name, playerId, email } = {}, ack) => {
     const game = rooms.get(String(pin || "").trim());
     if (!game) return ack?.({ error: `No game running on PIN ${pin}.` });
 
-    const res = game.addPlayer(socket, cleanName(name), playerId);
+    const res = game.addPlayer(socket, cleanName(name), playerId, email);
     if (res.error) return ack?.({ error: res.error });
 
     socket.join(game.room);
@@ -308,7 +507,7 @@ io.on("connection", socket => {
 /* -------------------------------------------------------------- boot ---- */
 
 server.listen(config.port, config.host, () => {
-  console.log(`Floor Quiz listening on http://${config.host}:${config.port} (${config.env})`);
+  console.log(`CX Quiz listening on http://${config.host}:${config.port} (${config.env})`);
   if (config.publicUrl) console.log(`Players join at ${config.publicUrl}`);
 });
 

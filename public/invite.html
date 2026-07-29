@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101828">
+<title>CX Quiz — set your password</title>
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<section class="screen on" id="s-invite">
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><span class="k">host invite</span></span></div>
+  <div class="stage center">
+    <h1>Set your password</h1>
+    <p class="sub" id="inviteWho">Checking your invite…</p>
+
+    <div id="inviteForm" hidden style="display:flex;flex-direction:column;gap:14px;align-items:center">
+      <div class="field" style="width:min(340px,88vw)">
+        <label for="pw1">New password</label>
+        <input class="inp" id="pw1" type="password" autocomplete="new-password">
+      </div>
+      <div class="field" style="width:min(340px,88vw)">
+        <label for="pw2">Confirm password</label>
+        <input class="inp" id="pw2" type="password" autocomplete="new-password">
+      </div>
+      <p class="err" id="inviteErr"></p>
+      <button class="btn big" id="inviteGo">Set password and sign in</button>
+    </div>
+
+    <a class="btn ghost" id="toHost" href="/host" hidden>Go to host sign in</a>
+  </div>
+</section>
+
+<script src="/js/invite.js"></script>
+</body>
+</html>
