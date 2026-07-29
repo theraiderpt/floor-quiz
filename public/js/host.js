@@ -18,7 +18,7 @@ async function api(path, opts = {}) {
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined
   });
-  if (res.status === 401) { show("s-login"); throw new Error("Sign in first."); }
+  if (res.status === 401 && path !== "/login") { show("s-login"); throw new Error("Sign in first."); }
   const data = res.headers.get("content-type")?.includes("json") ? await res.json() : null;
   if (!res.ok) throw new Error((data && data.error) || "Request failed.");
   return data;
@@ -115,7 +115,7 @@ async function openLibrary() {
   show("s-library");
 }
 
-$("libNew").addEventListener("click", () => { S.quiz = { id: null, title: "New quiz", questions: [], categoryId: null, joinMode: "name" }; openSetup(); });
+$("libNew").addEventListener("click", () => { S.quiz = { id: null, title: "New quiz", questions: [], categoryId: null, joinMode: "name", gapSeconds: 5 }; openSetup(); });
 $("libSample").addEventListener("click", async () => {
   const saved = await api("/quizzes", { method: "POST", body: SAMPLE });
   S.quiz = saved;
@@ -147,6 +147,7 @@ async function openSetup() {
   $("quizCategory").innerHTML = `<option value="">None</option>` + cats.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
   $("quizCategory").value = S.quiz.categoryId || "";
   $("quizJoinMode").value = S.quiz.joinMode || "name";
+  $("quizGap").value = S.quiz.gapSeconds || 5;
   renderSetup();
   show("s-setup");
 }
@@ -193,6 +194,7 @@ function renderSetup() {
 $("quizTitle").addEventListener("input", e => { S.quiz.title = e.target.value; $("setupTitle").textContent = e.target.value; });
 $("quizCategory").addEventListener("change", e => { S.quiz.categoryId = e.target.value ? Number(e.target.value) : null; });
 $("quizJoinMode").addEventListener("change", e => { S.quiz.joinMode = e.target.value; });
+$("quizGap").addEventListener("change", e => { S.quiz.gapSeconds = Number(e.target.value) || 5; });
 $("setupBack").addEventListener("click", openLibrary);
 $("addQ").addEventListener("click", () => openEditor(-1));
 $("browseBank").addEventListener("click", openBank);
@@ -217,7 +219,8 @@ async function persistQuiz() {
     title: S.quiz.title || "Quiz",
     questions: S.quiz.questions,
     categoryId: S.quiz.categoryId || null,
-    joinMode: S.quiz.joinMode || "name"
+    joinMode: S.quiz.joinMode || "name",
+    gapSeconds: S.quiz.gapSeconds || 5
   };
   S.quiz = S.quiz.id
     ? await api("/quizzes/" + S.quiz.id, { method: "PUT", body })
@@ -378,7 +381,7 @@ $("openLobby").addEventListener("click", async () => {
 });
 
 function createGame() {
-  socket.emit("host:create", { quiz: { title: S.quiz.title, questions: S.quiz.questions, joinMode: S.quiz.joinMode }, quizId: S.quiz.id }, res => {
+  socket.emit("host:create", { quiz: { title: S.quiz.title, questions: S.quiz.questions, joinMode: S.quiz.joinMode, gapSeconds: S.quiz.gapSeconds }, quizId: S.quiz.id }, res => {
     if (!res || res.error) return alert((res && res.error) || "Could not open a lobby.");
     S.pin = res.pin;
     S.players = [];

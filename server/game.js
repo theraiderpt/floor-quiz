@@ -49,7 +49,8 @@ export function sanitiseQuiz(input) {
     .filter(Boolean)
     .slice(0, 100);
   const joinMode = input?.joinMode === "name_email" ? "name_email" : "name";
-  return { title, questions, joinMode };
+  const gapSeconds = clamp(Number(input?.gapSeconds) || FLOW.scoresMs / 1000, 2, 30);
+  return { title, questions, joinMode, gapSeconds };
 }
 
 export class Game {
@@ -120,7 +121,8 @@ export class Game {
       score: 0,
       streak: 0,
       correctCount: 0,
-      answered: 0
+      answered: 0,
+      log: []          // one entry per question, in order: "Right" | "Wrong" | "No answer"
     };
     this.players.set(player.id, player);
     return { player, rejoined: false };
@@ -277,6 +279,14 @@ export class Game {
       }
     }
 
+    /* Recorded for every player, not just this.answers, so a player who let
+       the clock run out still gets a slot and the per-player logs stay
+       aligned with question order for the CSV export. */
+    for (const p of this.players.values()) {
+      const a = this.answers.get(p.id);
+      p.log.push(a ? (a.correct ? "Right" : "Wrong") : "No answer");
+    }
+
     this.broadcastState();
 
     const board = this.standings();
@@ -320,7 +330,7 @@ export class Game {
         this.phase = "scores";
         this.broadcastState();
         this.io.to(this.hostRoom).emit("scores", { board: this.standings().slice(0, 10) });
-        this.timer = setTimeout(() => this.next(), FLOW.scoresMs);
+        this.timer = setTimeout(() => this.next(), this.quiz.gapSeconds * 1000);
       } else {
         this.end();
       }
@@ -340,7 +350,8 @@ export class Game {
     this.phase = "final";
     const board = this.standings();
     try {
-      store.sessions.close(this.sessionId, board);
+      const withLogs = board.map(p => ({ ...p, log: this.players.get(p.id)?.log || [] }));
+      store.sessions.close(this.sessionId, withLogs, this.quiz.questions.map(q => q.q));
     } catch (err) {
       console.error("Could not save results for session", this.sessionId, err.message);
     }
