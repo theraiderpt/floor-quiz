@@ -316,19 +316,19 @@ app.get("/api/bank", requireHost, (req, res) =>
 app.get("/api/quizzes", requireHost, (req, res) => res.json(store.quizzes.list(req.hostAccount.id)));
 
 app.post("/api/quizzes", requireHost, (req, res) => {
-  const { title, questions, joinMode } = sanitiseQuiz(req.body);
+  const { title, questions, joinMode, gapSeconds } = sanitiseQuiz(req.body);
   if (!questions.length) return res.status(400).json({ error: "Add at least one usable question." });
   const categoryId = req.body?.categoryId ? Number(req.body.categoryId) : null;
-  res.status(201).json(store.quizzes.create(title, questions, req.hostAccount.id, categoryId, joinMode));
+  res.status(201).json(store.quizzes.create(title, questions, req.hostAccount.id, categoryId, joinMode, gapSeconds));
 });
 
 app.put("/api/quizzes/:id", requireHost, (req, res) => {
   const id = Number(req.params.id);
   if (!store.quizzes.get(id, req.hostAccount.id)) return res.status(404).json({ error: "No such quiz." });
-  const { title, questions, joinMode } = sanitiseQuiz(req.body);
+  const { title, questions, joinMode, gapSeconds } = sanitiseQuiz(req.body);
   if (!questions.length) return res.status(400).json({ error: "Add at least one usable question." });
   const categoryId = req.body?.categoryId ? Number(req.body.categoryId) : null;
-  res.json(store.quizzes.update(id, title, questions, categoryId, req.hostAccount.id, joinMode));
+  res.json(store.quizzes.update(id, title, questions, categoryId, req.hostAccount.id, joinMode, gapSeconds));
 });
 
 app.delete("/api/quizzes/:id", requireHost, (req, res) => {
@@ -349,10 +349,16 @@ app.get("/api/sessions/:id/csv", requireHost, (req, res) => {
   const s = store.sessions.get(Number(req.params.id), req.hostAccount.id);
   if (!s) return res.status(404).send("No such session.");
   const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const lines = [["Rank", "Name", "Email", "Score", "Correct", "Answered"].map(cell).join(",")];
-  s.results.forEach(r =>
-    lines.push([r.rank, r.name, r.email, r.score, r.correct_count, r.answered].map(cell).join(","))
-  );
+  let questions = [];
+  try { questions = JSON.parse(s.questions_json || "[]"); } catch { questions = []; }
+  const qHeaders = questions.map((q, i) => `Q${i + 1}: ${q}`);
+  const lines = [["Rank", "Name", "Email", "Score", "Correct", "Answered", ...qHeaders].map(cell).join(",")];
+  s.results.forEach(r => {
+    let log = [];
+    try { log = JSON.parse(r.answers_json || "[]"); } catch { log = []; }
+    const perQuestion = questions.map((_, i) => log[i] || "");
+    lines.push([r.rank, r.name, r.email, r.score, r.correct_count, r.answered, ...perQuestion].map(cell).join(","));
+  });
   const slug = s.title.replace(/[^\w]+/g, "_").slice(0, 40);
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="${slug}_${s.id}.csv"`);

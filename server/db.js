@@ -98,18 +98,21 @@ ensureColumn("quizzes", "category_id", "INTEGER REFERENCES categories(id) ON DEL
 ensureColumn("sessions", "host_id", "INTEGER REFERENCES hosts(id) ON DELETE SET NULL");
 /* 'name' (fun, nickname-friendly) or 'name_email' (formal, email required to join). */
 ensureColumn("quizzes", "join_mode", "TEXT NOT NULL DEFAULT 'name'");
+ensureColumn("quizzes", "gap_seconds", "INTEGER NOT NULL DEFAULT 5");
 ensureColumn("results", "email", "TEXT");
+ensureColumn("sessions", "questions_json", "TEXT");
+ensureColumn("results", "answers_json", "TEXT");
 
 const stmt = {
   listQuizzes: db.prepare(
-    "SELECT id, title, questions, category_id, join_mode, updated_at FROM quizzes WHERE host_id = ? ORDER BY updated_at DESC"
+    "SELECT id, title, questions, category_id, join_mode, gap_seconds, updated_at FROM quizzes WHERE host_id = ? ORDER BY updated_at DESC"
   ),
-  getQuiz: db.prepare("SELECT id, title, questions, host_id, category_id, join_mode FROM quizzes WHERE id = ?"),
+  getQuiz: db.prepare("SELECT id, title, questions, host_id, category_id, join_mode, gap_seconds FROM quizzes WHERE id = ?"),
   insertQuiz: db.prepare(
-    "INSERT INTO quizzes (title, questions, host_id, category_id, join_mode) VALUES (?, ?, ?, ?, ?)"
+    "INSERT INTO quizzes (title, questions, host_id, category_id, join_mode, gap_seconds) VALUES (?, ?, ?, ?, ?, ?)"
   ),
   updateQuiz: db.prepare(
-    "UPDATE quizzes SET title = ?, questions = ?, category_id = ?, join_mode = ?, updated_at = datetime('now') WHERE id = ?"
+    "UPDATE quizzes SET title = ?, questions = ?, category_id = ?, join_mode = ?, gap_seconds = ?, updated_at = datetime('now') WHERE id = ?"
   ),
   deleteQuiz: db.prepare("DELETE FROM quizzes WHERE id = ?"),
 
@@ -117,7 +120,7 @@ const stmt = {
     "INSERT INTO sessions (pin, quiz_id, title, host_id) VALUES (?, ?, ?, ?)"
   ),
   closeSession: db.prepare(
-    "UPDATE sessions SET ended_at = datetime('now'), player_count = ? WHERE id = ?"
+    "UPDATE sessions SET ended_at = datetime('now'), player_count = ?, questions_json = ? WHERE id = ?"
   ),
   listSessions: db.prepare(
     `SELECT id, pin, title, player_count, started_at, ended_at
@@ -134,11 +137,11 @@ const stmt = {
   getSession: db.prepare("SELECT * FROM sessions WHERE id = ?"),
   countSessions: db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE ended_at IS NOT NULL"),
   insertResult: db.prepare(
-    `INSERT INTO results (session_id, rank, name, score, correct_count, answered, email)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO results (session_id, rank, name, score, correct_count, answered, email, answers_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ),
   listResults: db.prepare(
-    "SELECT rank, name, score, correct_count, answered, email FROM results WHERE session_id = ? ORDER BY rank"
+    "SELECT rank, name, score, correct_count, answered, email, answers_json FROM results WHERE session_id = ? ORDER BY rank"
   ),
 
   getAdminByEmail: db.prepare("SELECT * FROM admins WHERE email = ?"),
@@ -203,6 +206,7 @@ const parseQuiz = row =>
     questions: JSON.parse(row.questions),
     categoryId: row.category_id ?? null,
     joinMode: row.join_mode || "name",
+    gapSeconds: row.gap_seconds || 5,
     updated_at: row.updated_at,
     host_id: row.host_id
   };
@@ -227,12 +231,12 @@ export const store = {
       const row = stmt.getQuiz.get(id);
       return row && row.host_id === hostId ? parseQuiz(row) : null;
     },
-    create: (title, questions, hostId, categoryId, joinMode) => {
-      const info = stmt.insertQuiz.run(title, JSON.stringify(questions), hostId, categoryId || null, joinMode || "name");
+    create: (title, questions, hostId, categoryId, joinMode, gapSeconds) => {
+      const info = stmt.insertQuiz.run(title, JSON.stringify(questions), hostId, categoryId || null, joinMode || "name", gapSeconds || 5);
       return store.quizzes.get(info.lastInsertRowid, hostId);
     },
-    update: (id, title, questions, categoryId, hostId, joinMode) => {
-      stmt.updateQuiz.run(title, JSON.stringify(questions), categoryId || null, joinMode || "name", id);
+    update: (id, title, questions, categoryId, hostId, joinMode, gapSeconds) => {
+      stmt.updateQuiz.run(title, JSON.stringify(questions), categoryId || null, joinMode || "name", gapSeconds || 5, id);
       return store.quizzes.get(id, hostId);
     },
     remove: (id, hostId) => {
@@ -248,12 +252,12 @@ export const store = {
 
     /* Written once, when a game finishes. A game that is abandoned midway
        never lands here, which keeps the history clean. */
-    close: (sessionId, standings) => {
+    close: (sessionId, standings, questionTexts) => {
       const tx = db.transaction(rows => {
         rows.forEach((p, i) =>
-          stmt.insertResult.run(sessionId, i + 1, p.name, p.score, p.correctCount, p.answered, p.email || null)
+          stmt.insertResult.run(sessionId, i + 1, p.name, p.score, p.correctCount, p.answered, p.email || null, JSON.stringify(p.log || []))
         );
-        stmt.closeSession.run(rows.length, sessionId);
+        stmt.closeSession.run(rows.length, JSON.stringify(questionTexts || []), sessionId);
       });
       tx(standings);
     },

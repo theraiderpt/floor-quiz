@@ -216,6 +216,45 @@ noEmailSocket.disconnect();
 formalSocket.disconnect();
 hostBSocket2.disconnect();
 
+/* ---- configurable time between questions ---- */
+const hostCSocket = ioc(base, { extraHeaders: { Cookie: cookieB }, transports: ["websocket"] });
+await new Promise(r => hostCSocket.on("connect", r));
+const gapGame = await new Promise(r => hostCSocket.emit("host:create", {
+  quiz: {
+    title: "Gap Test",
+    gapSeconds: 2,
+    questions: [
+      { q: "one", t: 6, opts: ["a", "b"], correct: 0 },
+      { q: "two", t: 6, opts: ["a", "b"], correct: 0 }
+    ]
+  }
+}, r));
+check("gap game opens", /^\d{4}$/.test(gapGame.pin || ""), JSON.stringify(gapGame));
+
+const gapPlayer = ioc(base, { transports: ["websocket"] });
+await new Promise(r => gapPlayer.on("connect", r));
+await new Promise(r => gapPlayer.emit("player:join", { pin: gapGame.pin, name: "Gapper" }, r));
+
+const gapQ1 = waitFor(gapPlayer, "state", s => s.phase === "question" && s.qIndex === 0);
+hostCSocket.emit("host:start");
+await gapQ1;
+await sleep(100);
+
+const gapScores = waitFor(hostCSocket, "scores", () => true);
+await new Promise(r => gapPlayer.emit("player:answer", { choice: 0 }, r));
+await gapScores;
+const gapT0 = Date.now();
+
+const gapQ2 = waitFor(gapPlayer, "state", s => s.phase === "question" && s.qIndex === 1);
+await gapQ2;
+const gapElapsed = Date.now() - gapT0;
+check("custom gapSeconds shortens the pause between questions",
+  gapElapsed >= 1500 && gapElapsed < 4000, "elapsed=" + gapElapsed + "ms");
+
+hostCSocket.emit("host:end");
+gapPlayer.disconnect();
+hostCSocket.disconnect();
+
 /* ---- host socket, host A ---- */
 const hostSocket = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
 await new Promise(r => hostSocket.on("connect", r));
@@ -335,6 +374,14 @@ const text = await csv.text();
 check("CSV export returns 200", csv.status === 200, "got " + csv.status);
 check("CSV has a header and three rows", text.trim().split("\r\n").length === 4, JSON.stringify(text.slice(0, 120)));
 check("CSV names the winner first", text.split("\r\n")[1].includes(board[0].name), text.split("\r\n")[1]);
+
+const csvRows = text.trim().split("\r\n");
+check("CSV header lists each question", csvRows[0].includes('"Q1: Fast one"') && csvRows[0].includes('"Q2: Second one"'), csvRows[0]);
+const rowFor = name => csvRows.slice(1).find(r => r.split(",")[1] === `"${name}"`);
+const perQ = row => row.split(",").slice(6).join(",");
+check("CSV marks Ana right on both questions", perQ(rowFor("Ana")) === '"Right","Right"', rowFor("Ana"));
+check("CSV marks Kostas right on both questions", perQ(rowFor("Kostas")) === '"Right","Right"', rowFor("Kostas"));
+check("CSV marks Marta wrong then right", perQ(rowFor("Marta")) === '"Wrong","Right"', rowFor("Marta"));
 
 const history = await (await fetch(base + "/api/sessions", { headers: { Cookie: cookie } })).json();
 check("session appears in history", history.some(s => s.id === sessionId));
