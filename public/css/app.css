@@ -1,11 +1,17 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans:wght@400;500;600&display=swap");
 
+/* Foundever brand palette, pulled from the official theme.json color presets
+   published on foundever.com (--wp--preset--color--brandpurple etc.), not a
+   guess. The wallboard stays dark on purpose (a projector in a bright room
+   needs it), so the brand hues are applied as accents and elevated-surface
+   tints against a near-black ink derived from Foundever's own "black"
+   (#09092D) rather than swapped for their light corporate-site background. */
 :root{
-  --ink:#101828; --ink-2:#18233a; --ink-3:#22304c; --line:#2c3b5c;
-  --chalk:#eef2f7; --muted:#8593ac; --live:#37d67a;
-  --a1:#f2a33c; --a2:#2bb3a3; --a3:#e8595b; --a4:#8b7be8;
+  --ink:#09092d; --ink-2:#16144a; --ink-3:#241f66; --line:#3a3480;
+  --chalk:#f3f3f7; --muted:#b0b0cd; --live:#8bf0bb;
+  --a1:#f9ef77; --a2:#8bf0bb; --a3:#ff8d96; --a4:#4a4af9;
   --disp:"Space Grotesk","Trebuchet MS",sans-serif;
-  --body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --body:"Noto Sans",system-ui,-apple-system,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --pad:clamp(16px,3vw,34px);
 }
@@ -27,8 +33,8 @@ a{color:var(--chalk)}
 .strip .v{font-weight:600;font-variant-numeric:tabular-nums}
 .strip .spacer{flex:1}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--live);flex:none;
-  box-shadow:0 0 0 0 rgba(55,214,122,.6);animation:ping 2s ease-out infinite}
-@keyframes ping{70%{box-shadow:0 0 0 9px rgba(55,214,122,0)}100%{box-shadow:0 0 0 0 rgba(55,214,122,0)}}
+  box-shadow:0 0 0 0 rgba(139,240,187,.6);animation:ping 2s ease-out infinite}
+@keyframes ping{70%{box-shadow:0 0 0 9px rgba(139,240,187,0)}100%{box-shadow:0 0 0 0 rgba(139,240,187,0)}}
 .dot.idle{background:var(--muted);animation:none}
 .dot.down{background:var(--a3);animation:none}
 
@@ -98,12 +104,12 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .clock{font-family:var(--mono);font-weight:600;font-size:clamp(22px,3vw,34px);font-variant-numeric:tabular-nums;min-width:2.2ch;text-align:right}
 .answers{display:grid;grid-template-columns:1fr 1fr;gap:clamp(10px,1.6vw,16px);width:100%;max-width:960px;margin:0 auto}
 .ans{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:clamp(16px,2.4vw,26px);
-  border-radius:12px;color:#0d1420;font-weight:600;text-align:left;font-size:clamp(15px,1.85vw,23px);
+  border-radius:12px;color:#09092d;font-weight:600;text-align:left;font-size:clamp(15px,1.85vw,23px);
   line-height:1.25;min-height:clamp(72px,11vh,124px);transition:opacity .25s ease,filter .25s ease}
-.ans .tag{font-family:var(--mono);font-weight:600;font-size:.82em;background:rgba(13,20,32,.16);
+.ans .tag{font-family:var(--mono);font-weight:600;font-size:.82em;background:rgba(9,9,45,.16);
   border-radius:6px;width:1.9em;height:1.9em;display:grid;place-items:center;flex:none}
 .ans .txt{flex:1;position:relative}
-.ans .bar{position:absolute;inset:0 auto 0 0;width:0;background:rgba(13,20,32,.17);transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.ans .bar{position:absolute;inset:0 auto 0 0;width:0;background:rgba(9,9,45,.17);transition:width .6s cubic-bezier(.2,.8,.2,1)}
 .ans .n{font-family:var(--mono);font-weight:600;font-size:.85em;position:relative;font-variant-numeric:tabular-nums}
 .ans.c1{background:var(--a1)} .ans.c2{background:var(--a2)} .ans.c3{background:var(--a3)} .ans.c4{background:var(--a4)}
 .ans.dim{opacity:.26;filter:saturate(.4)}
@@ -119,7 +125,7 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .lrow .rank{font-family:var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
 .lrow .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lrow .pts{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
-.lrow.p1{background:linear-gradient(90deg,rgba(242,163,60,.2),var(--ink-2))}
+.lrow.p1{background:linear-gradient(90deg,rgba(249,239,119,.2),var(--ink-2))}
 .lrow.detail{grid-template-columns:2.4em 1fr auto auto}
 .lrow.detail .acc{font-family:var(--mono);font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;justify-self:end}
 .lrow.head{background:transparent;border:none;padding:4px 18px;animation:none}
