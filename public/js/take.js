@@ -24,6 +24,9 @@ function show(id) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("on"));
   $(id).classList.add("on");
   window.scrollTo(0, 0);
+  /* Confetti is position:fixed and outlives a quick screen switch, so
+     without this it would keep raining over whatever screen comes next. */
+  document.querySelectorAll(".confetti-piece").forEach(p => p.remove());
 }
 
 /* No socket here at all - this is a plain request/response flow, one
@@ -71,7 +74,6 @@ async function start() {
     const res = await api("/api/selfpaced/" + token + "/start", { method: "POST", body: { name, email } });
     S.attemptId = res.attemptId;
     S.total = res.total;
-    S.qIndex = 0;
     S.name = name;
     S.score = 0;
     $("finName").textContent = name;
@@ -86,6 +88,10 @@ async function start() {
 const TYPE_HINTS = { multi: "Select all that apply", text: "Type your answer", numeric: "Enter your best guess" };
 
 function renderQuestion(q) {
+  /* Trust the server's qIndex rather than counting locally, since that's
+     the same value the server checks a submitted answer against - see the
+     comment on Attempt.answer() in server/selfpaced.js. */
+  S.qIndex = q.qIndex;
   $("tQn").textContent = (S.qIndex + 1) + "/" + S.total;
   $("tQ").textContent = q.q;
   $("tScore").textContent = S.score;
@@ -109,7 +115,7 @@ function renderQuestion(q) {
 function submitAnswer(value) {
   if (S.answered) return;
   S.answered = true;
-  api("/api/selfpaced/attempts/" + S.attemptId + "/answer", { method: "POST", body: { answer: value } })
+  api("/api/selfpaced/attempts/" + S.attemptId + "/answer", { method: "POST", body: { answer: value, qIndex: S.qIndex } })
     .then(showFeedback)
     .catch(e => { S.answered = false; alert(e.message); });
 }
@@ -206,7 +212,6 @@ function showFeedback(res) {
   $("fbNext").textContent = res.done ? "See results" : "Next question";
   $("fbNext").onclick = () => {
     if (res.done) return showFinal(res);
-    S.qIndex++;
     renderQuestion(res.next);
   };
   show("t-feedback");
@@ -224,6 +229,10 @@ function showFinal(res) {
    regardless of score, matching the encouraging tone the rest of the
    quiz genre uses at the finish line. */
 function confetti(count = 46) {
+  /* The global prefers-reduced-motion rule just speeds every animation to
+     near-zero, which for a burst of falling pieces would read as an
+     instant flash rather than nothing - skip spawning entirely instead. */
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
   const colors = ["var(--a1)", "var(--a2)", "var(--a3)", "var(--a4)", "var(--live)"];
   for (let i = 0; i < count; i++) {
     const piece = document.createElement("span");

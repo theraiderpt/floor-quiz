@@ -16,7 +16,7 @@ process.env.SESSION_SECRET = "0".repeat(64);
 process.env.DB_PATH = path.join(tmp, "test.db");
 process.env.PUBLIC_URL = "http://127.0.0.1";
 
-const { server } = await import("../server/index.js");
+const { server, attempts } = await import("../server/index.js");
 const { store } = await import("../server/db.js");
 const { hashPassword } = await import("../server/auth.js");
 const { FLOW } = await import("../server/config.js");
@@ -648,6 +648,58 @@ check("the self-paced result carries the player's name and score",
 
 const spAnswerAfterDone = await spAnswer(0);
 check("answering after an attempt is finished is rejected", Boolean(spAnswerAfterDone.error), JSON.stringify(spAnswerAfterDone));
+
+/* ---- self-paced stale-answer guard: a retried submission tagged with a
+   qIndex the attempt has already moved past must be rejected, not
+   silently scored against whatever question came next (a real bug this
+   session, since self-paced advances the instant one valid answer lands,
+   unlike the live game where a question stays open until the host moves
+   on) ---- */
+const staleStart = await (await fetch(base + "/api/selfpaced/" + spQuiz.shareToken + "/start", {
+  method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ name: "Stale Tester" })
+})).json();
+const staleAnswer = (answer, qIndex) => fetch(base + "/api/selfpaced/attempts/" + staleStart.attemptId + "/answer", {
+  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answer, qIndex })
+}).then(r => r.json());
+
+const staleFirst = await staleAnswer(0, staleStart.question.qIndex);
+check("a correctly-tagged qIndex is accepted", staleFirst.correct === true, JSON.stringify(staleFirst));
+const staleRetry = await staleAnswer(0, staleStart.question.qIndex);
+check("a retried answer tagged with a stale qIndex is rejected, not scored against the next question",
+  Boolean(staleRetry.error), JSON.stringify(staleRetry));
+
+/* ---- self-paced sweeper: mirrors the live game's own "keeps history
+   clean" rule (store.sessions.close in server/db.js) - an attempt that
+   never engaged at all shouldn't land in history just because it timed
+   out, but one that answered at least a single question before being
+   abandoned should be persisted as-is. ---- */
+const ghostStart = await (await fetch(base + "/api/selfpaced/" + spQuiz.shareToken + "/start", {
+  method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ name: "Ghost" })
+})).json();
+const ghostAttempt = attempts.get(ghostStart.attemptId);
+ghostAttempt.touchedAt = Date.now() - 4 * 60 * 60 * 1000; // past the 3h cutoff, never answered anything
+
+const halfStart = await (await fetch(base + "/api/selfpaced/" + spQuiz.shareToken + "/start", {
+  method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ name: "HalfDone" })
+})).json();
+await fetch(base + "/api/selfpaced/attempts/" + halfStart.attemptId + "/answer", {
+  method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ answer: 0, qIndex: halfStart.question.qIndex })
+});
+const halfAttempt = attempts.get(halfStart.attemptId);
+halfAttempt.touchedAt = Date.now() - 4 * 60 * 60 * 1000;
+
+attempts.sweep();
+
+const ghostSession = store.sessions.get(ghostAttempt.sessionId, hostA.id);
+check("a zero-engagement abandoned attempt is swept without being persisted (ended_at stays null)",
+  ghostSession.ended_at === null, JSON.stringify(ghostSession));
+const halfSession = store.sessions.get(halfAttempt.sessionId, hostA.id);
+check("an abandoned attempt that answered at least one question is persisted by the sweep",
+  halfSession.ended_at !== null && halfSession.results[0]?.answered === 1, JSON.stringify(halfSession));
 
 typer.disconnect();
 offer.disconnect();
