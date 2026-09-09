@@ -25,7 +25,7 @@ const socket = io({ transports: ["websocket", "polling"], reconnectionDelayMax: 
 
 const me = { pin: null, playerId: null, name: "", score: 0 };
 let currentQ = -1;
-let picked = -1;
+let answered = false;
 let endsAt = 0;
 let rafId = null;
 
@@ -90,7 +90,7 @@ function applyState(s) {
   if (s.phase === "question") {
     if (s.qIndex !== currentQ) {
       currentQ = s.qIndex;
-      picked = -1;
+      answered = false;
       renderPad(s);
     }
     endsAt = Date.now() + s.msLeft;
@@ -114,15 +114,32 @@ socket.on("result", r => {
   me.score = r.score;
   updateScore();
   const v = $("rVerdict");
+
+  /* Unscored text questions have no right/wrong verdict - they're a
+     discussion prompt, not something to grade. */
+  if (r.type === "text") {
+    v.textContent = r.answered ? "Answer recorded" : "No answer";
+    v.className = "verdict";
+    $("rPts").textContent = "";
+    $("rRank").textContent = "—";
+    $("rSub").textContent = "Total " + r.score + " points.";
+    return show("s-result");
+  }
+
   if (!r.answered) { v.textContent = "No answer"; v.className = "verdict"; }
   else if (r.correct) { v.textContent = "Correct"; v.className = "verdict good"; }
   else { v.textContent = "Not this time"; v.className = "verdict bad"; }
 
   $("rPts").textContent = r.points ? "+" + r.points : "+0";
   $("rRank").textContent = r.rank ? "#" + r.rank : "—";
+
+  const correctDescription = r.type === "multi" ? r.correctTexts.join(", ")
+    : r.type === "numeric" ? String(r.target)
+    : r.correctText;
+  const guessNote = r.type === "numeric" && r.answered ? "You guessed " + r.value + ". " : "";
   $("rSub").textContent = r.correct
     ? (r.streak > 1 ? r.streak + " in a row. Total " + r.score + " points." : "Total " + r.score + " points.")
-    : "The answer was " + LETTERS[r.correctIndex] + ". Total " + r.score + " points.";
+    : guessNote + "The answer was " + correctDescription + ". Total " + r.score + " points.";
   show("s-result");
 });
 
@@ -150,33 +167,101 @@ function renderPad(s) {
   $("aQ").textContent = s.question.q;
   const pad = $("aPad");
   pad.innerHTML = "";
-  s.question.opts.forEach((o, i) => {
-    const b = el("button", "ans " + COLORS[i]);
-    b.appendChild(el("span", "tag", LETTERS[i]));
-    b.appendChild(el("span", "txt", o));
-    b.addEventListener("click", () => answer(i));
-    pad.appendChild(b);
-  });
+  pad.className = "pad";
+  const type = s.question.type;
+  if (type === "text") renderTextPad(pad);
+  else if (type === "numeric") renderNumericPad(pad);
+  else if (type === "multi") renderMultiPad(pad, s);
+  else renderSinglePad(pad, s);
 }
 
-function answer(i) {
-  if (picked >= 0) return;
-  picked = i;
-  [...$("aPad").children].forEach((n, k) => {
-    n.classList.add(k === i ? "picked" : "faded");
-    n.disabled = true;
-  });
-  socket.emit("player:answer", { choice: i }, res => {
+/* Shared by every question type: submits once, locks the UI, and either
+   moves on to the "locked in, wait for reveal" screen or - on a rejected
+   answer - hands back control via `onError` so the player can retry. */
+function sendAnswer(value, onError) {
+  if (answered) return;
+  answered = true;
+  socket.emit("player:answer", { answer: value }, res => {
     if (res && res.error) {
-      picked = -1;
-      [...$("aPad").children].forEach(n => { n.classList.remove("picked", "faded"); n.disabled = false; });
+      answered = false;
+      onError?.();
       return;
     }
     stopClock();
     $("wMsg").textContent = "Locked in";
-    $("wSub").textContent = "Answer " + LETTERS[i] + " is in. Hold tight for the reveal.";
-    setTimeout(() => { if (picked >= 0) show("s-wait"); }, 420);
+    $("wSub").textContent = "Hold tight for the reveal.";
+    setTimeout(() => { if (answered) show("s-wait"); }, 420);
   });
+}
+
+function renderSinglePad(pad, s) {
+  s.question.opts.forEach((o, i) => {
+    const b = el("button", "ans " + COLORS[i]);
+    b.appendChild(el("span", "tag", LETTERS[i]));
+    b.appendChild(el("span", "txt", o));
+    b.addEventListener("click", () => {
+      if (answered) return;
+      [...pad.children].forEach((n, k) => { n.classList.add(k === i ? "picked" : "faded"); n.disabled = true; });
+      sendAnswer(i, () => [...pad.children].forEach(n => { n.classList.remove("picked", "faded"); n.disabled = false; }));
+    });
+    pad.appendChild(b);
+  });
+}
+
+function renderMultiPad(pad, s) {
+  pad.className = "pad multi";
+  s.question.opts.forEach((o, i) => {
+    const b = el("button", "ans " + COLORS[i]);
+    b.appendChild(el("span", "tag", LETTERS[i]));
+    b.appendChild(el("span", "txt", o));
+    b.dataset.i = String(i);
+    b.addEventListener("click", () => {
+      if (answered) return;
+      b.classList.toggle("picked");
+    });
+    pad.appendChild(b);
+  });
+  const tiles = () => [...pad.querySelectorAll(".ans")];
+  const submit = el("button", "btn big", "Submit answer");
+  submit.addEventListener("click", () => {
+    if (answered) return;
+    const picks = tiles().filter(n => n.classList.contains("picked")).map(n => Number(n.dataset.i));
+    if (!picks.length) return;
+    tiles().forEach(n => { n.disabled = true; if (!n.classList.contains("picked")) n.classList.add("faded"); });
+    submit.disabled = true;
+    sendAnswer(picks, () => { tiles().forEach(n => { n.disabled = false; n.classList.remove("faded"); }); submit.disabled = false; });
+  });
+  pad.appendChild(submit);
+}
+
+function renderTextPad(pad) {
+  pad.className = "pad stack";
+  const input = el("textarea", "inp");
+  input.rows = 3; input.maxLength = 300; input.placeholder = "Type your answer…";
+  const submit = el("button", "btn big", "Submit");
+  submit.addEventListener("click", () => {
+    if (answered) return;
+    const text = input.value.trim();
+    if (!text) return;
+    input.disabled = true; submit.disabled = true;
+    sendAnswer(text, () => { input.disabled = false; submit.disabled = false; });
+  });
+  pad.append(input, submit);
+}
+
+function renderNumericPad(pad) {
+  pad.className = "pad stack";
+  const input = el("input", "inp");
+  input.type = "number"; input.inputMode = "decimal"; input.placeholder = "Your best guess";
+  const submit = el("button", "btn big", "Submit");
+  submit.addEventListener("click", () => {
+    if (answered) return;
+    const value = Number(input.value);
+    if (!Number.isFinite(value)) return;
+    input.disabled = true; submit.disabled = true;
+    sendAnswer(value, () => { input.disabled = false; submit.disabled = false; });
+  });
+  pad.append(input, submit);
 }
 
 function runClock(durMs) {

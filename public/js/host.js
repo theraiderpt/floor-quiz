@@ -116,7 +116,7 @@ async function openLibrary() {
   show("s-library");
 }
 
-$("libNew").addEventListener("click", () => { S.quiz = { id: null, title: "New quiz", questions: [], categoryId: null, joinMode: "name", gapSeconds: 5 }; openSetup(); });
+$("libNew").addEventListener("click", () => { S.quiz = { id: null, title: "New quiz", questions: [], categoryId: null, joinMode: "name", gapSeconds: 5, deliveryMode: "live", shareToken: null }; openSetup(); });
 $("libSample").addEventListener("click", async () => {
   const saved = await api("/quizzes", { method: "POST", body: SAMPLE });
   S.quiz = saved;
@@ -150,6 +150,8 @@ $("fileIn").addEventListener("change", e => {
 
 /* ------------------------------------------------------------- setup ---- */
 
+const TYPE_LABELS = { single: "single choice", multi: "multiple choice", text: "open text", numeric: "numeric guess" };
+
 async function openSetup() {
   $("quizTitle").value = S.quiz.title;
   const cats = await loadCategories();
@@ -157,8 +159,22 @@ async function openSetup() {
   $("quizCategory").value = S.quiz.categoryId || "";
   $("quizJoinMode").value = S.quiz.joinMode || "name";
   $("quizGap").value = S.quiz.gapSeconds || 5;
+  $("quizDelivery").value = S.quiz.deliveryMode || "live";
+  updateDeliveryVisibility();
   renderSetup();
   show("s-setup");
+}
+
+function updateDeliveryVisibility() {
+  const isSelfPaced = S.quiz.deliveryMode === "selfpaced";
+  $("quizGapField").hidden = isSelfPaced;
+  $("openLobby").textContent = isSelfPaced ? "Save & get link" : "Open lobby";
+  if (isSelfPaced && S.quiz.shareToken) showShareLink(); else $("selfpacedShare").hidden = true;
+}
+
+function showShareLink() {
+  $("shareLinkInput").value = location.origin + "/take/" + S.quiz.shareToken;
+  $("selfpacedShare").hidden = false;
 }
 
 function renderSetup() {
@@ -174,8 +190,17 @@ function renderSetup() {
     body.appendChild(el("p", "qt", q.q));
     const meta = el("div", "meta");
     meta.appendChild(el("span", null, q.t + "s"));
-    meta.appendChild(el("span", null, q.opts.length + " options"));
-    meta.appendChild(el("span", null, "correct: " + LETTERS[q.correct]));
+    meta.appendChild(el("span", null, TYPE_LABELS[q.type] || TYPE_LABELS.single));
+    if (q.type === "multi") {
+      meta.appendChild(el("span", null, q.opts.length + " options"));
+      meta.appendChild(el("span", null, "correct: " + q.correct.map(idx => LETTERS[idx]).join(", ")));
+    } else if (q.type === "numeric") {
+      meta.appendChild(el("span", null, "target " + q.target + " ± " + q.tolerance));
+    } else if (q.type !== "text") {
+      meta.appendChild(el("span", null, q.opts.length + " options"));
+      meta.appendChild(el("span", null, "correct: " + LETTERS[q.correct]));
+    }
+    if (q.shuffle) meta.appendChild(el("span", null, "shuffled"));
     body.appendChild(meta);
     item.appendChild(body);
 
@@ -204,6 +229,16 @@ $("quizTitle").addEventListener("input", e => { S.quiz.title = e.target.value; $
 $("quizCategory").addEventListener("change", e => { S.quiz.categoryId = e.target.value ? Number(e.target.value) : null; });
 $("quizJoinMode").addEventListener("change", e => { S.quiz.joinMode = e.target.value; });
 $("quizGap").addEventListener("change", e => { S.quiz.gapSeconds = Number(e.target.value) || 5; });
+$("quizDelivery").addEventListener("change", e => { S.quiz.deliveryMode = e.target.value; updateDeliveryVisibility(); });
+$("copyShareLink").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("shareLinkInput").value);
+    $("copyShareLink").textContent = "Copied!";
+    setTimeout(() => { $("copyShareLink").textContent = "Copy link"; }, 1500);
+  } catch {
+    $("shareLinkInput").select();
+  }
+});
 $("setupBack").addEventListener("click", openLibrary);
 $("addQ").addEventListener("click", () => openEditor(-1));
 $("browseBank").addEventListener("click", openBank);
@@ -229,7 +264,8 @@ async function persistQuiz() {
     questions: S.quiz.questions,
     categoryId: S.quiz.categoryId || null,
     joinMode: S.quiz.joinMode || "name",
-    gapSeconds: S.quiz.gapSeconds || 5
+    gapSeconds: S.quiz.gapSeconds || 5,
+    deliveryMode: S.quiz.deliveryMode || "live"
   };
   S.quiz = S.quiz.id
     ? await api("/quizzes/" + S.quiz.id, { method: "PUT", body })
@@ -290,22 +326,54 @@ $("eImgClear").addEventListener("click", () => setEditorImage(null));
 
 function openEditor(i) {
   S.editing = i;
-  const q = i >= 0 ? S.quiz.questions[i] : { q: "", t: 20, opts: ["", "", "", ""], correct: 0, img: null };
+  const q = i >= 0 ? S.quiz.questions[i] : { type: "single", q: "", t: 20, opts: ["", "", "", ""], correct: 0, img: null, shuffle: false };
   $("editTitle").textContent = i >= 0 ? "Edit question" : "New question";
   $("editIdx").textContent = i >= 0 ? String(i + 1).padStart(2, "0") : "new";
+  $("eQType").value = q.type || "single";
   $("eQ").value = q.q;
   $("eTime").value = String(q.t);
-  $("eType").value = q.opts.length === 2 ? "2" : "4";
+  $("eType").value = (q.opts && q.opts.length === 2) ? "2" : "4";
+  $("eShuffle").checked = Boolean(q.shuffle);
+  $("eTarget").value = q.target ?? "";
+  $("eTolerance").value = q.tolerance ?? 0;
   setEditorImage(q.img || null);
-  renderOpts(q.opts, q.correct);
+  updateEditorVisibility();
+  renderOpts(q.opts || ["", "", "", ""], q.correct);
   show("s-edit");
   $("eQ").focus();
+}
+
+function updateEditorVisibility() {
+  const type = $("eQType").value;
+  const isChoice = type === "single" || type === "multi";
+  $("eOptsWrap").hidden = !isChoice;
+  $("eTypeField").hidden = !isChoice;
+  $("eShuffleField").hidden = !isChoice;
+  $("eNumericFields").hidden = type !== "numeric";
+  $("eOptsNote").textContent = type === "multi" ? "Mark every option that's correct." : "Mark exactly one option as correct.";
+}
+
+/* Reads whatever is currently typed into the option inputs, regardless of
+   which question type is active, so switching type/option-count doesn't
+   throw away text the host already wrote. */
+function currentOptVals() {
+  const vals = [...$("eOpts").querySelectorAll("input.inp")].map(n => n.value);
+  return vals.length ? vals : ["", "", "", ""];
+}
+function currentCorrect() {
+  if ($("eQType").value === "multi") {
+    return [...$("eOpts").querySelectorAll("input[type=checkbox]:checked")].map(n => Number(n.value));
+  }
+  const picked = $("eOpts").querySelector("input[type=radio]:checked");
+  return picked ? Number(picked.value) : 0;
 }
 
 function renderOpts(opts, correct) {
   const wrap = $("eOpts");
   wrap.innerHTML = "";
   const count = parseInt($("eType").value, 10);
+  const isMulti = $("eQType").value === "multi";
+  const correctSet = new Set(isMulti && Array.isArray(correct) ? correct : []);
   for (let i = 0; i < count; i++) {
     const row = el("div", "optrow");
     const sw = el("span", "swatch"); sw.style.background = SWATCH[i];
@@ -315,29 +383,54 @@ function renderOpts(opts, correct) {
     inp.maxLength = 120;
     if (count === 2) inp.readOnly = true;
     const lab = el("label", "correct");
-    const rad = el("input"); rad.type = "radio"; rad.name = "correct"; rad.value = String(i);
-    if (i === correct) rad.checked = true;
-    lab.append(rad, document.createTextNode("correct"));
+    const box = el("input");
+    box.value = String(i);
+    if (isMulti) { box.type = "checkbox"; box.checked = correctSet.has(i); }
+    else { box.type = "radio"; box.name = "correct"; box.checked = i === correct; }
+    lab.append(box, document.createTextNode("correct"));
     row.append(sw, inp, lab);
     wrap.appendChild(row);
   }
 }
 
+$("eQType").addEventListener("change", () => {
+  updateEditorVisibility();
+  renderOpts(currentOptVals(), currentCorrect());
+});
+
 $("eType").addEventListener("change", () => {
-  const vals = [...$("eOpts").querySelectorAll("input.inp")].map(n => n.value);
-  const picked = $("eOpts").querySelector("input[type=radio]:checked");
-  renderOpts(vals, picked ? parseInt(picked.value, 10) : 0);
+  renderOpts(currentOptVals(), currentCorrect());
 });
 
 $("eCancel").addEventListener("click", () => show("s-setup"));
 $("eSave").addEventListener("click", () => {
+  const type = $("eQType").value;
   const text = $("eQ").value.trim();
-  const opts = [...$("eOpts").querySelectorAll("input.inp")].map(n => n.value.trim());
-  const picked = $("eOpts").querySelector("input[type=radio]:checked");
   if (!text) return alert("Add the question text.");
-  if (opts.some(o => !o)) return alert("Fill in every answer option.");
-  if (!picked) return alert("Mark one option as correct.");
-  const q = { q: text, t: parseInt($("eTime").value, 10), opts, correct: parseInt(picked.value, 10), img: editingImg };
+  const t = parseInt($("eTime").value, 10);
+
+  let q;
+  if (type === "text") {
+    q = { type, q: text, t, img: editingImg };
+  } else if (type === "numeric") {
+    const target = Number($("eTarget").value);
+    if (!Number.isFinite(target)) return alert("Enter the correct number.");
+    const tolerance = Math.max(0, Number($("eTolerance").value) || 0);
+    q = { type, q: text, t, img: editingImg, target, tolerance };
+  } else if (type === "multi") {
+    const opts = currentOptVals().map(o => o.trim());
+    if (opts.some(o => !o)) return alert("Fill in every answer option.");
+    const correct = currentCorrect();
+    if (!correct.length) return alert("Mark at least one option as correct.");
+    q = { type, q: text, t, img: editingImg, opts, correct, shuffle: $("eShuffle").checked };
+  } else {
+    const opts = currentOptVals().map(o => o.trim());
+    if (opts.some(o => !o)) return alert("Fill in every answer option.");
+    const picked = $("eOpts").querySelector("input[type=radio]:checked");
+    if (!picked) return alert("Mark one option as correct.");
+    q = { type: "single", q: text, t, img: editingImg, opts, correct: Number(picked.value), shuffle: $("eShuffle").checked };
+  }
+
   if (S.editing >= 0) S.quiz.questions[S.editing] = q; else S.quiz.questions.push(q);
   renderSetup();
   show("s-setup");
@@ -386,6 +479,7 @@ async function renderBankPick() {
 
 $("openLobby").addEventListener("click", async () => {
   await persistQuiz();
+  if (S.quiz.deliveryMode === "selfpaced") return showShareLink();
   createGame();
 });
 
@@ -444,6 +538,8 @@ socket.on("state", s => {
   }
 });
 
+const TYPE_HINTS = { multi: "Select all that apply", text: "Players type their answer", numeric: "Players enter their best guess" };
+
 function renderQuestion(s) {
   $("pPin").textContent = S.pin;
   $("pQn").textContent = (s.qIndex + 1) + "/" + s.total;
@@ -456,15 +552,28 @@ function renderQuestion(s) {
   $("pImg").hidden = true;
   $("pImg").src = "";
 
+  const hint = TYPE_HINTS[s.question.type];
+  $("pTypeHint").textContent = hint || "";
+  $("pTypeHint").hidden = !hint;
+
   const wrap = $("pAnswers");
   wrap.innerHTML = "";
-  s.question.opts.forEach((o, i) => {
-    const b = el("div", "ans " + COLORS[i]);
-    b.appendChild(el("span", "tag", LETTERS[i]));
-    b.appendChild(el("span", "txt", o));
-    b.append(el("span", "bar"), el("span", "n", ""));
-    wrap.appendChild(b);
-  });
+  if (s.question.type === "text") {
+    wrap.className = "resplist";
+    wrap.appendChild(el("p", "placeholder", "Responses will appear here once time is up."));
+  } else if (s.question.type === "numeric") {
+    wrap.className = "resplist";
+    wrap.appendChild(el("p", "placeholder", "Guesses will appear here, closest first, once time is up."));
+  } else {
+    wrap.className = "answers";
+    s.question.opts.forEach((o, i) => {
+      const b = el("div", "ans " + COLORS[i]);
+      b.appendChild(el("span", "tag", LETTERS[i]));
+      b.appendChild(el("span", "txt", o));
+      b.append(el("span", "bar"), el("span", "n", ""));
+      wrap.appendChild(b);
+    });
+  }
 }
 
 socket.on("answered", d => { $("pAnswered").textContent = d.answered; });
@@ -481,17 +590,46 @@ socket.on("reveal", d => {
   stopClock();
   $("pTimerWrap").style.visibility = "hidden";
   $("pSkip").hidden = true;
-  const total = Math.max(1, d.answered);
-  [...$("pAnswers").children].forEach((node, i) => {
-    const n = d.counts[i] || 0;
-    const pct = Math.round((n / total) * 100);
-    node.querySelector(".bar").style.width = pct + "%";
-    node.querySelector(".n").textContent = n + " · " + pct + "%";
-    node.classList.add(i === d.correct ? "hit" : "dim");
-  });
-  $("pFoot").textContent = d.answered
-    ? d.gotItRight + " of " + d.answered + " got it (" + Math.round((d.gotItRight / d.answered) * 100) + "%)"
-    : "No answers received";
+
+  if (d.type === "text") {
+    const wrap = $("pAnswers");
+    wrap.innerHTML = "";
+    if (!d.responses.length) wrap.appendChild(el("p", "placeholder", "No responses received."));
+    d.responses.forEach((r, i) => {
+      const item = el("div", "respitem");
+      item.style.animationDelay = i * 40 + "ms";
+      item.append(el("span", "who", r.name), el("span", "what", r.text));
+      wrap.appendChild(item);
+    });
+    $("pFoot").textContent = d.responses.length + " response" + (d.responses.length === 1 ? "" : "s") + " collected";
+  } else if (d.type === "numeric") {
+    const wrap = $("pAnswers");
+    wrap.innerHTML = "";
+    if (!d.guesses.length) wrap.appendChild(el("p", "placeholder", "No guesses received."));
+    d.guesses.forEach((g, i) => {
+      const hit = g.distance <= d.tolerance;
+      const item = el("div", "respitem" + (hit ? " hit" : ""));
+      item.style.animationDelay = i * 40 + "ms";
+      item.append(el("span", "who", g.name), el("span", "what", String(g.value)), el("span", "dist", (hit ? "within" : "off by ") + " " + g.distance));
+      wrap.appendChild(item);
+    });
+    $("pFoot").textContent = "Target was " + d.target + " (±" + d.tolerance + "). " +
+      (d.answered ? d.gotItRight + " of " + d.answered + " within tolerance" : "No answers received");
+  } else {
+    const correctSet = d.type === "multi" ? new Set(d.correct) : new Set([d.correct]);
+    const total = Math.max(1, d.answered);
+    [...$("pAnswers").children].forEach((node, i) => {
+      const n = d.counts[i] || 0;
+      const pct = Math.round((n / total) * 100);
+      node.querySelector(".bar").style.width = pct + "%";
+      node.querySelector(".n").textContent = n + " · " + pct + "%";
+      node.classList.add(correctSet.has(i) ? "hit" : "dim");
+    });
+    $("pFoot").textContent = d.answered
+      ? d.gotItRight + " of " + d.answered + " got it (" + Math.round((d.gotItRight / d.answered) * 100) + "%)"
+      : "No answers received";
+  }
+
   $("pNext").hidden = false;
   $("pNext").textContent = S.qIndex + 1 < S.quiz.questions.length ? "Show standings" : "Show final result";
 });

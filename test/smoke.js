@@ -204,7 +204,7 @@ const formalQ = waitFor(formalSocket, "state", s => s.phase === "question");
 hostBSocket2.emit("host:start");
 await formalQ;
 await sleep(120);
-await new Promise(r => formalSocket.emit("player:answer", { choice: 0 }, r));
+await new Promise(r => formalSocket.emit("player:answer", { answer: 0 }, r));
 const formalResult = await formalFinal;
 
 const formalCsv = await fetch(base + "/api/sessions/" + formalResult.sessionId + "/csv", { headers: { Cookie: cookieB } });
@@ -241,7 +241,7 @@ await gapQ1;
 await sleep(100);
 
 const gapScores = waitFor(hostCSocket, "scores", () => true);
-await new Promise(r => gapPlayer.emit("player:answer", { choice: 0 }, r));
+await new Promise(r => gapPlayer.emit("player:answer", { answer: 0 }, r));
 await gapScores;
 const gapT0 = Date.now();
 
@@ -316,12 +316,12 @@ check("a question's picture is sent to the host on its own channel",
   questionImages.some(d => d.qIndex === 0 && d.img === TINY_PNG), JSON.stringify(questionImages));
 
 /* Ana answers correctly and fast, Kostas correctly but slow, Marta wrong. */
-await new Promise(r => players[0].socket.emit("player:answer", { choice: 0 }, r));
+await new Promise(r => players[0].socket.emit("player:answer", { answer: 0 }, r));
 await sleep(1500);
-await new Promise(r => players[1].socket.emit("player:answer", { choice: 0 }, r));
-const twice = await new Promise(r => players[0].socket.emit("player:answer", { choice: 1 }, r));
+await new Promise(r => players[1].socket.emit("player:answer", { answer: 0 }, r));
+const twice = await new Promise(r => players[0].socket.emit("player:answer", { answer: 1 }, r));
 check("double answering is blocked", Boolean(twice.error), JSON.stringify(twice));
-await new Promise(r => players[2].socket.emit("player:answer", { choice: 2 }, r));
+await new Promise(r => players[2].socket.emit("player:answer", { answer: 2 }, r));
 
 await sleep(1200);
 check("question one revealed", reveals.length === 1, "reveals=" + reveals.length);
@@ -350,7 +350,7 @@ await sleep(120);
 
 /* Everyone answers, which should close the question before the timer. */
 const t0 = Date.now();
-await Promise.all(players.map(p => new Promise(r => p.socket.emit("player:answer", { choice: 1 }, r))));
+await Promise.all(players.map(p => new Promise(r => p.socket.emit("player:answer", { answer: 1 }, r))));
 await sleep(900);
 check("all-answered closes the question early", Date.now() - t0 < 3000 && reveals.length === 2,
   "elapsed=" + (Date.now() - t0) + "ms reveals=" + reveals.length);
@@ -443,7 +443,7 @@ const secondQ = waitFor(soloPlayer, "state", s => s.phase === "question");
 hostSocket2.emit("host:start");
 await secondQ;
 await sleep(120);
-await new Promise(r => soloPlayer.emit("player:answer", { choice: 0 }, r));
+await new Promise(r => soloPlayer.emit("player:answer", { answer: 0 }, r));
 await sleep(600);
 await secondFinal;
 await sleep(FLOW.revealMs + 500);
@@ -467,6 +467,191 @@ const bucketAfterAbandoned = statsAfterAbandoned.find(q => q.quizId === null && 
 check("an abandoned, never-finished session doesn't count toward games played", bucketAfterAbandoned?.games === 1, JSON.stringify(bucketAfterAbandoned));
 check("an abandoned session's timestamp doesn't leak in as the bucket's last-played date",
   bucketAfterAbandoned?.lastPlayed === firstBucketAfter?.lastPlayed, JSON.stringify({ bucketAfterAbandoned, firstBucketAfter }));
+
+/* ---- new question types: multi-select, unscored text, numeric guess,
+   and per-player shuffled answer order ---- */
+const hostSocket3 = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
+await new Promise(r => hostSocket3.on("connect", r));
+
+const typesReveals = [];
+hostSocket3.on("reveal", d => typesReveals.push(d));
+const hostQ0States = [];
+hostSocket3.on("state", s => { if (s.phase === "question" && s.qIndex === 0) hostQ0States.push(s); });
+
+const typesGame = await new Promise(r => hostSocket3.emit("host:create", {
+  quiz: {
+    title: "Types Test",
+    questions: [
+      { type: "single", q: "Single", t: 8, opts: ["A", "B", "C", "D"], correct: 1, shuffle: true },
+      { type: "multi", q: "Multi", t: 8, opts: ["A", "B", "C", "D"], correct: [0, 2] },
+      { type: "text", q: "Text", t: 8 },
+      { type: "numeric", q: "Numeric", t: 8, target: 50, tolerance: 5 }
+    ]
+  }
+}, r));
+check("types game opens", /^\d{4}$/.test(typesGame.pin || ""), JSON.stringify(typesGame));
+
+const typer = ioc(base, { transports: ["websocket"] });
+await new Promise(r => typer.on("connect", r));
+const typerResults = [];
+typer.on("result", d => typerResults.push(d));
+
+const offer = ioc(base, { transports: ["websocket"] });
+await new Promise(r => offer.on("connect", r));
+const offerResults = [];
+offer.on("result", d => offerResults.push(d));
+
+await new Promise(r => typer.emit("player:join", { pin: typesGame.pin, name: "Typer" }, r));
+await new Promise(r => offer.emit("player:join", { pin: typesGame.pin, name: "Off" }, r));
+
+/* Q0: single, shuffled. Each player's own view is shuffled independently,
+   so both look up where the correct option ("B", canonical index 1) landed
+   for them rather than assuming a fixed position. */
+const typerQ0 = waitFor(typer, "state", s => s.phase === "question" && s.qIndex === 0);
+const offerQ0 = waitFor(offer, "state", s => s.phase === "question" && s.qIndex === 0);
+hostSocket3.emit("host:start");
+const [typerState0, offerState0] = await Promise.all([typerQ0, offerQ0]);
+check("shuffled question tells the player it's shuffled", typerState0.question.shuffle === true, JSON.stringify(typerState0.question));
+await sleep(150);
+check("host's own view stays in canonical (unshuffled) order",
+  JSON.stringify(hostQ0States[0]?.question.opts) === JSON.stringify(["A", "B", "C", "D"]),
+  JSON.stringify(hostQ0States[0]?.question));
+
+const typerPos0 = typerState0.question.opts.indexOf("B");
+const offerPos0 = offerState0.question.opts.indexOf("C"); // deliberately wrong
+await new Promise(r => typer.emit("player:answer", { answer: typerPos0 }, r));
+await new Promise(r => offer.emit("player:answer", { answer: offerPos0 }, r));
+await sleep(900);
+check("shuffled single-choice still scores against the canonical correct answer",
+  typerResults[0]?.correct === true && offerResults[0]?.correct === false,
+  JSON.stringify([typerResults[0], offerResults[0]]));
+
+/* Q1: multi-select, all-or-nothing. */
+hostSocket3.emit("host:next"); await sleep(150);   // reveal -> scores
+const typerQ1 = waitFor(typer, "state", s => s.phase === "question" && s.qIndex === 1);
+hostSocket3.emit("host:next");                      // scores -> ask(1)
+await typerQ1;
+await sleep(100);
+await new Promise(r => typer.emit("player:answer", { answer: [0, 2] }, r));  // exact set: correct
+await new Promise(r => offer.emit("player:answer", { answer: [0] }, r));     // partial: wrong
+await sleep(900);
+check("multi-select exact correct set scores correct", typerResults[1]?.correct === true, JSON.stringify(typerResults[1]));
+check("multi-select partial pick scores wrong, not partial credit", offerResults[1]?.correct === false, JSON.stringify(offerResults[1]));
+check("multi reveal reports counts per option and the correct set",
+  typesReveals[1]?.type === "multi" && JSON.stringify(typesReveals[1]?.correct) === "[0,2]" && typesReveals[1]?.counts?.length === 4,
+  JSON.stringify(typesReveals[1]));
+
+/* Q2: unscored text - collected, never scored. */
+hostSocket3.emit("host:next"); await sleep(150);
+const typerQ2 = waitFor(typer, "state", s => s.phase === "question" && s.qIndex === 2);
+hostSocket3.emit("host:next");
+await typerQ2;
+await sleep(100);
+await new Promise(r => typer.emit("player:answer", { answer: "typer text" }, r));
+await new Promise(r => offer.emit("player:answer", { answer: "off text" }, r));
+await sleep(900);
+check("unscored text answer reports correct: null and no points",
+  typerResults[2]?.correct === null && typerResults[2]?.points === 0, JSON.stringify(typerResults[2]));
+check("text reveal collects every response for the host to read",
+  typesReveals[2]?.type === "text" && typesReveals[2]?.responses?.length === 2,
+  JSON.stringify(typesReveals[2]));
+
+/* Q3: numeric guess, within/outside tolerance. */
+hostSocket3.emit("host:next"); await sleep(150);
+const typerQ3 = waitFor(typer, "state", s => s.phase === "question" && s.qIndex === 3);
+hostSocket3.emit("host:next");
+await typerQ3;
+await sleep(100);
+await new Promise(r => typer.emit("player:answer", { answer: 52 }, r));   // within tolerance (target 50 +/-5)
+await new Promise(r => offer.emit("player:answer", { answer: 100 }, r)); // outside
+await sleep(900);
+check("numeric guess within tolerance scores correct", typerResults[3]?.correct === true, JSON.stringify(typerResults[3]));
+check("numeric guess outside tolerance scores wrong", offerResults[3]?.correct === false, JSON.stringify(offerResults[3]));
+check("numeric reveal sorts guesses by closeness to the target",
+  typesReveals[3]?.type === "numeric" && typesReveals[3]?.guesses?.[0]?.name === "Typer",
+  JSON.stringify(typesReveals[3]));
+
+const typesFinal = waitFor(hostSocket3, "final", () => true);
+hostSocket3.emit("host:next");   // last question's reveal -> end()
+const typesFinalPayload = await typesFinal;
+
+const typesCsv = await fetch(base + "/api/sessions/" + typesFinalPayload.sessionId + "/csv", { headers: { Cookie: cookie } });
+const typesCsvText = await typesCsv.text();
+const typesRows = typesCsvText.trim().split("\r\n");
+check("CSV header lists all four question types",
+  typesRows[0].includes('"Q1: Single"') && typesRows[0].includes('"Q2: Multi"') &&
+  typesRows[0].includes('"Q3: Text"') && typesRows[0].includes('"Q4: Numeric"'),
+  typesRows[0]);
+const typesRowFor = name => typesRows.slice(1).find(r => r.split(",")[1] === `"${name}"`);
+const typesPerQ = row => row.split(",").slice(6).join(",");
+check("CSV logs Typer right on every scored question plus their literal text answer",
+  typesPerQ(typesRowFor("Typer")) === '"Right","Right","typer text","Right"', typesRowFor("Typer"));
+check("CSV logs Off wrong on every scored question plus their literal text answer",
+  typesPerQ(typesRowFor("Off")) === '"Wrong","Wrong","off text","Wrong"', typesRowFor("Off"));
+
+/* ---- delivery mode: a quiz saved as 'selfpaced' mints a share token and
+   can't be opened as a live lobby ---- */
+const spQuiz = await (await fetch(base + "/api/quizzes", {
+  method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie },
+  body: JSON.stringify({
+    title: "Self-Paced Test",
+    deliveryMode: "selfpaced",
+    questions: [
+      { type: "single", q: "SP single", t: 20, opts: ["A", "B"], correct: 0 },
+      { type: "multi", q: "SP multi", t: 20, opts: ["A", "B", "C"], correct: [0, 1] },
+      { type: "text", q: "SP text", t: 20 },
+      { type: "numeric", q: "SP numeric", t: 20, target: 7, tolerance: 1 }
+    ]
+  })
+})).json();
+check("a self-paced quiz gets a share token when saved", typeof spQuiz.shareToken === "string" && spQuiz.shareToken.length > 10, JSON.stringify(spQuiz));
+check("delivery mode round-trips as selfpaced", spQuiz.deliveryMode === "selfpaced", JSON.stringify(spQuiz));
+
+const liveAttempt = await new Promise(r => hostSocket3.emit("host:create", { quiz: spQuiz, quizId: spQuiz.id }, r));
+check("a self-paced quiz refuses to open as a live lobby", Boolean(liveAttempt.error), JSON.stringify(liveAttempt));
+
+const spMeta = await (await fetch(base + "/api/selfpaced/" + spQuiz.shareToken)).json();
+check("self-paced metadata is public (no auth) and reports the right total", spMeta.title === "Self-Paced Test" && spMeta.total === 4, JSON.stringify(spMeta));
+
+const badToken = await fetch(base + "/api/selfpaced/not-a-real-token");
+check("an unknown self-paced token 404s", badToken.status === 404, "got " + badToken.status);
+
+const spStart = await (await fetch(base + "/api/selfpaced/" + spQuiz.shareToken + "/start", {
+  method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ name: "Self Pacer" })
+})).json();
+check("starting a self-paced attempt returns the first question with no answer key",
+  Boolean(spStart.attemptId) && spStart.question?.q === "SP single" && spStart.question.correct === undefined,
+  JSON.stringify(spStart));
+
+const spAnswer = answer => fetch(base + "/api/selfpaced/attempts/" + spStart.attemptId + "/answer", {
+  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answer })
+}).then(r => r.json());
+
+const spR1 = await spAnswer(0); // single correct
+check("self-paced single answer scores flat BASE points, no speed bonus", spR1.correct === true && spR1.points === 600, JSON.stringify(spR1));
+const spR2 = await spAnswer([0, 1]); // multi correct
+check("self-paced multi answer scores correct", spR2.correct === true, JSON.stringify(spR2));
+const spR3 = await spAnswer("hello from self-paced"); // text unscored
+check("self-paced text answer is unscored", spR3.correct === null && spR3.points === 0, JSON.stringify(spR3));
+const spR4 = await spAnswer(8); // numeric within tolerance (target 7 +/-1)
+check("self-paced attempt finishes after the last question and reports done", spR4.done === true && spR4.next === null, JSON.stringify(spR4));
+check("self-paced running score reflects three correct answers", spR4.score === 1800 && spR4.correctCount === 3, JSON.stringify(spR4));
+
+const spSessions = await (await fetch(base + "/api/stats/quizzes/" + spQuiz.id + "/sessions", { headers: { Cookie: cookie } })).json();
+check("the finished self-paced attempt lands in the quiz's own dashboard bucket", spSessions.length === 1, JSON.stringify(spSessions));
+
+const spSessionDetail = await (await fetch(base + "/api/sessions/" + spSessions[0].id, { headers: { Cookie: cookie } })).json();
+check("the persisted self-paced session is tagged with mode 'selfpaced'", spSessionDetail.mode === "selfpaced", JSON.stringify(spSessionDetail));
+check("the self-paced result carries the player's name and score",
+  spSessionDetail.results[0]?.name === "Self Pacer" && spSessionDetail.results[0]?.score === 1800, JSON.stringify(spSessionDetail.results));
+
+const spAnswerAfterDone = await spAnswer(0);
+check("answering after an attempt is finished is rejected", Boolean(spAnswerAfterDone.error), JSON.stringify(spAnswerAfterDone));
+
+typer.disconnect();
+offer.disconnect();
+hostSocket3.disconnect();
 
 /* ---- sanitiser ---- */
 const { sanitiseQuiz, cleanName } = await import("../server/game.js");
@@ -497,6 +682,36 @@ const withImages = sanitiseQuiz({
 check("a valid data-URI image is kept", withImages.questions[0].img === TINY_PNG);
 check("a non-image string is dropped", withImages.questions[1].img === null, String(withImages.questions[1].img));
 check("an oversized image is dropped", withImages.questions[2].img === null, String(withImages.questions[2].img));
+
+const typedQuiz = sanitiseQuiz({
+  title: "Types",
+  deliveryMode: "selfpaced",
+  questions: [
+    { type: "single", q: "unmarked type defaults to single", t: 10, opts: ["a", "b"], correct: 1 },
+    { type: "multi", q: "multi with dupes and out-of-range picks", t: 10, opts: ["a", "b", "c"], correct: [0, 0, 1, 99, -1] },
+    { type: "multi", q: "multi with no valid picks is dropped", t: 10, opts: ["a", "b"], correct: [] },
+    { type: "text", q: "unscored", t: 10 },
+    { type: "text", q: "" /* blank text question is dropped, not just a blank opts list */ },
+    { type: "numeric", q: "guess it", t: 10, target: "42", tolerance: -5 },
+    { type: "numeric", q: "no target given", t: 10 },
+    { type: "bogus-type", q: "unknown type falls back to single", t: 10, opts: ["a", "b"], correct: 0 }
+  ]
+});
+check("delivery mode round-trips through sanitiseQuiz", typedQuiz.deliveryMode === "selfpaced", typedQuiz.deliveryMode);
+check("unusable typed questions (empty text, no valid picks, no target) are dropped",
+  typedQuiz.questions.length === 5, JSON.stringify(typedQuiz.questions.map(q => q.type + ":" + q.q)));
+check("multi correct set is deduped, filtered to range, and sorted",
+  JSON.stringify(typedQuiz.questions[1].correct) === "[0,1]", JSON.stringify(typedQuiz.questions[1].correct));
+check("numeric target coerces from a numeric string", typedQuiz.questions[3].target === 42, String(typedQuiz.questions[3].target));
+check("numeric tolerance is clamped to zero or above", typedQuiz.questions[3].tolerance === 0, String(typedQuiz.questions[3].tolerance));
+check("an unrecognised question type falls back to single",
+  typedQuiz.questions[4]?.type === "single" && typedQuiz.questions[4].q.includes("unknown type"),
+  JSON.stringify(typedQuiz.questions.map(q => q.type + ":" + q.q)));
+
+const shuffleOff = sanitiseQuiz({ questions: [{ q: "no shuffle field", t: 10, opts: ["a", "b"], correct: 0 }] });
+check("shuffle defaults to false when not given", shuffleOff.questions[0].shuffle === false);
+const shuffleOn = sanitiseQuiz({ questions: [{ q: "shuffled", t: 10, opts: ["a", "b"], correct: 0, shuffle: true }] });
+check("shuffle is kept when explicitly set", shuffleOn.questions[0].shuffle === true);
 
 /* ---- done ---- */
 players.forEach(p => p.socket.disconnect());
