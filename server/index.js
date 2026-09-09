@@ -371,23 +371,31 @@ app.get("/api/stats/overview", requireHost, (req, res) => res.json(store.stats.o
 
 app.get("/api/stats/quizzes", requireHost, (req, res) => res.json(store.stats.byQuiz(req.hostAccount.id)));
 
-function parseQuizIdParam(raw, res) {
-  if (raw === "null") return { quizId: null };
+/* A quiz group is addressed by the `groupKey` a /api/stats/quizzes row
+   carries: a saved quiz's own id as a string, or `t:<title>` for an
+   ad-hoc/deleted-quiz bucket (see store.stats.byQuiz). */
+function parseGroupKey(raw, res) {
+  if (typeof raw === "string" && raw.startsWith("t:")) return { quizId: null, title: raw.slice(2) };
   const quizId = Number(raw);
   if (!Number.isInteger(quizId)) { res.status(400).json({ error: "Bad quiz id." }); return null; }
-  return { quizId };
+  return { quizId, title: null };
 }
 
-app.get("/api/stats/quizzes/:quizId/sessions", requireHost, (req, res) => {
-  const parsed = parseQuizIdParam(req.params.quizId, res);
-  if (!parsed) return;
-  res.json(store.stats.sessionsForQuiz(req.hostAccount.id, parsed.quizId));
+app.get("/api/stats/quizzes/:groupKey", requireHost, (req, res) => {
+  if (!parseGroupKey(req.params.groupKey, res)) return;
+  res.json(store.stats.forQuiz(req.hostAccount.id, req.params.groupKey));
 });
 
-app.get("/api/stats/quizzes/:quizId/questions", requireHost, (req, res) => {
-  const parsed = parseQuizIdParam(req.params.quizId, res);
+app.get("/api/stats/quizzes/:groupKey/sessions", requireHost, (req, res) => {
+  const parsed = parseGroupKey(req.params.groupKey, res);
   if (!parsed) return;
-  res.json(store.stats.questionBreakdown(req.hostAccount.id, parsed.quizId));
+  res.json(store.stats.sessionsForQuiz(req.hostAccount.id, parsed.quizId, parsed.title));
+});
+
+app.get("/api/stats/quizzes/:groupKey/questions", requireHost, (req, res) => {
+  const parsed = parseGroupKey(req.params.groupKey, res);
+  if (!parsed) return;
+  res.json(store.stats.questionBreakdown(req.hostAccount.id, parsed.quizId, parsed.title));
 });
 
 app.get("/api/health", (req, res) => res.json({ ok: true, ...rooms.stats(), uptime: Math.round(process.uptime()) }));

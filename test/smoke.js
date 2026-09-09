@@ -397,23 +397,76 @@ const adhoc = statsByQuiz.find(q => q.quizId === null);
 check("an ad-hoc (unsaved) quiz still gets its own bucket in the per-quiz stats", Boolean(adhoc), JSON.stringify(statsByQuiz));
 check("per-quiz stats title falls back to the session title", adhoc?.title === "Smoke Test", JSON.stringify(adhoc));
 check("per-quiz stats count the one game played", adhoc?.games === 1, JSON.stringify(adhoc));
+check("per-quiz totalPlayers isn't inflated by the results-join fan-out (3, not 3x results rows)", adhoc?.totalPlayers === 3, JSON.stringify(adhoc));
 check("per-quiz accuracy blends both questions (5 of 6 correct)", adhoc?.accuracy === 83, JSON.stringify(adhoc));
+check("groupKey for an ad-hoc quiz is derived from its title", adhoc?.groupKey === "t:Smoke Test", JSON.stringify(adhoc));
 
-const quizSessions = await (await fetch(base + "/api/stats/quizzes/null/sessions", { headers: { Cookie: cookie } })).json();
+const groupKey = encodeURIComponent(adhoc.groupKey);
+
+const oneQuiz = await (await fetch(base + "/api/stats/quizzes/" + groupKey, { headers: { Cookie: cookie } })).json();
+check("single-quiz stats endpoint matches the list entry", oneQuiz?.games === adhoc.games && oneQuiz?.totalPlayers === adhoc.totalPlayers, JSON.stringify({ oneQuiz, adhoc }));
+
+const missingQuiz = await fetch(base + "/api/stats/quizzes/" + encodeURIComponent("t:Nonexistent"), { headers: { Cookie: cookie } });
+const missingQuizBody = await missingQuiz.json();
+check("single-quiz stats endpoint returns null for an unknown bucket", missingQuiz.status === 200 && missingQuizBody === null, JSON.stringify(missingQuizBody));
+
+const badKey = await fetch(base + "/api/stats/quizzes/not-a-number/sessions", { headers: { Cookie: cookie } });
+check("a malformed group key is rejected", badKey.status === 400, "got " + badKey.status);
+
+const quizSessions = await (await fetch(base + "/api/stats/quizzes/" + groupKey + "/sessions", { headers: { Cookie: cookie } })).json();
 check("drilling into the quiz lists its one session", quizSessions.length === 1 && quizSessions[0].id === sessionId, JSON.stringify(quizSessions));
 
-const quizQuestions = await (await fetch(base + "/api/stats/quizzes/null/questions", { headers: { Cookie: cookie } })).json();
+const quizQuestions = await (await fetch(base + "/api/stats/quizzes/" + groupKey + "/questions", { headers: { Cookie: cookie } })).json();
 const q1Stats = quizQuestions.find(q => q.q === "Fast one");
 const q2Stats = quizQuestions.find(q => q.q === "Second one");
 check("question breakdown finds both questions", Boolean(q1Stats) && Boolean(q2Stats), JSON.stringify(quizQuestions));
 check("hardest question reflects Marta's miss", q1Stats?.right === 2 && q1Stats?.wrong === 1 && q1Stats?.accuracy === 67, JSON.stringify(q1Stats));
 check("easy question shows everyone right", q2Stats?.right === 3 && q2Stats?.accuracy === 100, JSON.stringify(q2Stats));
 
-const otherHostSessions = await (await fetch(base + "/api/stats/quizzes/null/sessions", { headers: { Cookie: cookieB } })).json();
+const otherHostSessions = await (await fetch(base + "/api/stats/quizzes/" + groupKey + "/sessions", { headers: { Cookie: cookieB } })).json();
 check("dashboard stats are scoped per host, not shared", otherHostSessions.every(s => s.id !== sessionId), JSON.stringify(otherHostSessions));
 
 const statsNoAuth = await fetch(base + "/api/stats/overview");
 check("dashboard stats require a signed-in host", statsNoAuth.status === 401, "got " + statsNoAuth.status);
+
+/* ---- dashboard stats: a second, differently-titled ad-hoc quiz must not
+   get merged into the first one just because both have quiz_id NULL ---- */
+const hostSocket2 = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
+await new Promise(r => hostSocket2.on("connect", r));
+const secondAdhocQuiz = { title: "Second Ad-hoc", questions: [{ q: "Only one", t: 6, opts: ["Right", "Wrong"], correct: 0 }] };
+const secondGame = await new Promise(r => hostSocket2.emit("host:create", { quiz: secondAdhocQuiz }, r));
+const soloPlayer = ioc(base, { transports: ["websocket"] });
+await new Promise(r => soloPlayer.on("connect", r));
+await new Promise(r => soloPlayer.emit("player:join", { pin: secondGame.pin, name: "Solo" }, r));
+const secondFinal = waitFor(hostSocket2, "final", () => true);
+const secondQ = waitFor(soloPlayer, "state", s => s.phase === "question");
+hostSocket2.emit("host:start");
+await secondQ;
+await sleep(120);
+await new Promise(r => soloPlayer.emit("player:answer", { choice: 0 }, r));
+await sleep(600);
+await secondFinal;
+await sleep(FLOW.revealMs + 500);
+soloPlayer.disconnect();
+hostSocket2.disconnect();
+
+const statsByQuizAfter = await (await fetch(base + "/api/stats/quizzes", { headers: { Cookie: cookie } })).json();
+const nullBuckets = statsByQuizAfter.filter(q => q.quizId === null);
+check("two differently-titled ad-hoc quizzes get separate dashboard buckets", nullBuckets.length === 2, JSON.stringify(nullBuckets));
+const secondBucket = nullBuckets.find(q => q.title === "Second Ad-hoc");
+check("the new ad-hoc quiz's own bucket has its own game count", secondBucket?.games === 1, JSON.stringify(secondBucket));
+const firstBucketAfter = nullBuckets.find(q => q.title === "Smoke Test");
+check("the original ad-hoc quiz's game count is unaffected by the second one",
+  firstBucketAfter?.games === 1 && firstBucketAfter?.totalPlayers === 3, JSON.stringify(firstBucketAfter));
+
+/* ---- dashboard stats: an abandoned (never-ended) session must not leak
+   its title or timestamp into a bucket it doesn't actually count toward ---- */
+store.sessions.open("9999", null, "Smoke Test", hostA.id);
+const statsAfterAbandoned = await (await fetch(base + "/api/stats/quizzes", { headers: { Cookie: cookie } })).json();
+const bucketAfterAbandoned = statsAfterAbandoned.find(q => q.quizId === null && q.title === "Smoke Test");
+check("an abandoned, never-finished session doesn't count toward games played", bucketAfterAbandoned?.games === 1, JSON.stringify(bucketAfterAbandoned));
+check("an abandoned session's timestamp doesn't leak in as the bucket's last-played date",
+  bucketAfterAbandoned?.lastPlayed === firstBucketAfter?.lastPlayed, JSON.stringify({ bucketAfterAbandoned, firstBucketAfter }));
 
 /* ---- sanitiser ---- */
 const { sanitiseQuiz, cleanName } = await import("../server/game.js");

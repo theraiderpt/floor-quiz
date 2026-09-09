@@ -35,7 +35,7 @@ const S = {
   endsAt: 0,
   raf: null,
   sessionId: null,
-  dash: { quiz: null, backTo: "dashboard" }
+  dash: { groupKey: null, backTo: "dashboard" }
 };
 
 let CATEGORIES = [];
@@ -129,7 +129,7 @@ $("goDashboard").addEventListener("click", openDashboard);
 $("dashBack").addEventListener("click", openLibrary);
 $("qsBack").addEventListener("click", openDashboard);
 $("detailBack").addEventListener("click", () => {
-  if (S.dash.backTo === "quiz" && S.dash.quiz) openQuizSessions(S.dash.quiz);
+  if (S.dash.backTo === "quiz" && S.dash.groupKey) openQuizSessions(S.dash.groupKey);
   else if (S.dash.backTo === "history") openHistory();
   else openDashboard();
 });
@@ -604,7 +604,13 @@ function accClass(pct) {
 }
 
 async function openDashboard() {
-  const [overview, quizzes] = await Promise.all([api("/stats/overview"), api("/stats/quizzes")]);
+  let overview, quizzes;
+  try {
+    [overview, quizzes] = await Promise.all([api("/stats/overview"), api("/stats/quizzes")]);
+  } catch (e) {
+    alert(e.message);
+    return openLibrary();
+  }
 
   const stats = $("dashStats");
   stats.innerHTML = "";
@@ -635,19 +641,27 @@ async function openDashboard() {
     );
     body.appendChild(meta);
     item.appendChild(body);
-    item.addEventListener("click", () => openQuizSessions(q));
+    item.addEventListener("click", () => openQuizSessions(q.groupKey));
     wrap.appendChild(item);
   });
   show("s-dashboard");
 }
 
-async function openQuizSessions(quiz) {
-  S.dash.quiz = quiz;
-  const key = quiz.quizId == null ? "null" : quiz.quizId;
-  const [list, questions] = await Promise.all([
-    api("/stats/quizzes/" + key + "/sessions"),
-    api("/stats/quizzes/" + key + "/questions")
-  ]);
+async function openQuizSessions(groupKey) {
+  S.dash.groupKey = groupKey;
+  const key = encodeURIComponent(groupKey);
+  let quiz, list, questions;
+  try {
+    [quiz, list, questions] = await Promise.all([
+      api("/stats/quizzes/" + key),
+      api("/stats/quizzes/" + key + "/sessions"),
+      api("/stats/quizzes/" + key + "/questions")
+    ]);
+  } catch (e) {
+    alert(e.message);
+    return openDashboard();
+  }
+  if (!quiz) return openDashboard();
   $("qsTitle").textContent = quiz.title;
 
   const stats = $("qsStats");
@@ -669,7 +683,7 @@ async function openQuizSessions(quiz) {
       const bar = el("div", "qbar");
       const head = el("div", "qb-head");
       head.append(el("span", "qtxt", q.q), el("span", "qpct", q.accuracy != null ? q.accuracy + "%" : "—"));
-      const track = el("div", "track");
+      const track = el("div", "track sm");
       const fill = el("div", "fill" + accClass(q.accuracy));
       fill.style.width = (q.accuracy ?? 0) + "%";
       track.appendChild(fill);
@@ -703,7 +717,13 @@ async function openQuizSessions(quiz) {
 
 async function openSessionDetail(id, backTo) {
   S.dash.backTo = backTo;
-  const s = await api("/sessions/" + id);
+  let s;
+  try {
+    s = await api("/sessions/" + id);
+  } catch (e) {
+    alert(e.message);
+    return;
+  }
   $("detTitle").textContent = s.title;
   $("detPin").textContent = s.pin;
   $("detWhen").textContent = s.started_at.replace("T", " ").slice(0, 16) + " · " + s.player_count + " players";

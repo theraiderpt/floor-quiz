@@ -120,9 +120,10 @@ per-quiz aggregates, then drill-down into any one game's full leaderboard.
   quizzes in the library, last played date. All scoped to the signed-in
   host, same ownership model as quizzes/sessions.
 - Per-quiz cards: games played, total players, average score, accuracy,
-  last played. Grouped by `quiz_id`; a session whose quiz was later deleted
-  (or never saved) still rolls up under its own bucket, keyed by `null`,
-  using the session's own frozen title.
+  last played. Grouped by `quiz_id` when a session came from a saved quiz,
+  or by title when it didn't (a never-saved quiz and a quiz whose row was
+  later deleted both have `quiz_id NULL`, and two such sessions can be
+  genuinely different quizzes, so title is what keeps them apart).
 - Per-quiz question breakdown: which questions are actually getting missed,
   computed by lining up each session's frozen `questions_json` against
   every player's per-question `answers_json` log and tallying right/wrong/
@@ -136,28 +137,66 @@ per-quiz aggregates, then drill-down into any one game's full leaderboard.
 ### Files changed
 
 - `server/db.js`: `stmt.hostOverview`, `stmt.countQuizzesByHost`,
-  `stmt.statsByQuiz`, `stmt.sessionsForQuiz`, and a new `store.stats`
-  module (`overview`, `byQuiz`, `sessionsForQuiz`, `questionBreakdown`).
-  No schema change, everything reads existing columns.
+  `stmt.statsByQuiz` (a CTE query, see "Post-review fixes" below),
+  `stmt.sessionsForGroup`, `stmt.questionLogsForGroup`, and a new
+  `store.stats` module (`overview`, `byQuiz`, `forQuiz`, `sessionsForQuiz`,
+  `questionBreakdown`). No schema change, everything reads existing columns.
 - `server/index.js`: `GET /api/stats/overview`, `GET /api/stats/quizzes`,
-  `GET /api/stats/quizzes/:quizId/sessions`,
-  `GET /api/stats/quizzes/:quizId/questions`. All behind `requireHost` and
-  scoped to `req.hostAccount.id`; `:quizId` accepts the literal `null` for
-  the no-quiz bucket.
+  `GET /api/stats/quizzes/:groupKey`, `GET /api/stats/quizzes/:groupKey/sessions`,
+  `GET /api/stats/quizzes/:groupKey/questions`. All behind `requireHost` and
+  scoped to `req.hostAccount.id`. `groupKey` is a saved quiz's own id as a
+  string, or `t:<title>` for the ad-hoc/deleted-quiz bucket.
 - `public/host.html` / `public/js/host.js`: "Dashboard" nav entry next to
   "Past games"; three new screens (`s-dashboard`, `s-quiz-sessions`,
   `s-session-detail`); existing history rows now open the same session
   detail view instead of only offering a CSV link.
 - `public/css/app.css`: `.stats`/`.stat` tiles, `.qitem.click` hover state,
   `.lrow.detail`/`.lrow.head` for the results table, `.qbars`/`.qbar` for
-  the per-question accuracy bars.
+  the per-question accuracy bars (reusing the existing `.track`/`.fill`
+  progress-bar classes rather than duplicating them).
+
+### Post-review fixes
+
+`/code-review ultra` on the first version of this phase (commit `092ed40`)
+found and empirically verified three correctness bugs, plus a handful of
+lower-severity issues. All fixed before this ever reached production, in
+the same phase rather than as a separate one:
+
+- **Join fan-out inflated player counts.** The original `statsByQuiz` query
+  joined `sessions` to `results` (one row per player) before summing
+  `player_count`, so a 3-player game reported `totalPlayers: 9`. Fixed by
+  aggregating session-level sums and result-level sums in separate CTEs and
+  joining the two 1:1 by group afterward.
+- **Every ad-hoc quiz collapsed into one bucket.** `GROUP BY quiz_id` alone
+  merges *all* never-saved (or since-deleted) quizzes together, since they
+  all share `quiz_id NULL` regardless of being different quizzes. Fixed by
+  grouping on `COALESCE(quiz_id, 'title:' || title)` instead, and by
+  changing the client-facing quiz identifier from a raw `quizId` to a
+  `groupKey` (`"5"` or `"t:Friday Trivia"`) that both the SQL and the API
+  routes use consistently.
+- **An abandoned session's title/date could leak into a bucket it didn't
+  belong to.** The old title-fallback subquery didn't filter out
+  never-ended sessions the way the outer query did, so a lobby opened and
+  abandoned could supply the wrong title or `lastPlayed` for a quiz that
+  was actually never finished that time. Fixed by applying `ended_at IS
+  NOT NULL` once, in the base CTE, so every downstream reference inherits it.
+- Also fixed: `questionBreakdown` did an N+1 query (one extra round trip per
+  session) instead of one join; the quiz-drill-down screen's header tiles
+  went stale on Back-navigation because they were rendered from a cached
+  object instead of being re-fetched (now backed by the new
+  `GET /api/stats/quizzes/:groupKey`); the two new click-through screens had
+  no error handling for a 404 mid-navigation; `avgPlayers`/`topScore`/
+  `firstPlayed` were computed per-quiz but never rendered anywhere, so they
+  were dropped; and duplicate `.track`/`.fill` CSS was merged into the
+  existing shared classes.
 
 ### Commands run
 
 ```bash
 node --check server/db.js server/index.js public/js/host.js test/smoke.js
-npm run smoke   # 78 assertions, all green (12 new, covering host scoping,
-                 # the null-quiz bucket, and the accuracy math)
+npm run smoke   # 91 assertions, all green (25 new: the original 12 plus
+                 # 13 added post-review, including direct regression checks
+                 # for each of the three correctness bugs above)
 ```
 
 ### Manual verification still to do
