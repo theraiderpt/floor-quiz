@@ -94,7 +94,8 @@ async function loadOverview() {
     meta.append(
       el("span", null, g.host_email || "unassigned"),
       el("span", null, g.started_at.replace("T", " ").slice(0, 16)),
-      el("span", null, "pin " + g.pin)
+      el("span", null, "pin " + g.pin),
+      el("span", null, g.mode === "selfpaced" ? "self-paced" : "live")
     );
     body.appendChild(meta);
     item.appendChild(body);
