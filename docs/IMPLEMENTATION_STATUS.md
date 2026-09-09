@@ -334,11 +334,46 @@ layer via smoke.js and a few standalone repros, not by clicking through it):
 3. Confirm a self-paced quiz's "Open lobby" button correctly reads "Save &
    get link" instead, and that a live quiz never shows a self-paced link box.
 
+### Post-deploy fixes
+
+Found by self-review after this phase went out (no browser, no second
+agent this time - just re-reading the self-paced engine critically, the
+same way the ultra review caught the dashboard bugs earlier):
+
+- **Stale-answer guard.** The live game can't have this bug: a question
+  stays open until the host advances, so a retried `player:answer` always
+  lands on the still-open question. Self-paced has no such gate - it
+  advances the instant one valid answer is scored - so a lost response on
+  a flaky phone connection could make the client retry after the server
+  had already moved to the next question, silently scoring stale data
+  against whatever came next (e.g. a numeric guess like `8` retried
+  against a `text` question would pass validation as the string `"8"`).
+  Fixed by tagging every question with its own `qIndex` and having
+  `Attempt.answer()` reject a submission tagged with the wrong one;
+  `take.js` now trusts the server's `qIndex` instead of counting locally.
+  Verified with a direct repro before writing the fix, then locked in as
+  two smoke.js assertions.
+- **Sweeper persisted true no-shows.** `Attempts.sweep()` called
+  `finish()` unconditionally on every abandoned attempt, so someone who
+  opened the self-paced link, clicked Start, and closed the tab without
+  answering anything would still get persisted as a "0 answered" game
+  three hours later - inconsistent with the live game's own stated rule
+  that an abandoned session "keeps the history clean" by never landing in
+  it. Fixed: the sweep only finishes (and persists) an attempt that
+  answered at least one question; a true no-show is dropped, and its
+  session row simply never gets an `ended_at`, excluding it from stats
+  the same way an abandoned live game already is.
+- The QR code color was still on the pre-Foundever-rebrand palette
+  (`#101828`/`#eef2f7`) - that phase only touched the stylesheet, missed
+  this one call site in `server/index.js`. Now `#09092d`/`#f3f3f7`.
+
+```bash
+npm run smoke   # 134 assertions, all green (4 new for the two fixes above)
+```
+
 ### Deployment
 
-Not deployed. Per the standing ground rules: check
-`curl -s localhost:3000/api/health` for `games: 0` before restarting, and
-get explicit go-ahead before running `sudo -u deploy -i pm2 restart floor-quiz`.
+Deployed.
 
 ## Phase: light/dark toggle and Kahoot-style gamification pass
 
@@ -427,10 +462,26 @@ browser in this environment. Needs an actual look before calling it done:
 3. Trigger a streak of 2+ correct answers as a player and confirm the
    flame badge appears and disappears correctly between questions.
 
+### Post-deploy fixes
+
+Found by self-review after this phase went out:
+
+- Confetti is `position:fixed` and its fall animation runs a couple of
+  seconds; since every screen transition in this app is a client-side
+  `show()` call rather than a page reload, navigating away right after a
+  podium/final screen (e.g. the host tapping "back to library") would
+  leave it visibly raining over whatever screen came next. Fixed: `show()`
+  in all three files now clears any `.confetti-piece` elements as part of
+  every screen switch.
+- The existing `prefers-reduced-motion` rule just collapses every
+  animation's duration to near-zero, which for a burst of falling pieces
+  would read as an instant flash rather than nothing. `confetti()` in all
+  three files now checks the media query itself and skips spawning
+  entirely when it matches, rather than relying on the CSS speed-up.
+
 ### Deployment
 
-Not deployed yet as of writing this entry - see the commit this phase
-ships in for whether it went out.
+Deployed.
 
 ## Deferred, not started
 

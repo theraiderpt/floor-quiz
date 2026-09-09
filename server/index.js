@@ -432,7 +432,7 @@ app.post("/api/selfpaced/:token/start", selfpacedLimiter, (req, res) => {
 app.post("/api/selfpaced/attempts/:attemptId/answer", selfpacedLimiter, (req, res) => {
   const attempt = attempts.get(req.params.attemptId);
   if (!attempt) return res.status(404).json({ error: "That attempt has expired. Start again." });
-  const result = attempt.answer(req.body?.answer);
+  const result = attempt.answer(req.body?.answer, req.body?.qIndex);
   if (result.error) return res.status(400).json(result);
   res.json(result);
 });
@@ -487,7 +487,7 @@ io.on("connection", socket => {
     let qr = null;
     if (config.publicUrl) {
       try {
-        qr = await QRCode.toDataURL(joinUrl, { margin: 1, width: 340, color: { dark: "#101828", light: "#eef2f7" } });
+        qr = await QRCode.toDataURL(joinUrl, { margin: 1, width: 340, color: { dark: "#09092d", light: "#f3f3f7" } });
       } catch { /* a missing QR is cosmetic, never fatal */ }
     }
     ack?.({ pin: game.pin, joinUrl, qr, state: game.publicState() });
@@ -601,4 +601,4 @@ function shutdown(signal) {
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
-export { app, server, io, rooms };
+export { app, server, io, rooms, attempts };

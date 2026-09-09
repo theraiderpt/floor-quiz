@@ -54,7 +54,7 @@ class Attempt {
     const q = this.current;
     if (!q) return null;
     this.optOrder = q.shuffle && q.opts?.length ? shuffledOrder(q.opts.length) : null;
-    return publicQuestion(q, this.optOrder);
+    return { ...publicQuestion(q, this.optOrder), qIndex: this.qIndex };
   }
 
   /* A shuffled attempt shows options in `optOrder` order, so a submitted
@@ -73,11 +73,21 @@ class Attempt {
 
   /* Scores the current question and reports what the player should see for
      it, plus the next question (or a final summary when there isn't one).
-     Returns { error } if the question was already answered or the payload
-     doesn't fit the question's type. */
-  answer(rawAnswer) {
+     Returns { error } if the question was already answered, the payload
+     doesn't fit the question's type, or `qIndex` doesn't match the question
+     currently open. That last check matters specifically here: unlike the
+     live Game (where a question stays open until the host advances, so a
+     stray retry always lands on the same still-open question), a self-paced
+     attempt advances the instant one valid answer is scored. On a flaky
+     phone connection a lost response can make the client retry after the
+     server has already moved on, and without this check that retry would
+     silently score against whatever question came next instead. */
+  answer(rawAnswer, qIndex) {
     const q = this.current;
     if (!q || this.finished) return { error: "This attempt is already finished." };
+    if (qIndex != null && Number(qIndex) !== this.qIndex) {
+      return { error: "That question has already moved on. Refresh to see where you are." };
+    }
 
     const evaluated = evaluateAnswer(q, this.translate(q, rawAnswer));
     if (!evaluated.valid) return { error: "Invalid answer." };
@@ -156,11 +166,18 @@ export class Attempts {
 
   get(id) { return this.attempts.get(id); }
 
+  /* Mirrors the live game's own rule (see the comment on store.sessions.close
+     in server/db.js): a session that's abandoned without the player ever
+     engaging shouldn't land in history at all. An attempt that answered at
+     least one question gets persisted as-is, mid-quiz, same as it would if
+     they'd finished; one that never got past the join screen is just
+     dropped, so the open session row it started never picks up an
+     ended_at and is excluded from every stats query automatically. */
   sweep() {
     const cutoff = Date.now() - 3 * 60 * 60 * 1000;
     for (const [id, a] of this.attempts) {
       if (a.touchedAt < cutoff) {
-        if (!a.finished) a.finish();
+        if (!a.finished && a.answered > 0) a.finish();
         this.attempts.delete(id);
       }
     }

@@ -25,6 +25,11 @@ function show(id) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("on"));
   $(id).classList.add("on");
   window.scrollTo(0, 0);
+  /* Confetti is position:fixed and outlives a quick screen switch (its own
+     fall animation runs a couple of seconds), so without this a host who
+     taps "back to library" right after the podium would see it still
+     raining down over the library. */
+  document.querySelectorAll(".confetti-piece").forEach(p => p.remove());
 }
 
 async function api(path, opts = {}) {
@@ -700,6 +705,10 @@ socket.on("final", d => {
    ends - the single biggest "come back and play again" moment a live quiz
    has, and previously this screen just sat there static. */
 function confetti(count = 46) {
+  /* The global prefers-reduced-motion rule just speeds every animation to
+     near-zero, which for a burst of falling pieces would read as an
+     instant flash rather than nothing - skip spawning entirely instead. */
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
   const colors = ["var(--a1)", "var(--a2)", "var(--a3)", "var(--a4)", "var(--live)"];
   for (let i = 0; i < count; i++) {
     const piece = document.createElement("span");
