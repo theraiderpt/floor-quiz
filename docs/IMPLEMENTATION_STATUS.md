@@ -104,9 +104,10 @@ Not yet done in a browser:
 
 ### Deployment
 
-Not deployed. Per the standing ground rules: check
-`curl -s localhost:3000/api/health` for `games: 0` before restarting, and
-get explicit go-ahead before running `sudo -u deploy -i pm2 restart floor-quiz`.
+Deployed - this note was stale (said "not deployed" through several
+later phases and restarts that necessarily shipped it too, since every
+restart deploys the whole working tree, not just the phase being worked
+on at the time).
 
 ## Phase: host results dashboard
 
@@ -214,9 +215,8 @@ Not yet done in a browser:
 
 ### Deployment
 
-Not deployed. Per the standing ground rules: check
-`curl -s localhost:3000/api/health` for `games: 0` before restarting, and
-get explicit go-ahead before running `sudo -u deploy -i pm2 restart floor-quiz`.
+Deployed (including the ultra-review fixes above, which shipped in the
+same restart as the initial version of this phase).
 
 ## Phase: question types, per-player shuffle, and self-paced delivery
 
