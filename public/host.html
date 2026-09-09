@@ -29,7 +29,7 @@
 
 <!-- LIBRARY -->
 <section class="screen" id="s-library">
-  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">library</span><span class="v" id="libCount">0</span></span><span class="spacer"></span><span class="cell"><button class="k" id="goHistory" style="text-transform:uppercase;letter-spacing:.09em">Past games</button></span><span class="cell"><button class="k" id="logout" style="text-transform:uppercase;letter-spacing:.09em">Sign out</button></span></div>
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">library</span><span class="v" id="libCount">0</span></span><span class="spacer"></span><span class="cell"><button class="k" id="goDashboard" style="text-transform:uppercase;letter-spacing:.09em">Dashboard</button></span><span class="cell"><button class="k" id="goHistory" style="text-transform:uppercase;letter-spacing:.09em">Past games</button></span><span class="cell"><button class="k" id="logout" style="text-transform:uppercase;letter-spacing:.09em">Sign out</button></span></div>
   <div class="stage">
     <div><p class="eyebrow">Quiz library</p><h2>Pick a quiz, or build a new one</h2></div>
     <div class="qlist" id="libList"></div>
@@ -214,6 +214,42 @@
   <div class="stage">
     <div><p class="eyebrow">History</p><h2>Completed games</h2></div>
     <div class="qlist" id="histList"></div>
+  </div>
+</section>
+
+<!-- DASHBOARD -->
+<section class="screen" id="s-dashboard">
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">dashboard</span></span><span class="spacer"></span><span class="cell"><button class="k" id="dashBack" style="text-transform:uppercase;letter-spacing:.09em">Back</button></span></div>
+  <div class="stage">
+    <div><p class="eyebrow">Dashboard</p><h2>Results across every quiz</h2></div>
+    <div class="stats" id="dashStats"></div>
+    <hr class="divider">
+    <div><p class="eyebrow">By quiz</p><h2>Pick a quiz to drill in</h2></div>
+    <div class="qlist" id="dashList"></div>
+  </div>
+</section>
+
+<!-- QUIZ SESSIONS -->
+<section class="screen" id="s-quiz-sessions">
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">quiz</span><span class="v" id="qsTitle">—</span></span><span class="spacer"></span><span class="cell"><button class="k" id="qsBack" style="text-transform:uppercase;letter-spacing:.09em">Back</button></span></div>
+  <div class="stage">
+    <div class="stats" id="qsStats"></div>
+    <div><p class="eyebrow">Hardest questions</p><h2>Accuracy across every game of this quiz</h2></div>
+    <div class="qbars" id="qsQuestions"></div>
+    <div><p class="eyebrow">Games</p><h2>Every session of this quiz</h2></div>
+    <div class="qlist" id="qsList"></div>
+  </div>
+</section>
+
+<!-- SESSION DETAIL -->
+<section class="screen" id="s-session-detail">
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">game</span><span class="v" id="detTitle">—</span></span><span class="spacer"></span><span class="cell"><span class="k">pin</span><span class="v" id="detPin">—</span></span><span class="cell"><button class="k" id="detailBack" style="text-transform:uppercase;letter-spacing:.09em">Back</button></span></div>
+  <div class="stage">
+    <div class="row between">
+      <div><p class="eyebrow" id="detWhen">—</p><h2>Full results</h2></div>
+      <a class="btn ghost" id="detExport" href="#">Download CSV</a>
+    </div>
+    <div class="board" id="detBoard"></div>
   </div>
 </section>
 

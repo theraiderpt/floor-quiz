@@ -144,6 +144,46 @@ const stmt = {
     "SELECT rank, name, score, correct_count, answered, email, answers_json FROM results WHERE session_id = ? ORDER BY rank"
   ),
 
+  hostOverview: db.prepare(
+    `SELECT COUNT(*) AS games, COALESCE(SUM(player_count), 0) AS totalPlayers,
+            AVG(player_count) AS avgPlayers, MAX(started_at) AS lastPlayed
+     FROM sessions WHERE ended_at IS NOT NULL AND host_id = ?`
+  ),
+  countQuizzesByHost: db.prepare("SELECT COUNT(*) AS n FROM quizzes WHERE host_id = ?"),
+
+  /* Grouped by quiz_id so a renamed or deleted quiz still rolls its history
+     up correctly. Falls back to the most recent session's title when the
+     quiz itself is gone, since sessions keep their own copy of the title. */
+  statsByQuiz: db.prepare(
+    `SELECT s.quiz_id AS quizId,
+            COALESCE(q.title, (
+              SELECT s3.title FROM sessions s3
+              WHERE s3.quiz_id IS s.quiz_id AND s3.host_id = ?
+              ORDER BY s3.started_at DESC LIMIT 1
+            )) AS title,
+            COUNT(DISTINCT s.id) AS games,
+            COALESCE(SUM(s.player_count), 0) AS totalPlayers,
+            AVG(s.player_count) AS avgPlayers,
+            MAX(s.started_at) AS lastPlayed,
+            MIN(s.started_at) AS firstPlayed,
+            AVG(r.score) AS avgScore,
+            MAX(r.score) AS topScore,
+            SUM(r.correct_count) AS totalCorrect,
+            SUM(r.answered) AS totalAnswered
+     FROM sessions s
+     LEFT JOIN quizzes q ON q.id = s.quiz_id
+     LEFT JOIN results r ON r.session_id = s.id
+     WHERE s.ended_at IS NOT NULL AND s.host_id = ?
+     GROUP BY s.quiz_id
+     ORDER BY lastPlayed DESC`
+  ),
+
+  sessionsForQuiz: db.prepare(
+    `SELECT id, pin, title, player_count, started_at, ended_at
+     FROM sessions WHERE ended_at IS NOT NULL AND host_id = ? AND quiz_id IS ?
+     ORDER BY started_at DESC`
+  ),
+
   getAdminByEmail: db.prepare("SELECT * FROM admins WHERE email = ?"),
   getAdmin: db.prepare("SELECT * FROM admins WHERE id = ?"),
   upsertAdmin: db.prepare(
@@ -269,6 +309,76 @@ export const store = {
       const s = stmt.getSession.get(id);
       if (!s || (hostId != null && s.host_id !== hostId)) return null;
       return { ...s, results: stmt.listResults.all(id) };
+    }
+  },
+
+  /* Host-facing analytics. Everything here is scoped to a single host's own
+     games, mirroring the ownership check already done in quizzes/sessions
+     above, so one host can never see another's results. */
+  stats: {
+    overview: hostId => {
+      const row = stmt.hostOverview.get(hostId);
+      return {
+        games: row.games,
+        totalPlayers: row.totalPlayers,
+        avgPlayers: row.games ? Math.round((row.avgPlayers || 0) * 10) / 10 : 0,
+        lastPlayed: row.lastPlayed,
+        quizzes: stmt.countQuizzesByHost.get(hostId).n
+      };
+    },
+
+    byQuiz: hostId =>
+      stmt.statsByQuiz.all(hostId, hostId).map(r => ({
+        quizId: r.quizId,
+        title: r.title || "Untitled quiz",
+        games: r.games,
+        totalPlayers: r.totalPlayers,
+        avgPlayers: r.games ? Math.round((r.avgPlayers || 0) * 10) / 10 : 0,
+        avgScore: r.avgScore ? Math.round(r.avgScore) : 0,
+        topScore: r.topScore || 0,
+        accuracy: r.totalAnswered ? Math.round((r.totalCorrect / r.totalAnswered) * 100) : null,
+        lastPlayed: r.lastPlayed,
+        firstPlayed: r.firstPlayed
+      })),
+
+    sessionsForQuiz: (hostId, quizId) => stmt.sessionsForQuiz.all(hostId, quizId),
+
+    /* Lines up each session's frozen question texts against every player's
+       per-question answer log to find which questions actually trip people
+       up across every time this quiz has been played. Sessions can differ in
+       question count/order if the quiz was edited between games, so this
+       tallies by question text rather than by index. */
+    questionBreakdown: (hostId, quizId) => {
+      const tally = new Map();
+      for (const row of stmt.sessionsForQuiz.all(hostId, quizId)) {
+        const full = store.sessions.get(row.id, hostId);
+        if (!full) continue;
+        let questions = [];
+        try { questions = JSON.parse(full.questions_json || "[]"); } catch { questions = []; }
+        for (const r of full.results) {
+          let log = [];
+          try { log = JSON.parse(r.answers_json || "[]"); } catch { log = []; }
+          log.forEach((outcome, i) => {
+            const text = questions[i] || `Question ${i + 1}`;
+            if (!tally.has(text)) tally.set(text, { right: 0, wrong: 0, skipped: 0 });
+            const t = tally.get(text);
+            if (outcome === "Right") t.right++;
+            else if (outcome === "Wrong") t.wrong++;
+            else t.skipped++;
+          });
+        }
+      }
+      return [...tally.entries()].map(([q, t]) => {
+        const total = t.right + t.wrong + t.skipped;
+        return {
+          q,
+          right: t.right,
+          wrong: t.wrong,
+          skipped: t.skipped,
+          total,
+          accuracy: total ? Math.round((t.right / total) * 100) : null
+        };
+      });
     }
   },
 

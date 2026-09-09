@@ -34,7 +34,8 @@ const S = {
   qIndex: -1,
   endsAt: 0,
   raf: null,
-  sessionId: null
+  sessionId: null,
+  dash: { quiz: null, backTo: "dashboard" }
 };
 
 let CATEGORIES = [];
@@ -124,6 +125,14 @@ $("libSample").addEventListener("click", async () => {
 $("libImport").addEventListener("click", () => $("fileIn").click());
 $("goHistory").addEventListener("click", openHistory);
 $("histBack").addEventListener("click", openLibrary);
+$("goDashboard").addEventListener("click", openDashboard);
+$("dashBack").addEventListener("click", openLibrary);
+$("qsBack").addEventListener("click", openDashboard);
+$("detailBack").addEventListener("click", () => {
+  if (S.dash.backTo === "quiz" && S.dash.quiz) openQuizSessions(S.dash.quiz);
+  else if (S.dash.backTo === "history") openHistory();
+  else openDashboard();
+});
 
 $("fileIn").addEventListener("change", e => {
   const f = e.target.files && e.target.files[0];
@@ -558,7 +567,7 @@ async function openHistory() {
   if (!list.length) wrap.appendChild(el("p", "note", "No completed games yet."));
 
   list.forEach(s => {
-    const item = el("div", "qitem");
+    const item = el("div", "qitem click");
     item.appendChild(el("span", "idx", String(s.player_count).padStart(2, "0")));
     const body = el("div", "body");
     body.appendChild(el("p", "qt", s.title));
@@ -573,10 +582,152 @@ async function openHistory() {
     const a = el("a", "iconbtn", "↓");
     a.href = "/api/sessions/" + s.id + "/csv";
     a.title = "Download CSV";
+    a.addEventListener("click", e => e.stopPropagation());
     item.appendChild(a);
+    item.addEventListener("click", () => openSessionDetail(s.id, "history"));
     wrap.appendChild(item);
   });
   show("s-history");
+}
+
+/* ----------------------------------------------------------- dashboard --- */
+
+function statTile(label, value) {
+  const t = el("div", "stat");
+  t.appendChild(el("span", "n", String(value)));
+  t.appendChild(el("span", "l", label));
+  return t;
+}
+
+function accClass(pct) {
+  return pct == null ? "" : pct < 40 ? " crit" : pct < 70 ? " warn" : "";
+}
+
+async function openDashboard() {
+  const [overview, quizzes] = await Promise.all([api("/stats/overview"), api("/stats/quizzes")]);
+
+  const stats = $("dashStats");
+  stats.innerHTML = "";
+  [
+    ["Games played", overview.games],
+    ["Total players", overview.totalPlayers],
+    ["Avg players / game", overview.avgPlayers],
+    ["Quizzes in library", overview.quizzes],
+    ["Last played", overview.lastPlayed ? overview.lastPlayed.replace("T", " ").slice(0, 16) : "—"]
+  ].forEach(([label, value]) => stats.appendChild(statTile(label, value)));
+
+  const wrap = $("dashList");
+  wrap.innerHTML = "";
+  if (!quizzes.length) wrap.appendChild(el("p", "note", "No completed games yet."));
+
+  quizzes.forEach(q => {
+    const item = el("div", "qitem click");
+    item.appendChild(el("span", "idx", String(q.games).padStart(2, "0")));
+    const body = el("div", "body");
+    body.appendChild(el("p", "qt", q.title));
+    const meta = el("div", "meta");
+    meta.append(
+      el("span", null, q.games + (q.games === 1 ? " game" : " games")),
+      el("span", null, q.totalPlayers + " total players"),
+      el("span", null, "avg score " + q.avgScore),
+      el("span", null, q.accuracy != null ? q.accuracy + "% correct" : "—"),
+      el("span", null, "last played " + (q.lastPlayed ? q.lastPlayed.replace("T", " ").slice(0, 16) : "—"))
+    );
+    body.appendChild(meta);
+    item.appendChild(body);
+    item.addEventListener("click", () => openQuizSessions(q));
+    wrap.appendChild(item);
+  });
+  show("s-dashboard");
+}
+
+async function openQuizSessions(quiz) {
+  S.dash.quiz = quiz;
+  const key = quiz.quizId == null ? "null" : quiz.quizId;
+  const [list, questions] = await Promise.all([
+    api("/stats/quizzes/" + key + "/sessions"),
+    api("/stats/quizzes/" + key + "/questions")
+  ]);
+  $("qsTitle").textContent = quiz.title;
+
+  const stats = $("qsStats");
+  stats.innerHTML = "";
+  [
+    ["Games", quiz.games],
+    ["Total players", quiz.totalPlayers],
+    ["Avg score", quiz.avgScore],
+    ["Accuracy", quiz.accuracy != null ? quiz.accuracy + "%" : "—"]
+  ].forEach(([label, value]) => stats.appendChild(statTile(label, value)));
+
+  const qwrap = $("qsQuestions");
+  qwrap.innerHTML = "";
+  if (!questions.length) qwrap.appendChild(el("p", "note", "No answers recorded yet."));
+  questions
+    .slice()
+    .sort((a, b) => (a.accuracy ?? 101) - (b.accuracy ?? 101))
+    .forEach(q => {
+      const bar = el("div", "qbar");
+      const head = el("div", "qb-head");
+      head.append(el("span", "qtxt", q.q), el("span", "qpct", q.accuracy != null ? q.accuracy + "%" : "—"));
+      const track = el("div", "track");
+      const fill = el("div", "fill" + accClass(q.accuracy));
+      fill.style.width = (q.accuracy ?? 0) + "%";
+      track.appendChild(fill);
+      bar.append(head, track);
+      qwrap.appendChild(bar);
+    });
+
+  const wrap = $("qsList");
+  wrap.innerHTML = "";
+  if (!list.length) wrap.appendChild(el("p", "note", "No games recorded for this quiz."));
+
+  list.forEach(s => {
+    const item = el("div", "qitem click");
+    item.appendChild(el("span", "idx", String(s.player_count).padStart(2, "0")));
+    const body = el("div", "body");
+    body.appendChild(el("p", "qt", s.started_at.replace("T", " ").slice(0, 16)));
+    const meta = el("div", "meta");
+    meta.append(el("span", null, "pin " + s.pin), el("span", null, s.player_count + " players"));
+    body.appendChild(meta);
+    item.appendChild(body);
+    const a = el("a", "iconbtn", "↓");
+    a.href = "/api/sessions/" + s.id + "/csv";
+    a.title = "Download CSV";
+    a.addEventListener("click", e => e.stopPropagation());
+    item.appendChild(a);
+    item.addEventListener("click", () => openSessionDetail(s.id, "quiz"));
+    wrap.appendChild(item);
+  });
+  show("s-quiz-sessions");
+}
+
+async function openSessionDetail(id, backTo) {
+  S.dash.backTo = backTo;
+  const s = await api("/sessions/" + id);
+  $("detTitle").textContent = s.title;
+  $("detPin").textContent = s.pin;
+  $("detWhen").textContent = s.started_at.replace("T", " ").slice(0, 16) + " · " + s.player_count + " players";
+  $("detExport").href = "/api/sessions/" + s.id + "/csv";
+
+  const board = $("detBoard");
+  board.innerHTML = "";
+  const head = el("div", "lrow detail head");
+  head.append(el("span", null, "Rank"), el("span", null, "Name"), el("span", null, "Correct"), el("span", null, "Score"));
+  board.appendChild(head);
+
+  if (!s.results.length) board.appendChild(el("p", "note", "No results recorded."));
+  s.results.forEach((r, i) => {
+    const row = el("div", "lrow detail" + (r.rank === 1 ? " p1" : ""));
+    row.style.animationDelay = i * 30 + "ms";
+    row.append(
+      el("span", "rank", String(r.rank)),
+      el("span", "nm", r.name),
+      el("span", "acc", r.correct_count + "/" + r.answered),
+      el("span", "pts", String(r.score))
+    );
+    board.appendChild(row);
+  });
+  show("s-session-detail");
 }
 
 /* ------------------------------------------------------------- import --- */

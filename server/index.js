@@ -365,6 +365,31 @@ app.get("/api/sessions/:id/csv", requireHost, (req, res) => {
   res.send("\uFEFF" + lines.join("\r\n"));
 });
 
+/* --------------------------------------------------------------- stats --- */
+
+app.get("/api/stats/overview", requireHost, (req, res) => res.json(store.stats.overview(req.hostAccount.id)));
+
+app.get("/api/stats/quizzes", requireHost, (req, res) => res.json(store.stats.byQuiz(req.hostAccount.id)));
+
+function parseQuizIdParam(raw, res) {
+  if (raw === "null") return { quizId: null };
+  const quizId = Number(raw);
+  if (!Number.isInteger(quizId)) { res.status(400).json({ error: "Bad quiz id." }); return null; }
+  return { quizId };
+}
+
+app.get("/api/stats/quizzes/:quizId/sessions", requireHost, (req, res) => {
+  const parsed = parseQuizIdParam(req.params.quizId, res);
+  if (!parsed) return;
+  res.json(store.stats.sessionsForQuiz(req.hostAccount.id, parsed.quizId));
+});
+
+app.get("/api/stats/quizzes/:quizId/questions", requireHost, (req, res) => {
+  const parsed = parseQuizIdParam(req.params.quizId, res);
+  if (!parsed) return;
+  res.json(store.stats.questionBreakdown(req.hostAccount.id, parsed.quizId));
+});
+
 app.get("/api/health", (req, res) => res.json({ ok: true, ...rooms.stats(), uptime: Math.round(process.uptime()) }));
 
 /* ------------------------------------------------------------- static --- */
