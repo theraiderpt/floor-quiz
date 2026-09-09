@@ -340,6 +340,98 @@ Not deployed. Per the standing ground rules: check
 `curl -s localhost:3000/api/health` for `games: 0` before restarting, and
 get explicit go-ahead before running `sudo -u deploy -i pm2 restart floor-quiz`.
 
+## Phase: light/dark toggle and Kahoot-style gamification pass
+
+Status: shipped, smoke-tested (frontend-only, so smoke.js coverage is
+indirect - it confirms nothing server-side broke), not yet deployed.
+
+Two owner-requested visual passes, done back to back with no deploy in
+between, so they ship as one phase:
+
+- **Light/dark toggle.** One fixed circular button (bottom-right, sun/moon
+  SVG icon) on every page. `public/js/theme.js`, loaded synchronously in
+  `<head>` on all five pages, sets `<html data-theme>` from
+  `localStorage` before first paint (no flash of the wrong theme), and
+  wires the button's click handler once the DOM is ready. `app.css`'s
+  `:root` split into theme-agnostic tokens (fonts/spacing) plus a
+  `[data-theme="dark"]`/`[data-theme="light"]` pair for the rest. Answer
+  tile colors (`--a1..--a4`) don't change between themes - they're
+  independent bright backgrounds with dark text on top either way.
+  Caught one real regression before it shipped: the coral accent reads
+  fine as light text on the dark theme but drops to ~2:1 contrast as text
+  on the new light background, under WCAG AA. Split it into `--a3` (tile
+  backgrounds only, unaffected) and a new theme-aware `--danger` (error
+  text, danger buttons, "wrong" verdict) - verified by computing contrast
+  ratios directly, no way to screenshot in this environment.
+- **Kahoot-style visual pass.** The ask was to borrow the genre's "casual
+  gamification" visual language, not Kahoot's brand: shape icons
+  (triangle/diamond/circle/square) on every answer tile, matching the same
+  position-to-shape pairing the whole live-quiz genre uses now, replacing
+  the plain A/B/C/D letters (`SHAPES`/`shapeTag()` in each of host.js/
+  play.js/take.js - pure CSS/SVG, no assets copied); rounder corners
+  throughout (buttons, tiles, cards, podium, leaderboard rows); a
+  confetti burst on the host's shared final screen (every game), a
+  player's own final screen (top-3 finishers only, so it doesn't
+  fire for someone who came in last), and a self-paced attempt's
+  completion (always - there's no rank to gate on, and finishing at all
+  is worth celebrating there); a streak badge (flame icon + count) on a
+  player's result screen once they're a couple of correct answers into a
+  row, surfacing the streak bonus that already existed in scoring but
+  never showed up anywhere; a tile "pop" animation on the correct
+  answer(s) at reveal instead of a static highlight; a pulsing countdown
+  clock in the final seconds. Self-paced has no clock or streak by
+  design (untimed, no shared race), so neither applies to `take.js`.
+
+### Files changed
+
+- `public/css/app.css`: theme token split (see above), `--danger`,
+  `.themetoggle`, border-radius bumps across `.btn`/`.inp`/`.card`/
+  `.panel`/`.pinbox`/`.qr`/`.ans`/`.lrow`/`.pod`/`.qitem`/`.respitem`/
+  `.qbar`/`.stat`/`.iconbtn`, `.ans .tag svg` sizing, `.ans.hit` tile-pop
+  keyframe, `.clock.crit` pulse keyframe, `.confetti-piece` fall
+  animation, `.streakbadge`.
+- `public/js/theme.js` (new): the toggle's read/apply/persist logic.
+- `public/js/host.js`, `public/js/play.js`, `public/js/take.js`:
+  `SHAPES`/`shapeTag()`, a `confetti()` helper (duplicated per file,
+  matching this codebase's existing per-file-duplication convention
+  rather than introducing a shared bundle); `play.js` additionally gets
+  `streakBadge()` and the `gameover`/`result` wiring for both.
+  `runClock`/`stopClock` in host.js and play.js toggle `.clock.crit`.
+- `public/host.html`, `public/index.html`, `public/take.html`,
+  `public/admin.html`, `public/invite.html`: `<script src="/js/theme.js">`
+  in `<head>`, the toggle button markup near the end of `<body>`, and
+  (`index.html` only) a `#rStreak` placeholder for the streak badge.
+  `theme-color` meta tags fixed to the current dark ink while in there -
+  they'd been stuck on the pre-rebrand color (`#101828`) since that
+  phase only touched the stylesheet, not these tags.
+
+### Commands run
+
+```bash
+node --check public/js/theme.js public/js/host.js public/js/play.js public/js/take.js
+npm run smoke   # 130 assertions, all green (unaffected - this is a pure frontend change)
+```
+
+### Manual verification still to do
+
+Everything in this phase is visual and was verified by reading the
+rendered CSS/JS logic and computing contrast ratios by hand - there is no
+browser in this environment. Needs an actual look before calling it done:
+
+1. Toggle light/dark on each page and confirm nothing is unreadable,
+   especially the coral/`--danger` split and the answer tiles.
+2. Play a full game and confirm the shape icons render correctly at tile
+   size, the correct-answer tile pops on reveal, the clock pulses in the
+   final few seconds, and the confetti fires appropriately (host: always,
+   player: top 3 only, self-paced: always).
+3. Trigger a streak of 2+ correct answers as a player and confirm the
+   flame badge appears and disappears correctly between questions.
+
+### Deployment
+
+Not deployed yet as of writing this entry - see the commit this phase
+ships in for whether it went out.
+
 ## Deferred, not started
 
 Everything below was scoped out or explicitly deprioritised by the owner in

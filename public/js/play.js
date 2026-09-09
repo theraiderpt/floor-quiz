@@ -4,6 +4,21 @@ const $ = id => document.getElementById(id);
 const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
 const LETTERS = ["A", "B", "C", "D"];
 const COLORS = ["c1", "c2", "c3", "c4"];
+/* One shape per position - triangle/diamond/circle/square - the same
+   pairing the live-quiz genre uses so an option reads by shape and color
+   together, not just a letter. */
+const SHAPES = [
+  '<svg viewBox="0 0 24 24"><polygon points="12,3 22,20 2,20"/></svg>',
+  '<svg viewBox="0 0 24 24"><polygon points="12,2 22,12 12,22 2,12"/></svg>',
+  '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>',
+  '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>'
+];
+function shapeTag(i) {
+  const t = el("span", "tag");
+  t.innerHTML = SHAPES[i];
+  t.setAttribute("aria-label", "Option " + LETTERS[i]);
+  return t;
+}
 
 function show(id) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("on"));
@@ -114,6 +129,7 @@ socket.on("result", r => {
   me.score = r.score;
   updateScore();
   const v = $("rVerdict");
+  $("rStreak").innerHTML = "";
 
   /* Unscored text questions have no right/wrong verdict - they're a
      discussion prompt, not something to grade. */
@@ -138,8 +154,9 @@ socket.on("result", r => {
     : r.correctText;
   const guessNote = r.type === "numeric" && r.answered ? "You guessed " + r.value + ". " : "";
   $("rSub").textContent = r.correct
-    ? (r.streak > 1 ? r.streak + " in a row. Total " + r.score + " points." : "Total " + r.score + " points.")
+    ? "Total " + r.score + " points."
     : guessNote + "The answer was " + correctDescription + ". Total " + r.score + " points.";
+  if (r.correct && r.streak > 1) $("rStreak").appendChild(streakBadge(r.streak));
   show("s-result");
 });
 
@@ -150,6 +167,7 @@ socket.on("gameover", g => {
   $("fScore").textContent = g.score + " pts";
   $("fSub").textContent = g.correctCount + " right out of " + g.total +
     (g.of ? ", against " + g.of + " players." : ".");
+  if (g.rank && g.rank <= 3) confetti();
   show("s-final");
 });
 
@@ -197,7 +215,7 @@ function sendAnswer(value, onError) {
 function renderSinglePad(pad, s) {
   s.question.opts.forEach((o, i) => {
     const b = el("button", "ans " + COLORS[i]);
-    b.appendChild(el("span", "tag", LETTERS[i]));
+    b.appendChild(shapeTag(i));
     b.appendChild(el("span", "txt", o));
     b.addEventListener("click", () => {
       if (answered) return;
@@ -212,7 +230,7 @@ function renderMultiPad(pad, s) {
   pad.className = "pad multi";
   s.question.opts.forEach((o, i) => {
     const b = el("button", "ans " + COLORS[i]);
-    b.appendChild(el("span", "tag", LETTERS[i]));
+    b.appendChild(shapeTag(i));
     b.appendChild(el("span", "txt", o));
     b.dataset.i = String(i);
     b.addEventListener("click", () => {
@@ -272,12 +290,41 @@ function runClock(durMs) {
     const frac = Math.min(1, left / durMs);
     fill.style.width = (frac * 100).toFixed(2) + "%";
     fill.className = "fill" + (frac < 0.2 ? " crit" : frac < 0.45 ? " warn" : "");
+    clock.className = "clock" + (frac < 0.2 ? " crit" : "");
     clock.textContent = Math.ceil(left / 1000);
     rafId = left > 0 ? requestAnimationFrame(step) : null;
   };
   rafId = requestAnimationFrame(step);
 }
-function stopClock() { if (rafId) { cancelAnimationFrame(rafId); rafId = null; } }
+function stopClock() { if (rafId) { cancelAnimationFrame(rafId); rafId = null; } $("aClock")?.classList.remove("crit"); }
+
+/* Shown on a player's own result when they're a few correct answers into a
+   row - surfaces the streak bonus that already exists in scoring but
+   otherwise never shows up anywhere in the UI. */
+const FLAME_ICON = '<svg viewBox="0 0 24 24"><path d="M12 2c1 3-3 4-3 8a3 3 0 106 0c0-1-1-2-1-3 2 1 4 4 4 7a6 6 0 11-12 0c0-6 4-9 6-12z"/></svg>';
+function streakBadge(n) {
+  const b = el("span", "streakbadge");
+  b.innerHTML = FLAME_ICON + "<span>" + n + " in a row</span>";
+  return b;
+}
+
+/* A quick celebratory burst for a top-3 finish - the single biggest "come
+   back and play again" moment a live quiz has. */
+function confetti(count = 46) {
+  const colors = ["var(--a1)", "var(--a2)", "var(--a3)", "var(--a4)", "var(--live)"];
+  for (let i = 0; i < count; i++) {
+    const piece = document.createElement("span");
+    piece.className = "confetti-piece";
+    piece.style.left = Math.random() * 100 + "vw";
+    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.transform = "rotate(" + Math.floor(Math.random() * 360) + "deg)";
+    const duration = 2200 + Math.random() * 1400;
+    piece.style.animationDuration = duration + "ms";
+    piece.style.animationDelay = Math.random() * 300 + "ms";
+    document.body.appendChild(piece);
+    setTimeout(() => piece.remove(), duration + 400);
+  }
+}
 
 function updateScore() {
   $("wScore").textContent = me.score;

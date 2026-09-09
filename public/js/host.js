@@ -4,6 +4,21 @@ const $ = id => document.getElementById(id);
 const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
 const LETTERS = ["A", "B", "C", "D"];
 const COLORS = ["c1", "c2", "c3", "c4"];
+/* One shape per position - triangle/diamond/circle/square - the same
+   pairing the live-quiz genre uses so an option reads by shape and color
+   together, not just a letter. */
+const SHAPES = [
+  '<svg viewBox="0 0 24 24"><polygon points="12,3 22,20 2,20"/></svg>',
+  '<svg viewBox="0 0 24 24"><polygon points="12,2 22,12 12,22 2,12"/></svg>',
+  '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>',
+  '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>'
+];
+function shapeTag(i) {
+  const t = el("span", "tag");
+  t.innerHTML = SHAPES[i];
+  t.setAttribute("aria-label", "Option " + LETTERS[i]);
+  return t;
+}
 const SWATCH = ["var(--a1)", "var(--a2)", "var(--a3)", "var(--a4)"];
 
 function show(id) {
@@ -568,7 +583,7 @@ function renderQuestion(s) {
     wrap.className = "answers";
     s.question.opts.forEach((o, i) => {
       const b = el("div", "ans " + COLORS[i]);
-      b.appendChild(el("span", "tag", LETTERS[i]));
+      b.appendChild(shapeTag(i));
       b.appendChild(el("span", "txt", o));
       b.append(el("span", "bar"), el("span", "n", ""));
       wrap.appendChild(b);
@@ -675,10 +690,30 @@ socket.on("final", d => {
     row.append(el("span", "rank", String(i + 4)), el("span", "nm", p.name), el("span", "pts", String(p.score)));
     board.appendChild(row);
   });
+  if (d.board.length) confetti();
   show("s-final");
 });
 
 /* -------------------------------------------------------------- clock --- */
+
+/* A quick celebratory burst on the shared projector screen when a game
+   ends - the single biggest "come back and play again" moment a live quiz
+   has, and previously this screen just sat there static. */
+function confetti(count = 46) {
+  const colors = ["var(--a1)", "var(--a2)", "var(--a3)", "var(--a4)", "var(--live)"];
+  for (let i = 0; i < count; i++) {
+    const piece = document.createElement("span");
+    piece.className = "confetti-piece";
+    piece.style.left = Math.random() * 100 + "vw";
+    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.transform = "rotate(" + Math.floor(Math.random() * 360) + "deg)";
+    const duration = 2200 + Math.random() * 1400;
+    piece.style.animationDuration = duration + "ms";
+    piece.style.animationDelay = Math.random() * 300 + "ms";
+    document.body.appendChild(piece);
+    setTimeout(() => piece.remove(), duration + 400);
+  }
+}
 
 function runClock(durMs) {
   stopClock();
@@ -688,12 +723,13 @@ function runClock(durMs) {
     const frac = Math.min(1, left / durMs);
     fill.style.width = (frac * 100).toFixed(2) + "%";
     fill.className = "fill" + (frac < 0.2 ? " crit" : frac < 0.45 ? " warn" : "");
+    clock.className = "clock" + (frac < 0.2 ? " crit" : "");
     clock.textContent = Math.ceil(left / 1000);
     S.raf = left > 0 ? requestAnimationFrame(step) : null;
   };
   S.raf = requestAnimationFrame(step);
 }
-function stopClock() { if (S.raf) { cancelAnimationFrame(S.raf); S.raf = null; } }
+function stopClock() { if (S.raf) { cancelAnimationFrame(S.raf); S.raf = null; } $("pClock")?.classList.remove("crit"); }
 
 /* ------------------------------------------------------------ history --- */
 
