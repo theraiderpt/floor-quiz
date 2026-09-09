@@ -4,6 +4,21 @@ const $ = id => document.getElementById(id);
 const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
 const LETTERS = ["A", "B", "C", "D"];
 const COLORS = ["c1", "c2", "c3", "c4"];
+/* One shape per position - triangle/diamond/circle/square - the same
+   pairing the live-quiz genre uses so an option reads by shape and color
+   together, not just a letter. */
+const SHAPES = [
+  '<svg viewBox="0 0 24 24"><polygon points="12,3 22,20 2,20"/></svg>',
+  '<svg viewBox="0 0 24 24"><polygon points="12,2 22,12 12,22 2,12"/></svg>',
+  '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>',
+  '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>'
+];
+function shapeTag(i) {
+  const t = el("span", "tag");
+  t.innerHTML = SHAPES[i];
+  t.setAttribute("aria-label", "Option " + LETTERS[i]);
+  return t;
+}
 
 function show(id) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("on"));
@@ -102,7 +117,7 @@ function submitAnswer(value) {
 function renderSinglePad(pad, q) {
   q.opts.forEach((o, i) => {
     const b = el("button", "ans " + COLORS[i]);
-    b.appendChild(el("span", "tag", LETTERS[i]));
+    b.appendChild(shapeTag(i));
     b.appendChild(el("span", "txt", o));
     b.addEventListener("click", () => {
       if (S.answered) return;
@@ -117,7 +132,7 @@ function renderMultiPad(pad, q) {
   pad.className = "pad multi";
   q.opts.forEach((o, i) => {
     const b = el("button", "ans " + COLORS[i]);
-    b.appendChild(el("span", "tag", LETTERS[i]));
+    b.appendChild(shapeTag(i));
     b.appendChild(el("span", "txt", o));
     b.dataset.i = String(i);
     b.addEventListener("click", () => { if (!S.answered) b.classList.toggle("picked"); });
@@ -200,7 +215,28 @@ function showFeedback(res) {
 function showFinal(res) {
   $("finScore").textContent = res.score + " pts";
   $("finSub").textContent = res.correctCount + " right out of " + res.answered + ".";
+  confetti();
   show("t-final");
+}
+
+/* A quick celebratory burst on finishing - self-paced has no rank or
+   streak to celebrate, so this is the one moment that gets to feel good
+   regardless of score, matching the encouraging tone the rest of the
+   quiz genre uses at the finish line. */
+function confetti(count = 46) {
+  const colors = ["var(--a1)", "var(--a2)", "var(--a3)", "var(--a4)", "var(--live)"];
+  for (let i = 0; i < count; i++) {
+    const piece = document.createElement("span");
+    piece.className = "confetti-piece";
+    piece.style.left = Math.random() * 100 + "vw";
+    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.transform = "rotate(" + Math.floor(Math.random() * 360) + "deg)";
+    const duration = 2200 + Math.random() * 1400;
+    piece.style.animationDuration = duration + "ms";
+    piece.style.animationDelay = Math.random() * 300 + "ms";
+    document.body.appendChild(piece);
+    setTimeout(() => piece.remove(), duration + 400);
+  }
 }
 
 $("finAgain").addEventListener("click", () => location.reload());

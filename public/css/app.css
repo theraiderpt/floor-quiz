@@ -2,18 +2,35 @@
 
 /* Foundever brand palette, pulled from the official theme.json color presets
    published on foundever.com (--wp--preset--color--brandpurple etc.), not a
-   guess. The wallboard stays dark on purpose (a projector in a bright room
-   needs it), so the brand hues are applied as accents and elevated-surface
-   tints against a near-black ink derived from Foundever's own "black"
-   (#09092D) rather than swapped for their light corporate-site background. */
+   guess. Dark is the default "wallboard" look (built for a projector in a
+   lit room), light is the alternative for players/hosts who'd rather not
+   stare at a dark screen - see js/theme.js and the fixed toggle button near
+   the end of <body> in every page. Tile/accent colors (--a1..--a4) don't
+   need to change between themes: they're independent bright backgrounds
+   with dark text on top, not dependent on the page's own ink/chalk. */
 :root{
-  --ink:#09092d; --ink-2:#16144a; --ink-3:#241f66; --line:#3a3480;
-  --chalk:#f3f3f7; --muted:#b0b0cd; --live:#8bf0bb;
-  --a1:#f9ef77; --a2:#8bf0bb; --a3:#ff8d96; --a4:#4a4af9;
   --disp:"Space Grotesk","Trebuchet MS",sans-serif;
   --body:"Noto Sans",system-ui,-apple-system,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --pad:clamp(16px,3vw,34px);
+}
+:root,[data-theme="dark"]{
+  --ink:#09092d; --ink-2:#16144a; --ink-3:#241f66; --line:#3a3480;
+  --chalk:#f3f3f7; --muted:#b0b0cd; --live:#8bf0bb; --live-rgb:139,240,187;
+  --a1:#f9ef77; --a2:#8bf0bb; --a3:#ff8d96; --a4:#4a4af9;
+  /* Coral (--a3) is light text on a dark page, plenty of contrast - but the
+     same coral as text on the light theme's near-white page would read at
+     roughly 2:1, well under WCAG AA. --danger is the theme-aware version
+     for text/border contexts (error text, danger buttons, "wrong" verdict);
+     --a3 itself stays put for tile backgrounds, which don't have this
+     problem since they always carry dark text regardless of theme. */
+  --danger:#ff8d96;
+}
+[data-theme="light"]{
+  --ink:#f3f3f7; --ink-2:#ffffff; --ink-3:#e9e9f2; --line:#c4c4d8;
+  --chalk:#09092d; --muted:#5b5b78; --live:#00813e; --live-rgb:0,129,62;
+  --a1:#f9ef77; --a2:#8bf0bb; --a3:#ff8d96; --a4:#4a4af9;
+  --danger:#b3324a;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
@@ -33,8 +50,8 @@ a{color:var(--chalk)}
 .strip .v{font-weight:600;font-variant-numeric:tabular-nums}
 .strip .spacer{flex:1}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--live);flex:none;
-  box-shadow:0 0 0 0 rgba(139,240,187,.6);animation:ping 2s ease-out infinite}
-@keyframes ping{70%{box-shadow:0 0 0 9px rgba(139,240,187,0)}100%{box-shadow:0 0 0 0 rgba(139,240,187,0)}}
+  box-shadow:0 0 0 0 rgba(var(--live-rgb),.6);animation:ping 2s ease-out infinite}
+@keyframes ping{70%{box-shadow:0 0 0 9px rgba(var(--live-rgb),0)}100%{box-shadow:0 0 0 0 rgba(var(--live-rgb),0)}}
 .dot.idle{background:var(--muted);animation:none}
 .dot.down{background:var(--a3);animation:none}
 
@@ -48,17 +65,17 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
 .sub{color:var(--muted);max-width:56ch;line-height:1.55}
 .note{font-size:13px;color:var(--muted);line-height:1.55}
-.err{color:var(--a3);font-size:13.5px;min-height:1.3em}
+.err{color:var(--danger);font-size:13.5px;min-height:1.3em}
 
 /* buttons */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:14px 24px;
-  border-radius:10px;background:var(--chalk);color:var(--ink);font-weight:600;
+  border-radius:16px;background:var(--chalk);color:var(--ink);font-weight:600;
   transition:transform .12s ease,opacity .12s ease}
 .btn:hover{transform:translateY(-1px)}
 .btn.ghost{background:transparent;color:var(--chalk);border:1px solid var(--line)}
 .btn.ghost:hover{border-color:var(--muted)}
-.btn.danger{background:transparent;color:var(--a3);border:1px solid var(--a3)}
-.btn.big{padding:18px 34px;font-size:clamp(16px,1.5vw,19px);border-radius:12px}
+.btn.danger{background:transparent;color:var(--danger);border:1px solid var(--danger)}
+.btn.big{padding:18px 34px;font-size:clamp(16px,1.5vw,19px);border-radius:20px}
 .btn[disabled]{opacity:.4;cursor:not-allowed;transform:none}
 .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 .between{justify-content:space-between}
@@ -66,12 +83,12 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 /* fields */
 .field{display:flex;flex-direction:column;gap:7px;text-align:left}
 .field label{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
-.inp{background:var(--ink-2);border:1px solid var(--line);border-radius:9px;padding:13px 15px;width:100%}
+.inp{background:var(--ink-2);border:1px solid var(--line);border-radius:12px;padding:13px 15px;width:100%}
 .inp:focus{border-color:var(--muted);outline:none}
 .inp.pin{font-family:var(--mono);font-size:clamp(28px,7vw,44px);letter-spacing:.34em;text-align:center;font-weight:600;padding:18px 10px}
-.panel{border:1px solid var(--line);border-radius:14px;background:var(--ink-2);padding:clamp(16px,2.4vw,24px);display:flex;flex-direction:column;gap:16px}
+.panel{border:1px solid var(--line);border-radius:18px;background:var(--ink-2);padding:clamp(16px,2.4vw,24px);display:flex;flex-direction:column;gap:16px}
 .divider{height:1px;background:var(--line);border:none}
-.card{border:1px solid var(--line);border-radius:14px;background:var(--ink-2);padding:26px 24px;text-align:left;transition:border-color .15s ease,background .15s ease}
+.card{border:1px solid var(--line);border-radius:18px;background:var(--ink-2);padding:26px 24px;text-align:left;transition:border-color .15s ease,background .15s ease}
 .card:hover{border-color:var(--muted);background:var(--ink-3)}
 .card h3{font-family:var(--disp);font-size:22px;font-weight:700;margin-bottom:6px}
 .card p{color:var(--muted);font-size:14px;line-height:1.5}
@@ -79,10 +96,10 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 
 /* lobby */
 .lobbygrid{display:grid;gap:clamp(18px,3vw,42px);grid-template-columns:auto auto;align-items:center;justify-content:center}
-.pinbox{border:1px solid var(--line);border-radius:16px;background:var(--ink-2);padding:clamp(20px,3.5vw,34px) clamp(24px,5vw,56px);text-align:center}
+.pinbox{border:1px solid var(--line);border-radius:22px;background:var(--ink-2);padding:clamp(20px,3.5vw,34px) clamp(24px,5vw,56px);text-align:center}
 .pinbox .pin{font-family:var(--mono);font-weight:600;font-size:clamp(52px,11vw,108px);letter-spacing:.12em;line-height:1;font-variant-numeric:tabular-nums}
 .pinbox .url{font-family:var(--mono);font-size:clamp(12px,1.4vw,16px);color:var(--muted);margin-top:10px;word-break:break-all}
-.qr{border-radius:12px;width:clamp(150px,17vw,230px);height:auto;display:block;background:var(--chalk);padding:8px}
+.qr{border-radius:14px;width:clamp(150px,17vw,230px);height:auto;display:block;background:var(--chalk);padding:8px}
 .roster{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;max-width:1000px}
 .chip{border:1px solid var(--line);border-radius:999px;padding:8px 16px;background:var(--ink-2);font-size:14px;font-weight:500;animation:pop .28s cubic-bezier(.2,.9,.3,1.3)}
 .chip.off{opacity:.42}
@@ -101,25 +118,32 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .fill{height:100%;width:100%;background:var(--live);border-radius:99px}
 .fill.warn{background:var(--a1)}
 .fill.crit{background:var(--a3)}
-.clock{font-family:var(--mono);font-weight:600;font-size:clamp(22px,3vw,34px);font-variant-numeric:tabular-nums;min-width:2.2ch;text-align:right}
+.clock{font-family:var(--mono);font-weight:600;font-size:clamp(22px,3vw,34px);font-variant-numeric:tabular-nums;min-width:2.2ch;text-align:right;display:inline-block}
+.clock.crit{color:var(--danger);animation:clockpulse .5s ease-in-out infinite}
+@keyframes clockpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
 .answers{display:grid;grid-template-columns:1fr 1fr;gap:clamp(10px,1.6vw,16px);width:100%;max-width:960px;margin:0 auto}
 .ans{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:clamp(16px,2.4vw,26px);
-  border-radius:12px;color:#09092d;font-weight:600;text-align:left;font-size:clamp(15px,1.85vw,23px);
+  border-radius:18px;color:#09092d;font-weight:600;text-align:left;font-size:clamp(15px,1.85vw,23px);
   line-height:1.25;min-height:clamp(72px,11vh,124px);transition:opacity .25s ease,filter .25s ease}
-.ans .tag{font-family:var(--mono);font-weight:600;font-size:.82em;background:rgba(9,9,45,.16);
-  border-radius:6px;width:1.9em;height:1.9em;display:grid;place-items:center;flex:none}
+/* One shape per position (triangle/diamond/circle/square), the same
+   position-to-shape pairing the whole live-quiz genre uses (Kahoot etc) so
+   an option is identifiable by shape and color together, not just a letter. */
+.ans .tag{background:rgba(9,9,45,.16);
+  border-radius:8px;width:1.9em;height:1.9em;display:grid;place-items:center;flex:none}
+.ans .tag svg{width:58%;height:58%;fill:currentColor}
 .ans .txt{flex:1;position:relative}
 .ans .bar{position:absolute;inset:0 auto 0 0;width:0;background:rgba(9,9,45,.17);transition:width .6s cubic-bezier(.2,.8,.2,1)}
 .ans .n{font-family:var(--mono);font-weight:600;font-size:.85em;position:relative;font-variant-numeric:tabular-nums}
 .ans.c1{background:var(--a1)} .ans.c2{background:var(--a2)} .ans.c3{background:var(--a3)} .ans.c4{background:var(--a4)}
 .ans.dim{opacity:.26;filter:saturate(.4)}
-.ans.hit{box-shadow:0 0 0 3px var(--chalk)}
+.ans.hit{box-shadow:0 0 0 3px var(--chalk);animation:tilepop .5s ease}
+@keyframes tilepop{0%{transform:scale(1)}45%{transform:scale(1.07)}100%{transform:scale(1)}}
 .counter{font-family:var(--mono);font-size:clamp(12px,1.3vw,15px);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
 
 /* leaderboard */
 .board{width:100%;max-width:660px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
 .lrow{display:grid;grid-template-columns:2.4em 1fr auto;align-items:center;gap:14px;padding:14px 18px;
-  border-radius:10px;background:var(--ink-2);border:1px solid var(--line);
+  border-radius:14px;background:var(--ink-2);border:1px solid var(--line);
   animation:slidein .35s cubic-bezier(.2,.9,.3,1) backwards}
 @keyframes slidein{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
 .lrow .rank{font-family:var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
@@ -133,7 +157,7 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 
 /* text/numeric question and reveal (no tile grid to show) */
 .resplist{display:flex;flex-direction:column;gap:10px;width:100%;max-width:760px;margin:0 auto}
-.respitem{border:1px solid var(--line);border-radius:10px;background:var(--ink-2);padding:14px 18px;
+.respitem{border:1px solid var(--line);border-radius:14px;background:var(--ink-2);padding:14px 18px;
   display:flex;gap:14px;align-items:baseline;animation:slidein .3s cubic-bezier(.2,.9,.3,1) backwards}
 .respitem .who{font-family:var(--mono);font-size:12px;color:var(--muted);flex:none;min-width:8ch}
 .respitem .what{flex:1;font-size:16px;line-height:1.4}
@@ -143,7 +167,7 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 
 /* dashboard */
 .stats{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));width:100%}
-.stat{border:1px solid var(--line);border-radius:12px;background:var(--ink-2);padding:16px 18px;text-align:left}
+.stat{border:1px solid var(--line);border-radius:16px;background:var(--ink-2);padding:16px 18px;text-align:left}
 .stat .n{font-family:var(--mono);font-weight:600;font-size:clamp(20px,2.6vw,28px);font-variant-numeric:tabular-nums;display:block}
 .stat .l{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:4px;display:block}
 .qitem.click{cursor:pointer;transition:border-color .15s ease,background .15s ease}
@@ -151,12 +175,12 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 
 /* per-question accuracy */
 .qbars{display:flex;flex-direction:column;gap:8px;width:100%}
-.qbar{display:flex;flex-direction:column;gap:6px;padding:12px 16px;border:1px solid var(--line);border-radius:10px;background:var(--ink-2)}
+.qbar{display:flex;flex-direction:column;gap:6px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:var(--ink-2)}
 .qbar .qb-head{display:flex;justify-content:space-between;gap:14px;font-size:13.5px}
 .qbar .qb-head .qtxt{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .qbar .qb-head .qpct{font-family:var(--mono);color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
 .podium{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:end;width:100%;max-width:660px;margin:0 auto}
-.pod{border:1px solid var(--line);border-radius:12px 12px 0 0;background:var(--ink-2);padding:18px 12px;
+.pod{border:1px solid var(--line);border-radius:18px 18px 0 0;background:var(--ink-2);padding:18px 12px;
   text-align:center;display:flex;flex-direction:column;gap:6px;justify-content:flex-end}
 .pod .pn{font-weight:600;font-size:clamp(14px,1.6vw,18px);overflow:hidden;text-overflow:ellipsis}
 .pod .ps{font-family:var(--mono);color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
@@ -167,13 +191,13 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 
 /* editor */
 .qlist{display:flex;flex-direction:column;gap:10px;width:100%}
-.qitem{border:1px solid var(--line);border-radius:11px;background:var(--ink-2);padding:14px 16px;display:flex;gap:14px;align-items:flex-start}
+.qitem{border:1px solid var(--line);border-radius:14px;background:var(--ink-2);padding:14px 16px;display:flex;gap:14px;align-items:flex-start}
 .qitem .idx{font-family:var(--mono);color:var(--muted);font-size:13px;padding-top:2px;flex:none}
 .qitem .body{flex:1;min-width:0}
 .qitem .qt{font-weight:600;margin-bottom:6px;line-height:1.35}
 .qitem .meta{font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.05em;display:flex;gap:14px;flex-wrap:wrap}
 .qitem .acts{display:flex;gap:6px;flex:none}
-.iconbtn{border:1px solid var(--line);border-radius:7px;width:32px;height:32px;display:grid;place-items:center;color:var(--muted);font-size:15px}
+.iconbtn{border:1px solid var(--line);border-radius:9px;width:32px;height:32px;display:grid;place-items:center;color:var(--muted);font-size:15px}
 .iconbtn:hover{color:var(--chalk);border-color:var(--muted)}
 .editgrid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
 .optrow{display:flex;gap:10px;align-items:center}
@@ -184,7 +208,7 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 
 /* player */
 .verdict{font-family:var(--disp);font-weight:700;font-size:clamp(34px,8vw,64px);letter-spacing:-.03em;line-height:1}
-.verdict.good{color:var(--live)} .verdict.bad{color:var(--a3)}
+.verdict.good{color:var(--live)} .verdict.bad{color:var(--danger)}
 .bigpts{font-family:var(--mono);font-weight:600;font-size:clamp(30px,7vw,50px);font-variant-numeric:tabular-nums}
 .pulse{width:44px;height:44px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--live);animation:spin 1s linear infinite;margin:0 auto}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -203,9 +227,32 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
   transform:translateY(110%);transition:transform .25s ease;z-index:60}
 .offline.on{transform:none}
 
+/* theme toggle: one fixed button, present once per page regardless of
+   which .screen is on, so it's always reachable. Bottom-right is the one
+   corner no screen already puts content in. */
+.themetoggle{position:fixed;right:16px;bottom:16px;z-index:55;width:38px;height:38px;border-radius:50%;
+  border:1px solid var(--line);background:var(--ink-2);color:var(--chalk);display:grid;place-items:center;
+  cursor:pointer;transition:border-color .15s ease}
+.themetoggle:hover{border-color:var(--muted)}
+.themetoggle svg{width:18px;height:18px}
+
 /* admin dashboard tabs */
 .tab{opacity:.7} .tab.active{opacity:1;color:var(--chalk)}
 .tabpage{display:none} .tabpage.on{display:flex}
+
+/* confetti burst: JS spawns a handful of these on a game/attempt finishing,
+   then removes them once the fall animation ends. */
+.confetti-piece{position:fixed;top:-12px;width:8px;height:14px;border-radius:2px;opacity:.95;
+  pointer-events:none;z-index:70;animation:confettifall linear forwards}
+@keyframes confettifall{to{transform:translateY(105vh) rotate(600deg);opacity:.3}}
+
+/* streak badge: shown on a player's own result when they're a few correct
+   answers into a row, surfacing the streak bonus that already exists in
+   scoring but otherwise never shows up anywhere in the UI. */
+.streakbadge{display:inline-flex;align-items:center;gap:6px;background:var(--a1);color:#09092d;
+  font-weight:700;padding:7px 16px;border-radius:999px;font-family:var(--mono);font-size:14px;
+  margin-top:4px;animation:pop .3s cubic-bezier(.2,.9,.3,1.3)}
+.streakbadge svg{width:15px;height:15px;fill:currentColor}
 
 @media (max-width:760px){ .lobbygrid{grid-template-columns:1fr} }
 @media (max-width:620px){ .answers{grid-template-columns:1fr} .podium{gap:8px} .qitem{flex-wrap:wrap} }
