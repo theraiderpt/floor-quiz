@@ -8,10 +8,10 @@ const COLORS = ["c1", "c2", "c3", "c4"];
    pairing the live-quiz genre uses so an option reads by shape and color
    together, not just a letter. */
 const SHAPES = [
-  '<svg viewBox="0 0 24 24"><polygon points="12,3 22,20 2,20"/></svg>',
-  '<svg viewBox="0 0 24 24"><polygon points="12,2 22,12 12,22 2,12"/></svg>',
-  '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>',
-  '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>'
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,3 22,20 2,20"/></svg>',
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,2 22,12 12,22 2,12"/></svg>',
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg>',
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>'
 ];
 function shapeTag(i) {
   const t = el("span", "tag");
@@ -304,7 +304,7 @@ function stopClock() { if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
 /* Shown on a player's own result when they're a few correct answers into a
    row - surfaces the streak bonus that already exists in scoring but
    otherwise never shows up anywhere in the UI. */
-const FLAME_ICON = '<svg viewBox="0 0 24 24"><path d="M12 2c1 3-3 4-3 8a3 3 0 106 0c0-1-1-2-1-3 2 1 4 4 4 7a6 6 0 11-12 0c0-6 4-9 6-12z"/></svg>';
+const FLAME_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 3-3 4-3 8a3 3 0 106 0c0-1-1-2-1-3 2 1 4 4 4 7a6 6 0 11-12 0c0-6 4-9 6-12z"/></svg>';
 function streakBadge(n) {
   const b = el("span", "streakbadge");
   b.innerHTML = FLAME_ICON + "<span>" + n + " in a row</span>";

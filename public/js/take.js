@@ -8,10 +8,10 @@ const COLORS = ["c1", "c2", "c3", "c4"];
    pairing the live-quiz genre uses so an option reads by shape and color
    together, not just a letter. */
 const SHAPES = [
-  '<svg viewBox="0 0 24 24"><polygon points="12,3 22,20 2,20"/></svg>',
-  '<svg viewBox="0 0 24 24"><polygon points="12,2 22,12 12,22 2,12"/></svg>',
-  '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>',
-  '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>'
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,3 22,20 2,20"/></svg>',
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,2 22,12 12,22 2,12"/></svg>',
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg>',
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>'
 ];
 function shapeTag(i) {
   const t = el("span", "tag");
