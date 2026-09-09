@@ -67,7 +67,7 @@
           <option value="name_email">Name + work email required (formal)</option>
         </select>
       </div>
-      <div class="field">
+      <div class="field" id="quizGapField">
         <label for="quizGap">Time between questions</label>
         <select class="inp" id="quizGap">
           <option value="2">2 seconds</option>
@@ -78,6 +78,13 @@
           <option value="30">30 seconds</option>
         </select>
       </div>
+      <div class="field">
+        <label for="quizDelivery">Delivery</label>
+        <select class="inp" id="quizDelivery">
+          <option value="live">Live game — host runs it, scored, leaderboard</option>
+          <option value="selfpaced">Self-paced test — shareable link, no live session</option>
+        </select>
+      </div>
     </div>
     <div class="qlist" id="qlist"></div>
     <div class="row">
@@ -85,6 +92,13 @@
       <button class="btn ghost" id="browseBank">+ From question bank</button>
       <button class="btn ghost" id="exportBtn">Export JSON</button>
       <button class="btn ghost danger" id="deleteQuiz">Delete quiz</button>
+    </div>
+    <div class="row between" id="selfpacedShare" hidden>
+      <p class="note">Share this link so people can take the test on their own time.</p>
+      <div class="row">
+        <input class="inp" id="shareLinkInput" readonly style="max-width:360px">
+        <button class="btn ghost" id="copyShareLink">Copy link</button>
+      </div>
     </div>
     <hr class="divider">
     <div class="row between">
@@ -104,6 +118,15 @@
     <h2 id="editTitle">Question</h2>
     <div class="panel">
       <div class="field">
+        <label for="eQType">Question type</label>
+        <select class="inp" id="eQType">
+          <option value="single">Single choice</option>
+          <option value="multi">Multiple choice (more than one correct)</option>
+          <option value="text">Open text (unscored, for discussion)</option>
+          <option value="numeric">Numeric guess (closest within tolerance)</option>
+        </select>
+      </div>
+      <div class="field">
         <label for="eQ">Question</label>
         <textarea class="inp" id="eQ" rows="2" maxlength="200" placeholder="What does FCR measure?"></textarea>
       </div>
@@ -116,19 +139,36 @@
         <img id="eImgPreview" class="qimg small" hidden alt="">
         <input type="file" id="eImgFile" accept="image/*" hidden>
       </div>
-      <div class="editgrid">
+      <div class="editgrid" id="eNumericFields" hidden>
         <div class="field">
+          <label for="eTarget">Correct number</label>
+          <input class="inp" id="eTarget" type="number" step="any">
+        </div>
+        <div class="field">
+          <label for="eTolerance">Tolerance (plus or minus)</label>
+          <input class="inp" id="eTolerance" type="number" step="any" min="0" value="0">
+        </div>
+      </div>
+      <div class="editgrid">
+        <div class="field" id="eTimeField">
           <label for="eTime">Seconds to answer</label>
           <select class="inp" id="eTime"><option>10</option><option selected>20</option><option>30</option><option>45</option><option>60</option></select>
         </div>
-        <div class="field">
+        <div class="field" id="eTypeField">
           <label for="eType">Answer options</label>
           <select class="inp" id="eType"><option value="4">Four choices</option><option value="2">True / false</option></select>
         </div>
+        <div class="field" id="eShuffleField">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:normal;font-family:var(--body);font-size:15px;color:var(--chalk)">
+            <input type="checkbox" id="eShuffle" style="width:17px;height:17px;accent-color:var(--live)"> Shuffle order per player
+          </label>
+        </div>
       </div>
-      <hr class="divider">
-      <div class="qlist" id="eOpts"></div>
-      <p class="note">Mark exactly one option as correct.</p>
+      <div id="eOptsWrap">
+        <hr class="divider">
+        <div class="qlist" id="eOpts"></div>
+        <p class="note" id="eOptsNote">Mark exactly one option as correct.</p>
+      </div>
     </div>
     <div class="row between">
       <button class="btn ghost" id="eCancel">Cancel</button>
@@ -175,6 +215,7 @@
   <div class="strip"><span class="dot"></span><span class="cell"><span class="k">pin</span><span class="v" id="pPin">0000</span></span><span class="cell"><span class="k">q</span><span class="v" id="pQn">1/1</span></span><span class="cell"><span class="k">players</span><span class="v" id="pPlayers">0</span></span><span class="cell"><span class="k">answered</span><span class="v" id="pAnswered">0</span></span><span class="spacer"></span><span class="cell"><button class="k" id="pSkip" style="text-transform:uppercase;letter-spacing:.09em">Close early</button></span></div>
   <div class="stage">
     <p class="qtext" id="pQ">…</p>
+    <p class="counter" id="pTypeHint" hidden></p>
     <img id="pImg" class="qimg" hidden alt="">
     <div class="timerwrap" id="pTimerWrap"><div class="track"><div class="fill" id="pFill"></div></div><div class="clock" id="pClock">—</div></div>
     <div class="answers" id="pAnswers"></div>

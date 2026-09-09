@@ -3,9 +3,10 @@ import { SCORING, FLOW, config } from "./config.js";
 import { store } from "./db.js";
 
 export const PHASES = ["lobby", "question", "reveal", "scores", "final"];
+export const QUESTION_TYPES = ["single", "multi", "text", "numeric"];
 
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-const isValidEmail = s => typeof s === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
+export const isValidEmail = s => typeof s === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
 
 /* ~350KB of base64, comfortably under a resized/compressed photo, while
    keeping a whole image-heavy quiz well inside the raised body/socket limits
@@ -29,28 +30,171 @@ export function cleanName(raw) {
     .slice(0, 18);
 }
 
+function sanitiseQuestion(q) {
+  const type = QUESTION_TYPES.includes(q?.type) ? q.type : "single";
+  const text = String(q?.q || "").trim().slice(0, 200);
+  if (!text) return null;
+  const seconds = clamp(Number(q?.t) || 20, 5, 120);
+  const img = typeof q?.img === "string" && q.img.startsWith("data:image/") && q.img.length <= MAX_IMG_CHARS
+    ? q.img : null;
+
+  if (type === "text") return { type, q: text, t: seconds, img };
+
+  if (type === "numeric") {
+    const target = Number(q?.target);
+    if (!Number.isFinite(target)) return null;
+    const tolerance = clamp(Number(q?.tolerance) || 0, 0, 1_000_000_000);
+    return { type, q: text, t: seconds, img, target, tolerance };
+  }
+
+  /* "single" and "multi" are both option-based, so they share the opts
+     sanitising and the per-player shuffle flag. */
+  const opts = (Array.isArray(q?.opts) ? q.opts : [])
+    .map(o => String(o || "").trim().slice(0, 120))
+    .filter(Boolean)
+    .slice(0, 4);
+  if (opts.length < 2) return null;
+  const shuffle = Boolean(q?.shuffle);
+
+  if (type === "multi") {
+    const correct = [...new Set((Array.isArray(q?.correct) ? q.correct : []).map(Number))]
+      .filter(i => Number.isInteger(i) && i >= 0 && i < opts.length)
+      .sort((a, b) => a - b);
+    if (!correct.length) return null;
+    return { type, q: text, t: seconds, img, opts, correct, shuffle };
+  }
+
+  const correct = clamp(Number(q?.correct) || 0, 0, opts.length - 1);
+  return { type: "single", q: text, t: seconds, img, opts, correct, shuffle };
+}
+
 /* Questions arriving from the host console are never trusted as-is. */
 export function sanitiseQuiz(input) {
   const title = String(input?.title || "Quiz").trim().slice(0, 80) || "Quiz";
   const raw = Array.isArray(input?.questions) ? input.questions : [];
-  const questions = raw
-    .map(q => {
-      const opts = (Array.isArray(q?.opts) ? q.opts : [])
-        .map(o => String(o || "").trim().slice(0, 120))
-        .filter(Boolean)
-        .slice(0, 4);
-      const text = String(q?.q || "").trim().slice(0, 200);
-      const seconds = clamp(Number(q?.t) || 20, 5, 120);
-      const correct = clamp(Number(q?.correct) || 0, 0, Math.max(0, opts.length - 1));
-      const img = typeof q?.img === "string" && q.img.startsWith("data:image/") && q.img.length <= MAX_IMG_CHARS
-        ? q.img : null;
-      return opts.length >= 2 && text ? { q: text, t: seconds, opts, correct, img } : null;
-    })
-    .filter(Boolean)
-    .slice(0, 100);
+  const questions = raw.map(sanitiseQuestion).filter(Boolean).slice(0, 100);
   const joinMode = input?.joinMode === "name_email" ? "name_email" : "name";
   const gapSeconds = clamp(Number(input?.gapSeconds) || FLOW.scoresMs / 1000, 2, 30);
-  return { title, questions, joinMode, gapSeconds };
+  const deliveryMode = input?.deliveryMode === "selfpaced" ? "selfpaced" : "live";
+  return { title, questions, joinMode, gapSeconds, deliveryMode };
+}
+
+/* Checks a raw player answer against one question and reports whether it's
+   usable and whether it's correct. `correct` is `null` for question types
+   that don't have a right answer (currently just "text"), which callers use
+   to skip streak/correctCount bookkeeping without treating the answer as
+   wrong. Shared between the live Game below and the self-paced attempt
+   engine in server/selfpaced.js so both score the exact same way. */
+export function evaluateAnswer(question, payload) {
+  if (question.type === "multi") {
+    const picked = Array.isArray(payload) ? [...new Set(payload.map(Number))] : null;
+    if (!picked || !picked.length || picked.some(i => !Number.isInteger(i) || i < 0 || i >= question.opts.length)) {
+      return { valid: false };
+    }
+    const correctSet = new Set(question.correct);
+    const pickedSet = new Set(picked);
+    const correct = correctSet.size === pickedSet.size && [...correctSet].every(i => pickedSet.has(i));
+    return { valid: true, correct, answer: picked };
+  }
+
+  if (question.type === "text") {
+    const text = String(payload ?? "").trim().slice(0, 300);
+    if (!text) return { valid: false };
+    return { valid: true, correct: null, answer: text };
+  }
+
+  if (question.type === "numeric") {
+    const value = Number(payload);
+    if (!Number.isFinite(value)) return { valid: false };
+    const distance = Math.abs(value - question.target);
+    return { valid: true, correct: distance <= question.tolerance, answer: value, distance };
+  }
+
+  const idx = Number(payload);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= question.opts.length) return { valid: false };
+  return { valid: true, correct: idx === question.correct, answer: idx };
+}
+
+export function optionText(question, idx) {
+  return question.opts?.[idx];
+}
+
+/* One line per question, in submission order, for the CSV export. Unscored
+   text questions log the literal response (the whole point of asking) since
+   there's no right/wrong to report instead. Shared with the self-paced
+   attempt engine so both produce identical CSV columns. */
+export function logEntry(question, answer) {
+  if (!answer) return "No answer";
+  if (question.type === "text") return answer.answer || "No answer";
+  return answer.correct ? "Right" : "Wrong";
+}
+
+/* The wire-safe shape of a question: never the answer key, and personalised
+   to one player's shuffled option order when the question calls for it.
+   Shared by the live Game below and the self-paced attempt engine. */
+export function publicQuestion(question, optOrder) {
+  const order = question.shuffle && optOrder ? optOrder : null;
+  return {
+    type: question.type,
+    q: question.q,
+    t: question.t,
+    shuffle: Boolean(question.shuffle),
+    opts: question.opts ? (order ? order.map(i => question.opts[i]) : question.opts) : undefined
+  };
+}
+
+/* Shaped per question type so the player app can render the right feedback.
+   Single-choice keeps both the index (`choice`/`correctIndex`, for the
+   existing positional highlight when the question wasn't shuffled) and the
+   option text (works regardless of shuffle). */
+function resultFor(question, answer, player, rank, of) {
+  const base = { answered: Boolean(answer), score: player.score, streak: player.streak, rank, of, type: question.type };
+
+  if (question.type === "text") {
+    return { ...base, yourText: answer ? answer.answer : null, correct: null, points: 0 };
+  }
+
+  if (question.type === "numeric") {
+    return {
+      ...base,
+      value: answer ? answer.answer : null,
+      target: question.target,
+      distance: answer ? answer.distance : null,
+      correct: answer ? answer.correct : false,
+      points: answer ? answer.points : 0
+    };
+  }
+
+  if (question.type === "multi") {
+    const picked = answer ? answer.answer : [];
+    return {
+      ...base,
+      yourTexts: picked.map(i => optionText(question, i)),
+      correctTexts: question.correct.map(i => optionText(question, i)),
+      correct: answer ? answer.correct : false,
+      points: answer ? answer.points : 0
+    };
+  }
+
+  const idx = answer ? answer.answer : null;
+  return {
+    ...base,
+    choice: idx,
+    correctIndex: question.correct,
+    yourText: idx != null ? optionText(question, idx) : null,
+    correctText: optionText(question, question.correct),
+    correct: answer ? answer.correct : false,
+    points: answer ? answer.points : 0
+  };
+}
+
+export function shuffledOrder(n) {
+  const order = Array.from({ length: n }, (_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return order;
 }
 
 export class Game {
@@ -68,7 +212,7 @@ export class Game {
     this.phase = "lobby";
     this.qIndex = -1;
     this.players = new Map();      // playerId -> player
-    this.answers = new Map();      // playerId -> { choice, usedMs, points, correct }
+    this.answers = new Map();      // playerId -> evaluated answer + usedMs/points
     this.timer = null;
     this.questionEndsAt = 0;
     this.createdAt = Date.now();
@@ -122,7 +266,8 @@ export class Game {
       streak: 0,
       correctCount: 0,
       answered: 0,
-      log: []          // one entry per question, in order: "Right" | "Wrong" | "No answer"
+      optOrder: null,  // this question's per-player shuffled option order, or null
+      log: []          // one entry per question, in order: "Right" | "Wrong" | "No answer" | literal text
     };
     this.players.set(player.id, player);
     return { player, rejoined: false };
@@ -173,9 +318,13 @@ export class Game {
 
   /* ------------------------------------------------ broadcasting -------- */
 
-  publicState() {
+  /* `forPlayer` personalises the visible option order for a shuffled
+     question. The host/projector view always calls this with no player, so
+     the shared screen stays in one canonical order even when phones don't. */
+  publicState(forPlayer) {
     const q = this.current;
     const showQuestion = this.phase === "question" || this.phase === "reveal";
+    const question = showQuestion && q ? publicQuestion(q, forPlayer?.optOrder) : null;
     return {
       pin: this.pin,
       title: this.quiz.title,
@@ -185,12 +334,15 @@ export class Game {
       players: this.players.size,
       connected: this.connectedCount(),
       msLeft: this.phase === "question" ? Math.max(0, this.questionEndsAt - Date.now()) : 0,
-      question: showQuestion && q ? { q: q.q, opts: q.opts, t: q.t } : null
+      question
     };
   }
 
   broadcastState() {
-    this.io.to(this.room).emit("state", this.publicState());
+    this.io.to(this.hostRoom).emit("state", this.publicState());
+    for (const p of this.players.values()) {
+      if (p.socketId) this.io.to(p.socketId).emit("state", this.publicState(p));
+    }
   }
 
   broadcastLobby() {
@@ -217,6 +369,15 @@ export class Game {
     this.answers = new Map();
     const q = this.current;
     this.questionEndsAt = Date.now() + q.t * 1000;
+
+    /* A fresh per-player shuffle every time this question is asked, so the
+       translation in submitAnswer() below always matches what's currently
+       on screen. Only choice-based questions have anything to shuffle. */
+    const optionCount = q.opts?.length || 0;
+    for (const p of this.players.values()) {
+      p.optOrder = q.shuffle && optionCount ? shuffledOrder(optionCount) : null;
+    }
+
     this.broadcastState();
     this.io.to(this.hostRoom).emit("answered", { answered: 0, connected: this.connectedCount() });
     /* Sent only to the host/projector screen, on its own channel, never as
@@ -226,22 +387,36 @@ export class Game {
     this.timer = setTimeout(() => this.closeQuestion(), q.t * 1000 + 250);
   }
 
-  submitAnswer(playerId, choice) {
+  /* A shuffled player's phone shows options in `optOrder` order, so a tapped
+     position has to be mapped back to the question's own canonical index
+     before it means anything to evaluateAnswer(). Unshuffled questions pass
+     the raw payload through untouched. */
+  translateAnswer(player, question, rawAnswer) {
+    if (!question.shuffle || !player.optOrder) return rawAnswer;
+    const toCanonical = shown => {
+      const i = Number(shown);
+      return Number.isInteger(i) && i >= 0 && i < player.optOrder.length ? player.optOrder[i] : shown;
+    };
+    if (question.type === "multi") return Array.isArray(rawAnswer) ? rawAnswer.map(toCanonical) : rawAnswer;
+    return toCanonical(rawAnswer);
+  }
+
+  submitAnswer(playerId, rawAnswer) {
     if (this.phase !== "question") return { error: "Too late." };
     const p = this.players.get(playerId);
     if (!p) return { error: "You are not in this game." };
     if (this.answers.has(playerId)) return { error: "Already answered." };
 
     const q = this.current;
-    const idx = Number(choice);
-    if (!Number.isInteger(idx) || idx < 0 || idx >= q.opts.length) return { error: "Invalid answer." };
+    const translated = this.translateAnswer(p, q, rawAnswer);
+    const evaluated = evaluateAnswer(q, translated);
+    if (!evaluated.valid) return { error: "Invalid answer." };
 
     const limitMs = q.t * 1000;
     const usedMs = clamp(limitMs - (this.questionEndsAt - Date.now()), 0, limitMs);
-    const correct = idx === q.correct;
-    const points = correct ? scoreAnswer(usedMs, limitMs, p.streak) : 0;
+    const points = evaluated.correct === true ? scoreAnswer(usedMs, limitMs, p.streak) : 0;
 
-    this.answers.set(playerId, { choice: idx, usedMs, points, correct });
+    this.answers.set(playerId, { ...evaluated, usedMs, points });
     this.touch();
 
     this.io.to(this.hostRoom).emit("answered", {
@@ -255,7 +430,7 @@ export class Game {
       this.clearTimer();
       this.timer = setTimeout(() => this.closeQuestion(), 600);
     }
-    return { ok: true, choice: idx };
+    return { ok: true };
   }
 
   closeQuestion() {
@@ -263,18 +438,36 @@ export class Game {
     this.clearTimer();
     this.phase = "reveal";
     const q = this.current;
+    const isChoice = q.type === "single" || q.type === "multi";
 
-    const counts = new Array(q.opts.length).fill(0);
+    const counts = isChoice ? new Array(q.opts.length).fill(0) : null;
+    const responses = q.type === "text" ? [] : null;
+    const guesses = q.type === "numeric" ? [] : null;
+
     for (const [playerId, a] of this.answers) {
-      counts[a.choice]++;
+      const p = this.players.get(playerId);
+      if (!p) continue;
+      if (isChoice) {
+        (q.type === "multi" ? a.answer : [a.answer]).forEach(i => { if (counts[i] != null) counts[i]++; });
+      } else if (q.type === "text") {
+        responses.push({ name: p.name, text: a.answer });
+      } else if (q.type === "numeric") {
+        guesses.push({ name: p.name, value: a.answer, distance: a.distance });
+      }
+    }
+    if (guesses) guesses.sort((x, y) => x.distance - y.distance);
+
+    for (const [playerId, a] of this.answers) {
       const p = this.players.get(playerId);
       if (!p) continue;
       p.answered++;
-      if (a.correct) {
+      /* `correct === null` (unscored text) touches neither the streak nor
+         correctCount - it's a discussion prompt, not a right/wrong one. */
+      if (a.correct === true) {
         p.score += a.points;
         p.streak++;
         p.correctCount++;
-      } else {
+      } else if (a.correct === false) {
         p.streak = 0;
       }
     }
@@ -283,8 +476,7 @@ export class Game {
        the clock run out still gets a slot and the per-player logs stay
        aligned with question order for the CSV export. */
     for (const p of this.players.values()) {
-      const a = this.answers.get(p.id);
-      p.log.push(a ? (a.correct ? "Right" : "Wrong") : "No answer");
+      p.log.push(logEntry(q, this.answers.get(p.id)));
     }
 
     this.broadcastState();
@@ -292,29 +484,26 @@ export class Game {
     const board = this.standings();
     const rankById = new Map(board.map((p, i) => [p.id, i + 1]));
 
-    this.io.to(this.hostRoom).emit("reveal", {
-      correct: q.correct,
-      counts,
-      answered: this.answers.size,
-      connected: this.connectedCount(),
-      gotItRight: counts[q.correct] || 0
-    });
+    const reveal = { type: q.type, answered: this.answers.size, connected: this.connectedCount() };
+    if (isChoice) {
+      reveal.correct = q.correct;
+      reveal.counts = counts;
+      reveal.gotItRight = [...this.answers.values()].filter(a => a.correct === true).length;
+    } else if (q.type === "text") {
+      reveal.responses = responses;
+    } else if (q.type === "numeric") {
+      reveal.target = q.target;
+      reveal.tolerance = q.tolerance;
+      reveal.guesses = guesses;
+      reveal.gotItRight = [...this.answers.values()].filter(a => a.correct === true).length;
+    }
+    this.io.to(this.hostRoom).emit("reveal", reveal);
 
     /* Each player gets their own result, addressed to their socket only. */
     for (const p of this.players.values()) {
       if (!p.socketId) continue;
       const a = this.answers.get(p.id);
-      this.io.to(p.socketId).emit("result", {
-        answered: Boolean(a),
-        choice: a ? a.choice : null,
-        correctIndex: q.correct,
-        correct: Boolean(a && a.correct),
-        points: a ? a.points : 0,
-        score: p.score,
-        streak: p.streak,
-        rank: rankById.get(p.id) || null,
-        of: board.length
-      });
+      this.io.to(p.socketId).emit("result", resultFor(q, a, p, rankById.get(p.id) || null, board.length));
     }
 
     /* Auto-advance by default so the host never has to touch the console

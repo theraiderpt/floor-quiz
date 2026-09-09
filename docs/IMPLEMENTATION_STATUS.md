@@ -1,10 +1,10 @@
 # Implementation status
 
 Tracks what has shipped against the product direction agreed with the owner:
-a single-organisation, Foundever-focused proof of concept, live-session-only
-(no self-paced mode), SQLite kept as-is, no AI authoring. See
-`docs/PRODUCT_AND_TECHNICAL_AUDIT.md` for the full audit this direction was
-scoped against.
+a single-organisation, Foundever-focused proof of concept, SQLite kept as-is,
+no AI authoring. See `docs/PRODUCT_AND_TECHNICAL_AUDIT.md` for the full audit
+this direction was scoped against (that audit predates self-paced delivery
+and the additional question types below, both since added by owner request).
 
 ## Phase: admin / host accounts, categories, quotas, question bank
 
@@ -218,6 +218,128 @@ Not deployed. Per the standing ground rules: check
 `curl -s localhost:3000/api/health` for `games: 0` before restarting, and
 get explicit go-ahead before running `sudo -u deploy -i pm2 restart floor-quiz`.
 
+## Phase: question types, per-player shuffle, and self-paced delivery
+
+Status: shipped, smoke-tested, not yet deployed to production.
+
+Two owner requests landed together since they touch the same schema:
+more question formats than single-choice/true-false, and a way to run a
+quiz as an untimed, unscored, self-paced test instead of a live session.
+
+### Question types
+
+A question now carries a `type` (default `"single"`, so every question in
+every quiz saved before this phase keeps working with zero migration):
+
+- **single** - today's MCQ/true-false, unchanged.
+- **multi** - checkboxes, more than one correct option, scored all-or-
+  nothing (the picked set must exactly equal the correct set).
+- **text** - free text, deliberately unscored. A discussion/culture prompt,
+  not a graded question: no points, streak and correctCount untouched. The
+  reveal screen shows every response as a list instead of a bar chart.
+- **numeric** - a target number plus a tolerance; a guess within tolerance
+  scores like a normal correct answer, otherwise zero. No partial credit by
+  closeness in this version, kept intentionally simple.
+- **shuffle** (a flag on single/multi, not a type of its own) - each player
+  gets their own randomised option order. The host/projector screen always
+  shows the canonical order; only phones are shuffled, and the server
+  translates a shuffled position back to the canonical index before scoring
+  (`Game.translateAnswer` / the identical `Attempt.translate` in
+  server/selfpaced.js). Correctness never depends on shuffle: `evaluateAnswer`
+  in server/game.js is the single scoring function both engines call, always
+  against canonical indices.
+
+### Self-paced delivery
+
+A quiz gains a `deliveryMode` (`"live"`, the default, or `"selfpaced"`),
+set by the host when building it. A self-paced quiz mints a `shareToken`
+(stable across edits) and a link at `/take/:token`: no PIN, no lobby, no
+host pacing, no shared clock. A player enters a name (and email, if the
+quiz's join mode asks for it) and works through the questions one at a
+time over plain HTTP, at their own pace.
+
+Deliberately a separate, simpler engine (`server/selfpaced.js`, `Attempt`/
+`Attempts`) rather than a mode flag inside `Game`/`Rooms`: no sockets, no
+timers, one player per attempt, flat `SCORING.BASE` points per correct
+answer (no speed bonus - there's no shared clock to be fast against, and no
+streak bonus). It reuses `sanitiseQuiz`, `evaluateAnswer`, and critically
+the exact same `sessions`/`results` persistence as a live game (a `mode`
+column on `sessions` distinguishes them), so a finished self-paced attempt
+rolls straight into the same host dashboard, per-quiz stats, question
+breakdown, and CSV export built in the previous phase - with no extra work.
+A live lobby refuses to open for a quiz saved as self-paced (and vice versa
+isn't offered in the UI at all).
+
+### Files changed
+
+- `server/game.js`: `QUESTION_TYPES`, `sanitiseQuestion` per type,
+  `evaluateAnswer` (the shared correctness/validity check), `logEntry`,
+  `optionText`, `publicQuestion`, `shuffledOrder` (all exported for reuse by
+  selfpaced.js), `resultFor` (per-type result payload). `Game.ask`/
+  `submitAnswer`/`closeQuestion` rewritten around question type;
+  `publicState`/`broadcastState` personalise the visible option order per
+  player instead of one shared broadcast.
+- `server/selfpaced.js` (new): the `Attempt`/`Attempts` self-paced engine
+  described above.
+- `server/db.js`: `quizzes.delivery_mode`/`share_token` columns,
+  `sessions.mode` column (all additive via `ensureColumn`, no manual
+  migration step), `store.quizzes.getByShareToken`, `randomToken()` reused
+  from `server/auth.js` for share tokens.
+- `server/index.js`: quiz CRUD passes `deliveryMode` through;
+  `GET /api/selfpaced/:token`, `POST /api/selfpaced/:token/start`,
+  `POST /api/selfpaced/attempts/:attemptId/answer` (public, rate-limited,
+  same pattern as the invite-link flow); `GET /take/:token` static route;
+  `host:create` refuses to open a live lobby for a self-paced quiz;
+  `player:answer` payload generalised from `{choice}` to `{answer}`.
+- `public/host.html` / `public/js/host.js`: question-type selector and
+  per-type sub-forms (options+correct-set / target+tolerance / neither) and
+  a shuffle checkbox in the question editor; a delivery-mode selector and
+  share-link box in quiz setup; the projector reveal screen renders a bar
+  chart, a response list, or a sorted guess list depending on type.
+- `public/index.html` / `public/js/play.js`: per-type answer controls
+  (radio tiles / checkbox tiles with an explicit submit / textarea / number
+  input) and per-type result feedback.
+- `public/take.html`, `public/js/take.js` (new): the self-paced player
+  flow - join, one question at a time with immediate feedback, final
+  summary.
+- `public/css/app.css`: checkbox styling on `.optrow`, `.pad.multi`/
+  `.pad.stack` layouts, `.resplist`/`.respitem`/`.placeholder` for the
+  text/numeric reveal.
+- `test/smoke.js`: every existing `player:answer` payload updated to the
+  new wire shape; new coverage for all three new types, shuffle (including
+  that the host's own view stays canonical while a shuffled player's
+  doesn't), and a full self-paced attempt across all four types verifying
+  it lands in the right dashboard bucket tagged `mode: 'selfpaced'`.
+
+### Commands run
+
+```bash
+node --check server/game.js server/db.js server/index.js server/selfpaced.js \
+  public/js/host.js public/js/play.js public/js/take.js test/smoke.js
+npm run smoke   # 118 assertions, all green (27 new)
+```
+
+### Manual verification still to do
+
+Not yet done in a browser (everything above was verified at the HTTP/socket
+layer via smoke.js and a few standalone repros, not by clicking through it):
+
+1. Build one quiz with each question type, including a shuffled single-
+   choice question, and play it live with two phones side by side - confirm
+   they show the options in a different order from each other and from the
+   projector, and that both score correctly regardless.
+2. Save a quiz as self-paced, copy the link, and take it end to end on a
+   phone: name entry (and email, if that quiz asks for it), each question
+   type's input control, per-question feedback, final summary.
+3. Confirm a self-paced quiz's "Open lobby" button correctly reads "Save &
+   get link" instead, and that a live quiz never shows a self-paced link box.
+
+### Deployment
+
+Not deployed. Per the standing ground rules: check
+`curl -s localhost:3000/api/health` for `games: 0` before restarting, and
+get explicit go-ahead before running `sudo -u deploy -i pm2 restart floor-quiz`.
+
 ## Deferred, not started
 
 Everything below was scoped out or explicitly deprioritised by the owner in
@@ -226,6 +348,5 @@ a fresh ask:
 
 - Multi-tenant organisations/teams beyond the single Foundever org.
 - Competency frameworks and cross-session reporting.
-- Self-paced (non-live) quiz mode.
 - AI-assisted question authoring.
 - Migrating off SQLite.

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { config } from "./config.js";
 import { QUESTION_BANK_SEED } from "./question-bank-seed.js";
+import { randomToken } from "./auth.js";
 
 fs.mkdirSync(path.dirname(config.dbPath), { recursive: true });
 
@@ -102,33 +103,50 @@ ensureColumn("quizzes", "gap_seconds", "INTEGER NOT NULL DEFAULT 5");
 ensureColumn("results", "email", "TEXT");
 ensureColumn("sessions", "questions_json", "TEXT");
 ensureColumn("results", "answers_json", "TEXT");
+/* 'live' (host-paced, real-time, scored/leaderboard) or 'selfpaced' (a
+   shareable link, no lobby, taken individually - see server/selfpaced.js).
+   share_token is only ever set for 'selfpaced' quizzes. */
+ensureColumn("quizzes", "delivery_mode", "TEXT NOT NULL DEFAULT 'live'");
+ensureColumn("quizzes", "share_token", "TEXT");
+ensureColumn("sessions", "mode", "TEXT NOT NULL DEFAULT 'live'");
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_quizzes_share_token ON quizzes(share_token) WHERE share_token IS NOT NULL");
 
 const stmt = {
   listQuizzes: db.prepare(
-    "SELECT id, title, questions, category_id, join_mode, gap_seconds, updated_at FROM quizzes WHERE host_id = ? ORDER BY updated_at DESC"
+    `SELECT id, title, questions, category_id, join_mode, gap_seconds, delivery_mode, share_token, updated_at
+     FROM quizzes WHERE host_id = ? ORDER BY updated_at DESC`
   ),
-  getQuiz: db.prepare("SELECT id, title, questions, host_id, category_id, join_mode, gap_seconds FROM quizzes WHERE id = ?"),
+  getQuiz: db.prepare(
+    `SELECT id, title, questions, host_id, category_id, join_mode, gap_seconds, delivery_mode, share_token
+     FROM quizzes WHERE id = ?`
+  ),
+  getQuizByShareToken: db.prepare(
+    `SELECT id, title, questions, host_id, category_id, join_mode, gap_seconds, delivery_mode, share_token
+     FROM quizzes WHERE share_token = ? AND delivery_mode = 'selfpaced'`
+  ),
   insertQuiz: db.prepare(
-    "INSERT INTO quizzes (title, questions, host_id, category_id, join_mode, gap_seconds) VALUES (?, ?, ?, ?, ?, ?)"
+    `INSERT INTO quizzes (title, questions, host_id, category_id, join_mode, gap_seconds, delivery_mode, share_token)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ),
   updateQuiz: db.prepare(
-    "UPDATE quizzes SET title = ?, questions = ?, category_id = ?, join_mode = ?, gap_seconds = ?, updated_at = datetime('now') WHERE id = ?"
+    `UPDATE quizzes SET title = ?, questions = ?, category_id = ?, join_mode = ?, gap_seconds = ?,
+       delivery_mode = ?, share_token = ?, updated_at = datetime('now') WHERE id = ?`
   ),
   deleteQuiz: db.prepare("DELETE FROM quizzes WHERE id = ?"),
 
   insertSession: db.prepare(
-    "INSERT INTO sessions (pin, quiz_id, title, host_id) VALUES (?, ?, ?, ?)"
+    "INSERT INTO sessions (pin, quiz_id, title, host_id, mode) VALUES (?, ?, ?, ?, ?)"
   ),
   closeSession: db.prepare(
     "UPDATE sessions SET ended_at = datetime('now'), player_count = ?, questions_json = ? WHERE id = ?"
   ),
   listSessions: db.prepare(
-    `SELECT id, pin, title, player_count, started_at, ended_at
+    `SELECT id, pin, title, player_count, mode, started_at, ended_at
      FROM sessions WHERE ended_at IS NOT NULL AND host_id = ?
      ORDER BY started_at DESC LIMIT ?`
   ),
   listAllSessions: db.prepare(
-    `SELECT sessions.id, sessions.pin, sessions.title, sessions.player_count,
+    `SELECT sessions.id, sessions.pin, sessions.title, sessions.player_count, sessions.mode,
             sessions.started_at, sessions.ended_at, hosts.email AS host_email
      FROM sessions LEFT JOIN hosts ON hosts.id = sessions.host_id
      WHERE sessions.ended_at IS NOT NULL
@@ -276,6 +294,8 @@ const parseQuiz = row =>
     categoryId: row.category_id ?? null,
     joinMode: row.join_mode || "name",
     gapSeconds: row.gap_seconds || 5,
+    deliveryMode: row.delivery_mode || "live",
+    shareToken: row.share_token || null,
     updated_at: row.updated_at,
     host_id: row.host_id
   };
@@ -300,24 +320,41 @@ export const store = {
       const row = stmt.getQuiz.get(id);
       return row && row.host_id === hostId ? parseQuiz(row) : null;
     },
-    create: (title, questions, hostId, categoryId, joinMode, gapSeconds) => {
-      const info = stmt.insertQuiz.run(title, JSON.stringify(questions), hostId, categoryId || null, joinMode || "name", gapSeconds || 5);
+    create: (title, questions, hostId, categoryId, joinMode, gapSeconds, deliveryMode) => {
+      const mode = deliveryMode === "selfpaced" ? "selfpaced" : "live";
+      const shareToken = mode === "selfpaced" ? randomToken() : null;
+      const info = stmt.insertQuiz.run(
+        title, JSON.stringify(questions), hostId, categoryId || null, joinMode || "name", gapSeconds || 5, mode, shareToken
+      );
       return store.quizzes.get(info.lastInsertRowid, hostId);
     },
-    update: (id, title, questions, categoryId, hostId, joinMode, gapSeconds) => {
-      stmt.updateQuiz.run(title, JSON.stringify(questions), categoryId || null, joinMode || "name", gapSeconds || 5, id);
+    /* The share link stays stable across edits - only generated the first
+       time a quiz becomes self-paced, reused after that - so a link a host
+       has already handed out never silently breaks when they tweak a
+       question. Switching back to 'live' clears it; switching to
+       'selfpaced' again later mints a fresh one. */
+    update: (id, title, questions, categoryId, hostId, joinMode, gapSeconds, deliveryMode) => {
+      const mode = deliveryMode === "selfpaced" ? "selfpaced" : "live";
+      const existing = stmt.getQuiz.get(id);
+      const shareToken = mode === "selfpaced" ? (existing?.share_token || randomToken()) : null;
+      stmt.updateQuiz.run(
+        title, JSON.stringify(questions), categoryId || null, joinMode || "name", gapSeconds || 5, mode, shareToken, id
+      );
       return store.quizzes.get(id, hostId);
     },
     remove: (id, hostId) => {
       const row = stmt.getQuiz.get(id);
       if (!row || row.host_id !== hostId) return false;
       return stmt.deleteQuiz.run(id).changes > 0;
-    }
+    },
+    /* Public lookup for the self-paced player flow - no host scoping, since
+       the token itself is the access control. */
+    getByShareToken: token => parseQuiz(stmt.getQuizByShareToken.get(String(token || "")))
   },
 
   sessions: {
-    open: (pin, quizId, title, hostId) =>
-      Number(stmt.insertSession.run(pin, quizId || null, title, hostId || null).lastInsertRowid),
+    open: (pin, quizId, title, hostId, mode) =>
+      Number(stmt.insertSession.run(pin, quizId || null, title, hostId || null, mode === "selfpaced" ? "selfpaced" : "live").lastInsertRowid),
 
     /* Written once, when a game finishes. A game that is abandoned midway
        never lands here, which keeps the history clean. */

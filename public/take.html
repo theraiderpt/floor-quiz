@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101828">
+<title>CX Quiz — self-paced</title>
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<section class="screen on" id="t-join">
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><span class="k">self-paced</span></span></div>
+  <div class="stage center">
+    <p class="eyebrow">Self-paced test</p>
+    <h1 id="tTitle">—</h1>
+    <p class="sub" id="tIntro">Take this at your own pace. No live session, no clock — just work through the questions.</p>
+    <div class="field" style="width:min(340px,88vw)">
+      <label for="tName">Your name</label>
+      <input class="inp" id="tName" maxlength="18" placeholder="First name and team" autocomplete="off">
+    </div>
+    <div class="field" id="tEmailField" style="width:min(340px,88vw)" hidden>
+      <label for="tEmail">Work email</label>
+      <input class="inp" id="tEmail" type="email" placeholder="you@company.com" autocomplete="email">
+    </div>
+    <p class="err" id="tErr"></p>
+    <button class="btn big" id="tStart">Start</button>
+  </div>
+</section>
+
+<section class="screen" id="t-question">
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">question</span><span class="v" id="tQn">1/1</span></span><span class="spacer"></span><span class="cell"><span class="k">score</span><span class="v" id="tScore">0</span></span></div>
+  <div class="stage" style="gap:14px">
+    <p id="tQ" style="text-align:center;font-weight:600;line-height:1.35;font-size:clamp(15px,2.2vh,19px)">…</p>
+    <p class="note" id="tHint" style="text-align:center" hidden></p>
+    <div class="pad" id="tPad"></div>
+  </div>
+</section>
+
+<section class="screen" id="t-feedback">
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">score</span><span class="v" id="fbScore">0</span></span></div>
+  <div class="stage center">
+    <p class="verdict" id="fbVerdict">—</p>
+    <p class="bigpts" id="fbPts">+0</p>
+    <p class="sub" id="fbSub"></p>
+    <button class="btn big" id="fbNext">Next question</button>
+  </div>
+</section>
+
+<section class="screen" id="t-final">
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">finished</span><span class="v" id="finName">—</span></span></div>
+  <div class="stage center">
+    <p class="eyebrow">That's the lot</p>
+    <h1>All done</h1>
+    <p class="bigpts" id="finScore">0</p>
+    <p class="sub" id="finSub"></p>
+    <button class="btn ghost" id="finAgain">Take it again</button>
+  </div>
+</section>
+
+<script src="/js/take.js"></script>
+</body>
+</html>

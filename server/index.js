@@ -10,6 +10,7 @@ import QRCode from "qrcode";
 import { config, PUBLIC_DIR } from "./config.js";
 import { store } from "./db.js";
 import { Rooms, sanitiseQuiz, cleanName } from "./game.js";
+import { Attempts } from "./selfpaced.js";
 import { hashPassword, verifyPassword, randomToken } from "./auth.js";
 
 const app = express();
@@ -23,6 +24,7 @@ const io = new IOServer(server, {
   maxHttpBufferSize: 8e6
 });
 const rooms = new Rooms(io);
+const attempts = new Attempts();
 
 /* Nginx sits in front, so trust exactly one proxy hop for client IPs. */
 app.set("trust proxy", 1);
@@ -316,19 +318,19 @@ app.get("/api/bank", requireHost, (req, res) =>
 app.get("/api/quizzes", requireHost, (req, res) => res.json(store.quizzes.list(req.hostAccount.id)));
 
 app.post("/api/quizzes", requireHost, (req, res) => {
-  const { title, questions, joinMode, gapSeconds } = sanitiseQuiz(req.body);
+  const { title, questions, joinMode, gapSeconds, deliveryMode } = sanitiseQuiz(req.body);
   if (!questions.length) return res.status(400).json({ error: "Add at least one usable question." });
   const categoryId = req.body?.categoryId ? Number(req.body.categoryId) : null;
-  res.status(201).json(store.quizzes.create(title, questions, req.hostAccount.id, categoryId, joinMode, gapSeconds));
+  res.status(201).json(store.quizzes.create(title, questions, req.hostAccount.id, categoryId, joinMode, gapSeconds, deliveryMode));
 });
 
 app.put("/api/quizzes/:id", requireHost, (req, res) => {
   const id = Number(req.params.id);
   if (!store.quizzes.get(id, req.hostAccount.id)) return res.status(404).json({ error: "No such quiz." });
-  const { title, questions, joinMode, gapSeconds } = sanitiseQuiz(req.body);
+  const { title, questions, joinMode, gapSeconds, deliveryMode } = sanitiseQuiz(req.body);
   if (!questions.length) return res.status(400).json({ error: "Add at least one usable question." });
   const categoryId = req.body?.categoryId ? Number(req.body.categoryId) : null;
-  res.json(store.quizzes.update(id, title, questions, categoryId, req.hostAccount.id, joinMode, gapSeconds));
+  res.json(store.quizzes.update(id, title, questions, categoryId, req.hostAccount.id, joinMode, gapSeconds, deliveryMode));
 });
 
 app.delete("/api/quizzes/:id", requireHost, (req, res) => {
@@ -400,6 +402,41 @@ app.get("/api/stats/quizzes/:groupKey/questions", requireHost, (req, res) => {
 
 app.get("/api/health", (req, res) => res.json({ ok: true, ...rooms.stats(), uptime: Math.round(process.uptime()) }));
 
+/* -------------------------------------------------------- self-paced --- */
+/* Public, unauthenticated: the share token itself is the access control,
+   same pattern as the invite-link flow above. No socket, no lobby - see
+   server/selfpaced.js for why this is a separate engine from Rooms/Game. */
+
+const selfpacedLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many attempts. Wait a bit and try again." }
+});
+
+app.get("/api/selfpaced/:token", selfpacedLimiter, (req, res) => {
+  const quiz = store.quizzes.getByShareToken(req.params.token);
+  if (!quiz) return res.status(404).json({ error: "That link isn't valid." });
+  res.json({ title: quiz.title, total: quiz.questions.length, joinMode: quiz.joinMode });
+});
+
+app.post("/api/selfpaced/:token/start", selfpacedLimiter, (req, res) => {
+  const quiz = store.quizzes.getByShareToken(req.params.token);
+  if (!quiz) return res.status(404).json({ error: "That link isn't valid." });
+  const result = attempts.start(quiz, req.body?.name, req.body?.email);
+  if (result.error) return res.status(400).json(result);
+  res.status(201).json(result);
+});
+
+app.post("/api/selfpaced/attempts/:attemptId/answer", selfpacedLimiter, (req, res) => {
+  const attempt = attempts.get(req.params.attemptId);
+  if (!attempt) return res.status(404).json({ error: "That attempt has expired. Start again." });
+  const result = attempt.answer(req.body?.answer);
+  if (result.error) return res.status(400).json(result);
+  res.json(result);
+});
+
 /* ------------------------------------------------------------- static --- */
 
 app.use(express.static(PUBLIC_DIR, { maxAge: config.isProd ? "1h" : 0, extensions: ["html"] }));
@@ -407,6 +444,7 @@ app.get("/host", (req, res) => res.sendFile("host.html", { root: PUBLIC_DIR }));
 app.get("/admin", (req, res) => res.sendFile("admin.html", { root: PUBLIC_DIR }));
 app.get("/invite/:token", (req, res) => res.sendFile("invite.html", { root: PUBLIC_DIR }));
 app.get("/play", (req, res) => res.sendFile("index.html", { root: PUBLIC_DIR }));
+app.get("/take/:token", (req, res) => res.sendFile("take.html", { root: PUBLIC_DIR }));
 app.use((req, res) => res.status(404).sendFile("index.html", { root: PUBLIC_DIR }));
 
 /* ----------------------------------------------------------- realtime --- */
@@ -430,7 +468,11 @@ io.on("connection", socket => {
     const quiz = sanitiseQuiz(payload?.quiz);
     if (!quiz.questions.length) return ack?.({ error: "That quiz has no usable questions." });
     /* Only stamp the session with a quizId this host actually owns. */
-    const ownedQuizId = payload?.quizId && store.quizzes.get(payload.quizId, socket.data.hostId) ? payload.quizId : null;
+    const ownedQuiz = payload?.quizId ? store.quizzes.get(payload.quizId, socket.data.hostId) : null;
+    if (ownedQuiz?.deliveryMode === "selfpaced") {
+      return ack?.({ error: "This quiz is set to self-paced. Share its link instead of opening a live lobby." });
+    }
+    const ownedQuizId = ownedQuiz ? payload.quizId : null;
     let game;
     try {
       game = rooms.create(quiz, ownedQuizId, socket.data.hostId, socket.data.hostMaxPlayers);
@@ -523,10 +565,10 @@ io.on("connection", socket => {
     game.broadcastState();
   });
 
-  socket.on("player:answer", ({ choice } = {}, ack) => {
+  socket.on("player:answer", ({ answer } = {}, ack) => {
     const game = rooms.get(socket.data.pin);
     if (!game || !socket.data.playerId) return ack?.({ error: "Not in a game." });
-    const outcome = game.submitAnswer(socket.data.playerId, choice);
+    const outcome = game.submitAnswer(socket.data.playerId, answer);
     ack?.(outcome);
   });
 
