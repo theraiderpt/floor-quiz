@@ -151,37 +151,66 @@ const stmt = {
   ),
   countQuizzesByHost: db.prepare("SELECT COUNT(*) AS n FROM quizzes WHERE host_id = ?"),
 
-  /* Grouped by quiz_id so a renamed or deleted quiz still rolls its history
-     up correctly. Falls back to the most recent session's title when the
-     quiz itself is gone, since sessions keep their own copy of the title. */
+  /* Grouped by quiz_id when a session came from a saved quiz, or by title
+     when it didn't (quiz_id NULL covers both "never saved" and "quiz later
+     deleted", and two such sessions can be genuinely different quizzes that
+     just happen to share no quiz_id, so title is what keeps them apart).
+     Session-level sums (player_count) and result-level sums (score,
+     correct_count) are aggregated in separate CTEs before being joined 1:1
+     by group: joining sessions straight to results before aggregating would
+     multiply every session-level number by that session's player count.
+     The `grp` CTE applies the ended_at filter once, up front, so an
+     abandoned session can never supply the title or last-played date for a
+     bucket it doesn't actually count toward. */
   statsByQuiz: db.prepare(
-    `SELECT s.quiz_id AS quizId,
+    `WITH grp AS (
+       SELECT id, quiz_id, title, player_count, started_at,
+              COALESCE(quiz_id, 'title:' || title) AS gkey
+       FROM sessions
+       WHERE ended_at IS NOT NULL AND host_id = ?
+     ),
+     bySession AS (
+       SELECT gkey, MAX(quiz_id) AS quizId, COUNT(*) AS games,
+              COALESCE(SUM(player_count), 0) AS totalPlayers,
+              MAX(started_at) AS lastPlayed
+       FROM grp GROUP BY gkey
+     ),
+     byResult AS (
+       SELECT grp.gkey AS gkey, AVG(r.score) AS avgScore,
+              SUM(r.correct_count) AS totalCorrect, SUM(r.answered) AS totalAnswered
+       FROM grp JOIN results r ON r.session_id = grp.id
+       GROUP BY grp.gkey
+     )
+     SELECT bySession.quizId AS quizId,
             COALESCE(q.title, (
-              SELECT s3.title FROM sessions s3
-              WHERE s3.quiz_id IS s.quiz_id AND s3.host_id = ?
-              ORDER BY s3.started_at DESC LIMIT 1
+              SELECT title FROM grp WHERE grp.gkey = bySession.gkey ORDER BY grp.started_at DESC LIMIT 1
             )) AS title,
-            COUNT(DISTINCT s.id) AS games,
-            COALESCE(SUM(s.player_count), 0) AS totalPlayers,
-            AVG(s.player_count) AS avgPlayers,
-            MAX(s.started_at) AS lastPlayed,
-            MIN(s.started_at) AS firstPlayed,
-            AVG(r.score) AS avgScore,
-            MAX(r.score) AS topScore,
-            SUM(r.correct_count) AS totalCorrect,
-            SUM(r.answered) AS totalAnswered
-     FROM sessions s
-     LEFT JOIN quizzes q ON q.id = s.quiz_id
-     LEFT JOIN results r ON r.session_id = s.id
-     WHERE s.ended_at IS NOT NULL AND s.host_id = ?
-     GROUP BY s.quiz_id
-     ORDER BY lastPlayed DESC`
+            bySession.games AS games,
+            bySession.totalPlayers AS totalPlayers,
+            bySession.lastPlayed AS lastPlayed,
+            byResult.avgScore AS avgScore,
+            byResult.totalCorrect AS totalCorrect,
+            byResult.totalAnswered AS totalAnswered
+     FROM bySession
+     LEFT JOIN byResult ON byResult.gkey = bySession.gkey
+     LEFT JOIN quizzes q ON q.id = bySession.quizId
+     ORDER BY bySession.lastPlayed DESC`
   ),
 
-  sessionsForQuiz: db.prepare(
+  sessionsForGroup: db.prepare(
     `SELECT id, pin, title, player_count, started_at, ended_at
-     FROM sessions WHERE ended_at IS NOT NULL AND host_id = ? AND quiz_id IS ?
+     FROM sessions
+     WHERE ended_at IS NOT NULL AND host_id = ?
+       AND ((? IS NOT NULL AND quiz_id = ?) OR (? IS NULL AND quiz_id IS NULL AND title = ?))
      ORDER BY started_at DESC`
+  ),
+
+  questionLogsForGroup: db.prepare(
+    `SELECT s.id AS session_id, s.questions_json AS questions_json, r.answers_json AS answers_json
+     FROM sessions s
+     JOIN results r ON r.session_id = s.id
+     WHERE s.ended_at IS NOT NULL AND s.host_id = ?
+       AND ((? IS NOT NULL AND s.quiz_id = ?) OR (? IS NULL AND s.quiz_id IS NULL AND s.title = ?))`
   ),
 
   getAdminByEmail: db.prepare("SELECT * FROM admins WHERE email = ?"),
@@ -327,46 +356,51 @@ export const store = {
       };
     },
 
+    /* `groupKey` is the stable handle the client passes back to drill into
+       one quiz: a saved quiz's own id as a string, or `t:<title>` for an
+       ad-hoc/deleted-quiz bucket. Kept out of the SQL so the id/title pair
+       stays the single source of truth for how a group is identified. */
     byQuiz: hostId =>
-      stmt.statsByQuiz.all(hostId, hostId).map(r => ({
+      stmt.statsByQuiz.all(hostId).map(r => ({
         quizId: r.quizId,
+        groupKey: r.quizId != null ? String(r.quizId) : "t:" + r.title,
         title: r.title || "Untitled quiz",
         games: r.games,
         totalPlayers: r.totalPlayers,
-        avgPlayers: r.games ? Math.round((r.avgPlayers || 0) * 10) / 10 : 0,
         avgScore: r.avgScore ? Math.round(r.avgScore) : 0,
-        topScore: r.topScore || 0,
         accuracy: r.totalAnswered ? Math.round((r.totalCorrect / r.totalAnswered) * 100) : null,
-        lastPlayed: r.lastPlayed,
-        firstPlayed: r.firstPlayed
+        lastPlayed: r.lastPlayed
       })),
 
-    sessionsForQuiz: (hostId, quizId) => stmt.sessionsForQuiz.all(hostId, quizId),
+    forQuiz: (hostId, groupKey) => store.stats.byQuiz(hostId).find(q => q.groupKey === groupKey) || null,
+
+    sessionsForQuiz: (hostId, quizId, title) => stmt.sessionsForGroup.all(hostId, quizId, quizId, quizId, title),
 
     /* Lines up each session's frozen question texts against every player's
        per-question answer log to find which questions actually trip people
        up across every time this quiz has been played. Sessions can differ in
        question count/order if the quiz was edited between games, so this
-       tallies by question text rather than by index. */
-    questionBreakdown: (hostId, quizId) => {
+       tallies by question text rather than by index. One query for the
+       whole group rather than one round trip per session. */
+    questionBreakdown: (hostId, quizId, title) => {
       const tally = new Map();
-      for (const row of stmt.sessionsForQuiz.all(hostId, quizId)) {
-        const full = store.sessions.get(row.id, hostId);
-        if (!full) continue;
-        let questions = [];
-        try { questions = JSON.parse(full.questions_json || "[]"); } catch { questions = []; }
-        for (const r of full.results) {
-          let log = [];
-          try { log = JSON.parse(r.answers_json || "[]"); } catch { log = []; }
-          log.forEach((outcome, i) => {
-            const text = questions[i] || `Question ${i + 1}`;
-            if (!tally.has(text)) tally.set(text, { right: 0, wrong: 0, skipped: 0 });
-            const t = tally.get(text);
-            if (outcome === "Right") t.right++;
-            else if (outcome === "Wrong") t.wrong++;
-            else t.skipped++;
-          });
+      const questionsCache = new Map();
+      for (const row of stmt.questionLogsForGroup.all(hostId, quizId, quizId, quizId, title)) {
+        let questions = questionsCache.get(row.session_id);
+        if (!questions) {
+          try { questions = JSON.parse(row.questions_json || "[]"); } catch { questions = []; }
+          questionsCache.set(row.session_id, questions);
         }
+        let log = [];
+        try { log = JSON.parse(row.answers_json || "[]"); } catch { log = []; }
+        log.forEach((outcome, i) => {
+          const text = questions[i] || `Question ${i + 1}`;
+          if (!tally.has(text)) tally.set(text, { right: 0, wrong: 0, skipped: 0 });
+          const t = tally.get(text);
+          if (outcome === "Right") t.right++;
+          else if (outcome === "Wrong") t.wrong++;
+          else t.skipped++;
+        });
       }
       return [...tally.entries()].map(([q, t]) => {
         const total = t.right + t.wrong + t.skipped;
