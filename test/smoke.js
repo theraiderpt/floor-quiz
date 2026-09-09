@@ -705,6 +705,33 @@ typer.disconnect();
 offer.disconnect();
 hostSocket3.disconnect();
 
+/* ---- shuffle x multi-select together: translateAnswer()'s multi branch
+   (mapping a whole array of shown positions through optOrder) is only
+   exercised by this combination - single+shuffle and multi+no-shuffle
+   above don't reach it. ---- */
+const hostSocket4 = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
+await new Promise(r => hostSocket4.on("connect", r));
+const shuffleMultiGame = await new Promise(r => hostSocket4.emit("host:create", {
+  quiz: { title: "Shuffle Multi Test", questions: [
+    { type: "multi", q: "Pick even", t: 10, opts: ["1", "2", "3", "4"], correct: [1, 3], shuffle: true }
+  ] }
+}, r));
+const smPlayer = ioc(base, { transports: ["websocket"] });
+await new Promise(r => smPlayer.on("connect", r));
+const smQ = waitFor(smPlayer, "state", s => s.phase === "question");
+const smResultP = waitFor(smPlayer, "result", () => true);
+await new Promise(r => smPlayer.emit("player:join", { pin: shuffleMultiGame.pin, name: "Shuffler" }, r));
+hostSocket4.emit("host:start");
+const smState = await smQ;
+const shownPositions = ["2", "4"].map(v => smState.question.opts.indexOf(v));
+await new Promise(r => smPlayer.emit("player:answer", { answer: shownPositions }, r));
+const smResult = await smResultP;
+check("shuffled multi-select still scores against the canonical correct set",
+  smResult.correct === true && JSON.stringify(smResult.yourTexts.slice().sort()) === '["2","4"]',
+  JSON.stringify(smResult));
+smPlayer.disconnect();
+hostSocket4.disconnect();
+
 /* ---- sanitiser ---- */
 const { sanitiseQuiz, cleanName } = await import("../server/game.js");
 const dirty = sanitiseQuiz({
