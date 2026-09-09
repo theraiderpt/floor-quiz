@@ -386,6 +386,35 @@ check("CSV marks Marta wrong then right", perQ(rowFor("Marta")) === '"Wrong","Ri
 const history = await (await fetch(base + "/api/sessions", { headers: { Cookie: cookie } })).json();
 check("session appears in history", history.some(s => s.id === sessionId));
 
+/* ---- dashboard stats ---- */
+const statsOverview = await (await fetch(base + "/api/stats/overview", { headers: { Cookie: cookie } })).json();
+check("stats overview counts this host's one completed game", statsOverview.games === 1, JSON.stringify(statsOverview));
+check("stats overview sums players across the game", statsOverview.totalPlayers === 3, JSON.stringify(statsOverview));
+check("stats overview counts this host's one saved quiz", statsOverview.quizzes === 1, JSON.stringify(statsOverview));
+
+const statsByQuiz = await (await fetch(base + "/api/stats/quizzes", { headers: { Cookie: cookie } })).json();
+const adhoc = statsByQuiz.find(q => q.quizId === null);
+check("an ad-hoc (unsaved) quiz still gets its own bucket in the per-quiz stats", Boolean(adhoc), JSON.stringify(statsByQuiz));
+check("per-quiz stats title falls back to the session title", adhoc?.title === "Smoke Test", JSON.stringify(adhoc));
+check("per-quiz stats count the one game played", adhoc?.games === 1, JSON.stringify(adhoc));
+check("per-quiz accuracy blends both questions (5 of 6 correct)", adhoc?.accuracy === 83, JSON.stringify(adhoc));
+
+const quizSessions = await (await fetch(base + "/api/stats/quizzes/null/sessions", { headers: { Cookie: cookie } })).json();
+check("drilling into the quiz lists its one session", quizSessions.length === 1 && quizSessions[0].id === sessionId, JSON.stringify(quizSessions));
+
+const quizQuestions = await (await fetch(base + "/api/stats/quizzes/null/questions", { headers: { Cookie: cookie } })).json();
+const q1Stats = quizQuestions.find(q => q.q === "Fast one");
+const q2Stats = quizQuestions.find(q => q.q === "Second one");
+check("question breakdown finds both questions", Boolean(q1Stats) && Boolean(q2Stats), JSON.stringify(quizQuestions));
+check("hardest question reflects Marta's miss", q1Stats?.right === 2 && q1Stats?.wrong === 1 && q1Stats?.accuracy === 67, JSON.stringify(q1Stats));
+check("easy question shows everyone right", q2Stats?.right === 3 && q2Stats?.accuracy === 100, JSON.stringify(q2Stats));
+
+const otherHostSessions = await (await fetch(base + "/api/stats/quizzes/null/sessions", { headers: { Cookie: cookieB } })).json();
+check("dashboard stats are scoped per host, not shared", otherHostSessions.every(s => s.id !== sessionId), JSON.stringify(otherHostSessions));
+
+const statsNoAuth = await fetch(base + "/api/stats/overview");
+check("dashboard stats require a signed-in host", statsNoAuth.status === 401, "got " + statsNoAuth.status);
+
 /* ---- sanitiser ---- */
 const { sanitiseQuiz, cleanName } = await import("../server/game.js");
 const dirty = sanitiseQuiz({

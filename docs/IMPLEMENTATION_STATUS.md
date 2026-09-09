@@ -108,6 +108,77 @@ Not deployed. Per the standing ground rules: check
 `curl -s localhost:3000/api/health` for `games: 0` before restarting, and
 get explicit go-ahead before running `sudo -u deploy -i pm2 restart floor-quiz`.
 
+## Phase: host results dashboard
+
+Status: shipped, smoke-tested, not yet deployed to production.
+
+Adds a "Dashboard" screen for hosts, separate from the flat "Past games"
+list that already existed: an overview of everything a host has run, then
+per-quiz aggregates, then drill-down into any one game's full leaderboard.
+
+- Overview tiles: games played, total players, average players per game,
+  quizzes in the library, last played date. All scoped to the signed-in
+  host, same ownership model as quizzes/sessions.
+- Per-quiz cards: games played, total players, average score, accuracy,
+  last played. Grouped by `quiz_id`; a session whose quiz was later deleted
+  (or never saved) still rolls up under its own bucket, keyed by `null`,
+  using the session's own frozen title.
+- Per-quiz question breakdown: which questions are actually getting missed,
+  computed by lining up each session's frozen `questions_json` against
+  every player's per-question `answers_json` log and tallying right/wrong/
+  skipped by question text (not index, since a quiz can be edited between
+  games). Sorted hardest-first.
+- Click through from a quiz to its list of games, and from any game (in the
+  dashboard or the existing history list) to a full per-player results
+  table: rank, name, correct/answered, score. CSV export reused from the
+  existing per-session endpoint.
+
+### Files changed
+
+- `server/db.js`: `stmt.hostOverview`, `stmt.countQuizzesByHost`,
+  `stmt.statsByQuiz`, `stmt.sessionsForQuiz`, and a new `store.stats`
+  module (`overview`, `byQuiz`, `sessionsForQuiz`, `questionBreakdown`).
+  No schema change, everything reads existing columns.
+- `server/index.js`: `GET /api/stats/overview`, `GET /api/stats/quizzes`,
+  `GET /api/stats/quizzes/:quizId/sessions`,
+  `GET /api/stats/quizzes/:quizId/questions`. All behind `requireHost` and
+  scoped to `req.hostAccount.id`; `:quizId` accepts the literal `null` for
+  the no-quiz bucket.
+- `public/host.html` / `public/js/host.js`: "Dashboard" nav entry next to
+  "Past games"; three new screens (`s-dashboard`, `s-quiz-sessions`,
+  `s-session-detail`); existing history rows now open the same session
+  detail view instead of only offering a CSV link.
+- `public/css/app.css`: `.stats`/`.stat` tiles, `.qitem.click` hover state,
+  `.lrow.detail`/`.lrow.head` for the results table, `.qbars`/`.qbar` for
+  the per-question accuracy bars.
+
+### Commands run
+
+```bash
+node --check server/db.js server/index.js public/js/host.js test/smoke.js
+npm run smoke   # 78 assertions, all green (12 new, covering host scoping,
+                 # the null-quiz bucket, and the accuracy math)
+```
+
+### Manual verification still to do
+
+Not yet done in a browser:
+
+1. Sign in as a host with at least one finished game, open "Dashboard",
+   confirm the overview tiles and per-quiz cards match what's in "Past
+   games".
+2. Drill into a quiz, confirm the question-accuracy bars look right against
+   a game you remember playing, then drill into one of its games and check
+   the leaderboard table and CSV download both work.
+3. Confirm a host with zero finished games gets empty-state copy rather
+   than a broken screen.
+
+### Deployment
+
+Not deployed. Per the standing ground rules: check
+`curl -s localhost:3000/api/health` for `games: 0` before restarting, and
+get explicit go-ahead before running `sudo -u deploy -i pm2 restart floor-quiz`.
+
 ## Deferred, not started
 
 Everything below was scoped out or explicitly deprioritised by the owner in
