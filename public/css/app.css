@@ -109,6 +109,15 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .qimg{max-width:min(560px,90%);max-height:34vh;width:auto;height:auto;border-radius:12px;
   margin:0 auto;display:block;object-fit:contain;background:var(--ink-2)}
 .qimg.small{max-height:160px;max-width:280px;margin:0}
+/* Player-facing copy, deliberately smaller than the host projector's: the
+   answer pad still needs most of a phone screen below it. */
+.qimg.compact{max-height:20vh;max-width:min(420px,92%)}
+
+.gifsearch{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--ink-2)}
+.gifgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.gifgrid button{padding:0;border:2px solid transparent;border-radius:10px;overflow:hidden;background:var(--ink);cursor:pointer;aspect-ratio:1;transition:border-color .15s ease}
+.gifgrid button:hover,.gifgrid button:focus-visible{border-color:var(--a2)}
+.gifgrid img{width:100%;height:100%;object-fit:cover;display:block}
 
 /* question */
 .qtext{font-family:var(--disp);font-weight:700;font-size:clamp(24px,3.9vw,46px);line-height:1.16;letter-spacing:-.02em;text-align:center;max-width:24ch;margin:0 auto}
@@ -139,6 +148,7 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .ans.hit{box-shadow:0 0 0 3px var(--chalk);animation:tilepop .5s ease}
 @keyframes tilepop{0%{transform:scale(1)}45%{transform:scale(1.07)}100%{transform:scale(1)}}
 .counter{font-family:var(--mono);font-size:clamp(12px,1.3vw,15px);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
+.counter.fastest{color:var(--a2);font-weight:700;animation:pop .3s cubic-bezier(.2,.9,.3,1.3)}
 
 /* leaderboard */
 .board{width:100%;max-width:660px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
@@ -235,6 +245,11 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
   cursor:pointer;transition:border-color .15s ease}
 .themetoggle:hover{border-color:var(--muted)}
 .themetoggle svg{width:18px;height:18px}
+
+.soundtoggle{position:fixed;right:64px;bottom:16px;z-index:55;width:38px;height:38px;border-radius:50%;
+  border:1px solid var(--line);background:var(--ink-2);color:var(--chalk);display:grid;place-items:center;
+  cursor:pointer;transition:border-color .15s ease;font-size:16px}
+.soundtoggle:hover{border-color:var(--muted)}
 
 /* admin dashboard tabs */
 .tab{opacity:.7} .tab.active{opacity:1;color:var(--chalk)}

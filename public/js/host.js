@@ -305,9 +305,20 @@ function setEditorImage(dataUrl) {
 }
 
 /* Resized and re-encoded client side so a phone photo (often several MB)
-   never has to round-trip at full size. Falls back to a lower quality pass
-   if it's still too big for the server's per-image cap. */
-function readImageResized(file, maxDim = 900) {
+   never has to round-trip at full size. GIFs are read straight through
+   instead: drawing one to a canvas only ever captures its current frame, so
+   "compressing" a GIF the same way silently turned it into a static image.
+   The upload itself (server/media.js) still enforces its own size ceiling
+   regardless of what happens here. */
+function readImageForUpload(file, maxDim = 900) {
+  if (file.type === "image/gif") {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Could not read that file."));
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    });
+  }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("Could not read that file."));
@@ -321,8 +332,7 @@ function readImageResized(file, maxDim = 900) {
         canvas.width = w; canvas.height = h;
         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
         let out = canvas.toDataURL("image/jpeg", 0.72);
-        if (out.length > 340_000) out = canvas.toDataURL("image/jpeg", 0.5);
-        if (out.length > 340_000) return reject(new Error("That image is too large even after compression. Try a smaller photo."));
+        if (out.length > 900_000) out = canvas.toDataURL("image/jpeg", 0.5);
         resolve(out);
       };
       img.src = reader.result;
@@ -331,18 +341,74 @@ function readImageResized(file, maxDim = 900) {
   });
 }
 
+async function uploadImage(dataUrl) {
+  $("eImgPick").disabled = true;
+  const label = $("eImgPick").textContent;
+  $("eImgPick").textContent = "Uploading…";
+  try {
+    const { url } = await api("/uploads/image", { method: "POST", body: { dataUrl } });
+    setEditorImage(url);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    $("eImgPick").disabled = false;
+    $("eImgPick").textContent = label;
+  }
+}
+
 $("eImgPick").addEventListener("click", () => $("eImgFile").click());
 $("eImgFile").addEventListener("change", async e => {
   const file = e.target.files && e.target.files[0];
   e.target.value = "";
   if (!file) return;
+  if (file.type === "image/gif" && file.size > 4_000_000) {
+    alert("That GIF is too large (max 4MB uncompressed, it isn't re-encoded). Try a shorter or smaller one, or search Giphy instead.");
+    return;
+  }
   try {
-    setEditorImage(await readImageResized(file));
+    await uploadImage(await readImageForUpload(file));
   } catch (err) {
     alert(err.message);
   }
 });
 $("eImgClear").addEventListener("click", () => setEditorImage(null));
+
+/* ---- GIF search (Giphy) ---- */
+$("eGifSearchToggle").addEventListener("click", () => {
+  const panel = $("eGifSearch");
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden && !$("eGifResults").children.length) runGifSearch("");
+});
+
+let gifSearchSeq = 0;
+async function runGifSearch(query) {
+  const seq = ++gifSearchSeq;
+  $("eGifStatus").textContent = "Searching…";
+  $("eGifResults").innerHTML = "";
+  try {
+    const { data } = await api("/giphy/search?q=" + encodeURIComponent(query));
+    if (seq !== gifSearchSeq) return; // a newer search finished first
+    if (!data.length) { $("eGifStatus").textContent = "No GIFs found."; return; }
+    $("eGifStatus").textContent = "";
+    data.forEach(g => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.title = g.title;
+      const img = document.createElement("img");
+      img.src = g.previewUrl;
+      img.loading = "lazy";
+      img.alt = g.title;
+      b.appendChild(img);
+      b.addEventListener("click", () => { setEditorImage(g.url); $("eGifSearch").hidden = true; });
+      $("eGifResults").appendChild(b);
+    });
+  } catch (err) {
+    if (seq !== gifSearchSeq) return;
+    $("eGifStatus").textContent = err.message;
+  }
+}
+$("eGifSearchBtn").addEventListener("click", () => runGifSearch($("eGifQuery").value.trim()));
+$("eGifQuery").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); runGifSearch($("eGifQuery").value.trim()); } });
 
 function openEditor(i) {
   S.editing = i;
@@ -569,8 +635,9 @@ function renderQuestion(s) {
   $("pNext").hidden = true;
   $("pSkip").hidden = false;
   $("pTimerWrap").style.visibility = "visible";
-  $("pImg").hidden = true;
-  $("pImg").src = "";
+  $("pImg").hidden = !s.question.img;
+  $("pImg").src = s.question.img || "";
+  $("pFastest").hidden = true;
 
   const hint = TYPE_HINTS[s.question.type];
   $("pTypeHint").textContent = hint || "";
@@ -598,16 +665,9 @@ function renderQuestion(s) {
 
 socket.on("answered", d => { $("pAnswered").textContent = d.answered; });
 
-/* Arrives on its own channel, host-only, so player phones never pull down
-   image bytes for a picture only the projector screen shows. */
-socket.on("question:image", d => {
-  if (d.qIndex !== S.qIndex) return;
-  $("pImg").src = d.img;
-  $("pImg").hidden = false;
-});
-
 socket.on("reveal", d => {
   stopClock();
+  Sound.play("reveal");
   $("pTimerWrap").style.visibility = "hidden";
   $("pSkip").hidden = true;
 
@@ -650,6 +710,13 @@ socket.on("reveal", d => {
       : "No answers received";
   }
 
+  if (d.fastestCorrect) {
+    $("pFastest").hidden = false;
+    $("pFastest").textContent = "⚡ Fastest correct: " + d.fastestCorrect.name + " (" + (d.fastestCorrect.usedMs / 1000).toFixed(1) + "s)";
+  } else {
+    $("pFastest").hidden = true;
+  }
+
   $("pNext").hidden = false;
   $("pNext").textContent = S.qIndex + 1 < S.quiz.questions.length ? "Show standings" : "Show final result";
 });
@@ -672,6 +739,7 @@ socket.on("scores", d => {
 
 socket.on("final", d => {
   stopClock();
+  Sound.play("podium");
   S.sessionId = d.sessionId;
   $("fQuiz").textContent = S.quiz.title;
   $("fPlayers").textContent = d.board.length;
@@ -727,13 +795,17 @@ function confetti(count = 46) {
 function runClock(durMs) {
   stopClock();
   const fill = $("pFill"), clock = $("pClock");
+  let lastTickSecond = null;
   const step = () => {
     const left = Math.max(0, S.endsAt - Date.now());
     const frac = Math.min(1, left / durMs);
     fill.style.width = (frac * 100).toFixed(2) + "%";
     fill.className = "fill" + (frac < 0.2 ? " crit" : frac < 0.45 ? " warn" : "");
     clock.className = "clock" + (frac < 0.2 ? " crit" : "");
-    clock.textContent = Math.ceil(left / 1000);
+    const seconds = Math.ceil(left / 1000);
+    clock.textContent = seconds;
+    /* Kahoot's countdown tick, last three seconds only, once per second. */
+    if (left > 0 && seconds <= 3 && seconds !== lastTickSecond) { lastTickSecond = seconds; Sound.play("tick"); }
     S.raf = left > 0 ? requestAnimationFrame(step) : null;
   };
   S.raf = requestAnimationFrame(step);

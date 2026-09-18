@@ -8,10 +8,14 @@ export const QUESTION_TYPES = ["single", "multi", "text", "numeric"];
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 export const isValidEmail = s => typeof s === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
 
-/* ~350KB of base64, comfortably under a resized/compressed photo, while
-   keeping a whole image-heavy quiz well inside the raised body/socket limits
-   in server/index.js. */
-const MAX_IMG_CHARS = 350_000;
+/* Pictures aren't embedded on the question any more (server/media.js saves
+   uploads to disk and Giphy picks stay on Giphy's CDN), so `img` is always
+   a short URL now: either our own `/uploads/...` path or an `https://` URL
+   on Giphy's media CDN. A generous length cap just guards against garbage,
+   not against a real picture's worth of bytes. */
+const MAX_IMG_URL_CHARS = 600;
+const isOwnUpload = s => s.startsWith("/uploads/");
+const isGiphyUrl = s => /^https:\/\/[a-z0-9-]+\.giphy\.com\//.test(s);
 
 /* Scoring lives server side and nowhere else. The client is never told the
    correct answer until the question is closed, and never computes its own
@@ -35,7 +39,7 @@ function sanitiseQuestion(q) {
   const text = String(q?.q || "").trim().slice(0, 200);
   if (!text) return null;
   const seconds = clamp(Number(q?.t) || 20, 5, 120);
-  const img = typeof q?.img === "string" && q.img.startsWith("data:image/") && q.img.length <= MAX_IMG_CHARS
+  const img = typeof q?.img === "string" && q.img.length <= MAX_IMG_URL_CHARS && (isOwnUpload(q.img) || isGiphyUrl(q.img))
     ? q.img : null;
 
   if (type === "text") return { type, q: text, t: seconds, img };
@@ -138,6 +142,7 @@ export function publicQuestion(question, optOrder) {
     type: question.type,
     q: question.q,
     t: question.t,
+    img: question.img || null,
     shuffle: Boolean(question.shuffle),
     opts: question.opts ? (order ? order.map(i => question.opts[i]) : question.opts) : undefined
   };
@@ -380,10 +385,6 @@ export class Game {
 
     this.broadcastState();
     this.io.to(this.hostRoom).emit("answered", { answered: 0, connected: this.connectedCount() });
-    /* Sent only to the host/projector screen, on its own channel, never as
-       part of the shared player "state" event - phones never pull down the
-       image bytes for a picture they don't display. */
-    if (q.img) this.io.to(this.hostRoom).emit("question:image", { qIndex: index, img: q.img });
     this.timer = setTimeout(() => this.closeQuestion(), q.t * 1000 + 250);
   }
 
@@ -457,6 +458,11 @@ export class Game {
     }
     if (guesses) guesses.sort((x, y) => x.distance - y.distance);
 
+    /* Called out on the host screen, Kahoot-style: a nudge that speed pays
+       (it does, see scoreAnswer's SPEED slice) and a small moment of fame
+       for whoever earns it. Stays null for an unscored text question, since
+       correct is never true there. */
+    let fastestCorrect = null;
     for (const [playerId, a] of this.answers) {
       const p = this.players.get(playerId);
       if (!p) continue;
@@ -467,6 +473,7 @@ export class Game {
         p.score += a.points;
         p.streak++;
         p.correctCount++;
+        if (!fastestCorrect || a.usedMs < fastestCorrect.usedMs) fastestCorrect = { name: p.name, usedMs: a.usedMs };
       } else if (a.correct === false) {
         p.streak = 0;
       }
@@ -484,7 +491,7 @@ export class Game {
     const board = this.standings();
     const rankById = new Map(board.map((p, i) => [p.id, i + 1]));
 
-    const reveal = { type: q.type, answered: this.answers.size, connected: this.connectedCount() };
+    const reveal = { type: q.type, answered: this.answers.size, connected: this.connectedCount(), fastestCorrect };
     if (isChoice) {
       reveal.correct = q.correct;
       reveal.counts = counts;

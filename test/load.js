@@ -94,7 +94,7 @@ console.log(`           p50 ${pct(fanout, .5)} ms   p95 ${pct(fanout, .95)} ms  
 
 const burstStart = Date.now();
 const acks = await Promise.all(
-  clients.map(c => new Promise(r => c.s.emit("player:answer", { choice: Math.floor(Math.random() * 4) }, r)))
+  clients.map(c => new Promise(r => c.s.emit("player:answer", { answer: Math.floor(Math.random() * 4) }, r)))
 );
 const burstMs = Date.now() - burstStart;
 const accepted = acks.filter(a => a && a.ok).length;
