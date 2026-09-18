@@ -22,9 +22,10 @@ const { hashPassword } = await import("../server/auth.js");
 const { FLOW } = await import("../server/config.js");
 const { io: ioc } = await import("socket.io-client");
 
-/* Smallest possible valid PNG (1x1 transparent), used to check picture
-   questions round-trip without needing a real image file on disk. */
+/* Smallest possible valid PNG and GIF (1x1 transparent), used to check the
+   /api/uploads/image round-trip without needing a real image file on disk. */
 const TINY_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+const TINY_GIF = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 
 let failures = 0;
 const check = (label, cond, extra = "") => {
@@ -255,6 +256,41 @@ hostCSocket.emit("host:end");
 gapPlayer.disconnect();
 hostCSocket.disconnect();
 
+/* ---- image uploads and Giphy search ---- */
+const pngUpload = await (await fetch(base + "/api/uploads/image", {
+  method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie },
+  body: JSON.stringify({ dataUrl: TINY_PNG })
+})).json();
+check("PNG upload returns an /uploads/ URL", /^\/uploads\/[\w-]+\.png$/.test(pngUpload.url || ""), JSON.stringify(pngUpload));
+
+const gifUpload = await (await fetch(base + "/api/uploads/image", {
+  method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie },
+  body: JSON.stringify({ dataUrl: TINY_GIF })
+})).json();
+check("GIF upload returns an /uploads/ URL", /^\/uploads\/[\w-]+\.gif$/.test(gifUpload.url || ""), JSON.stringify(gifUpload));
+
+const servedGif = await fetch(base + gifUpload.url);
+check("uploaded GIF is served back with the right content type",
+  servedGif.status === 200 && servedGif.headers.get("content-type") === "image/gif",
+  servedGif.status + " " + servedGif.headers.get("content-type"));
+
+const badUpload = await fetch(base + "/api/uploads/image", {
+  method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie },
+  body: JSON.stringify({ dataUrl: "not-a-data-uri" })
+});
+check("garbage upload is rejected", badUpload.status === 400, "got " + badUpload.status);
+
+const uploadNoAuth = await fetch(base + "/api/uploads/image", {
+  method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ dataUrl: TINY_PNG })
+});
+check("upload needs auth", uploadNoAuth.status === 401, "got " + uploadNoAuth.status);
+
+/* No GIPHY_API_KEY in the test env, so this exercises the "not configured"
+   path rather than a real Giphy call. */
+const giphyNoKey = await fetch(base + "/api/giphy/search?q=cat", { headers: { Cookie: cookie } });
+check("Giphy search without an API key fails clearly", giphyNoKey.status === 501, "got " + giphyNoKey.status);
+
 /* ---- host socket, host A ---- */
 const hostSocket = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
 await new Promise(r => hostSocket.on("connect", r));
@@ -262,7 +298,7 @@ await new Promise(r => hostSocket.on("connect", r));
 const quiz = {
   title: "Smoke Test",
   questions: [
-    { q: "Fast one", t: 6, opts: ["Right", "Wrong", "Also wrong", "Nope"], correct: 0, img: TINY_PNG },
+    { q: "Fast one", t: 6, opts: ["Right", "Wrong", "Also wrong", "Nope"], correct: 0, img: pngUpload.url },
     { q: "Second one", t: 6, opts: ["True", "False"], correct: 1 }
   ]
 };
@@ -304,16 +340,17 @@ const scoreEvents = [];
 hostSocket.on("scores", d => scoreEvents.push(d));
 const finals = [];
 hostSocket.on("final", d => finals.push(d));
-const questionImages = [];
-hostSocket.on("question:image", d => questionImages.push(d));
 
+const hostQ1 = waitFor(hostSocket, "state", s => s.phase === "question");
 const q1 = waitFor(players[0].socket, "state", s => s.phase === "question");
 hostSocket.emit("host:start");   // deliberately no ack: guards the short-circuit bug
-await q1;
+const [hostQ1State, playerQ1State] = await Promise.all([hostQ1, q1]);
 await sleep(120);
 
-check("a question's picture is sent to the host on its own channel",
-  questionImages.some(d => d.qIndex === 0 && d.img === TINY_PNG), JSON.stringify(questionImages));
+check("a question's picture reaches the host through the normal state broadcast",
+  hostQ1State.question?.img === pngUpload.url, JSON.stringify(hostQ1State.question));
+check("a question's picture now reaches player devices too (used to be host-only)",
+  playerQ1State.question?.img === pngUpload.url, JSON.stringify(playerQ1State.question));
 
 /* Ana answers correctly and fast, Kostas correctly but slow, Marta wrong. */
 await new Promise(r => players[0].socket.emit("player:answer", { answer: 0 }, r));
@@ -328,6 +365,7 @@ check("question one revealed", reveals.length === 1, "reveals=" + reveals.length
 check("reveal reports the right answer index", reveals[0]?.correct === 0);
 check("answer distribution counted", JSON.stringify(reveals[0]?.counts) === "[2,0,1,0]", JSON.stringify(reveals[0]?.counts));
 check("two of three got it right", reveals[0]?.gotItRight === 2);
+check("fastest correct answer is called out", reveals[0]?.fastestCorrect?.name === "Ana", JSON.stringify(reveals[0]?.fastestCorrect));
 
 const anaR = players[0].results[0], kosR = players[1].results[0], marR = players[2].results[0];
 check("fast correct beats slow correct", anaR.points > kosR.points, anaR.points + " vs " + kosR.points);
@@ -753,14 +791,19 @@ check("control characters stripped from names", cleanName("Ru\u0000i\nSilva") ==
 const withImages = sanitiseQuiz({
   title: "Pictures",
   questions: [
-    { q: "valid image", opts: ["a", "b"], correct: 0, img: TINY_PNG },
-    { q: "bogus image", opts: ["a", "b"], correct: 0, img: "not-a-data-uri" },
-    { q: "oversized image", opts: ["a", "b"], correct: 0, img: "data:image/png;base64," + "A".repeat(400_000) }
+    { q: "own upload", opts: ["a", "b"], correct: 0, img: "/uploads/abc123.png" },
+    { q: "giphy pick", opts: ["a", "b"], correct: 0, img: "https://media3.giphy.com/media/xyz/giphy.gif" },
+    { q: "raw data-URI no longer accepted", opts: ["a", "b"], correct: 0, img: TINY_PNG },
+    { q: "arbitrary https host rejected", opts: ["a", "b"], correct: 0, img: "https://evil.example.com/tracker.gif" },
+    { q: "overlong string dropped", opts: ["a", "b"], correct: 0, img: "/uploads/" + "a".repeat(700) + ".png" }
   ]
 });
-check("a valid data-URI image is kept", withImages.questions[0].img === TINY_PNG);
-check("a non-image string is dropped", withImages.questions[1].img === null, String(withImages.questions[1].img));
-check("an oversized image is dropped", withImages.questions[2].img === null, String(withImages.questions[2].img));
+check("an own-server upload URL is kept", withImages.questions[0].img === "/uploads/abc123.png");
+check("a Giphy CDN URL is kept", withImages.questions[1].img === "https://media3.giphy.com/media/xyz/giphy.gif");
+check("a raw base64 data-URI is dropped (pictures live on disk now, not on the question)",
+  withImages.questions[2].img === null, String(withImages.questions[2].img));
+check("an https URL outside Giphy's CDN is dropped", withImages.questions[3].img === null, String(withImages.questions[3].img));
+check("an overlong image URL is dropped", withImages.questions[4].img === null, String(withImages.questions[4].img));
 
 const typedQuiz = sanitiseQuiz({
   title: "Types",

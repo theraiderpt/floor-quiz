@@ -14,8 +14,14 @@ export const config = {
   sessionSecret: process.env.SESSION_SECRET || "",
   publicUrl: (process.env.PUBLIC_URL || "").replace(/\/+$/, ""),
   dbPath: process.env.DB_PATH || path.join(ROOT, "data", "floor-quiz.db"),
-  maxPlayers: Number(process.env.MAX_PLAYERS || 400)
+  maxPlayers: Number(process.env.MAX_PLAYERS || 400),
+  giphyApiKey: process.env.GIPHY_API_KEY || ""
 };
+
+/* Next to the database, outside the app directory, for the same reason:
+   a redeploy (deploy/update.sh untars over APP_DIR) never wipes uploaded
+   question pictures. */
+config.uploadsDir = path.join(path.dirname(config.dbPath), "uploads");
 
 config.isProd = config.env === "production";
 

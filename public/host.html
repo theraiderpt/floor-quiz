@@ -7,6 +7,7 @@
 <title>CX Quiz — host</title>
 <link rel="stylesheet" href="/css/app.css">
 <script src="/js/theme.js"></script>
+<script src="/js/sound.js"></script>
 </head>
 <body>
 
@@ -132,10 +133,19 @@
         <textarea class="inp" id="eQ" rows="2" maxlength="200" placeholder="What does FCR measure?"></textarea>
       </div>
       <div class="field">
-        <label>Picture (optional)</label>
+        <label>Picture (optional, shown to the host screen and every player's phone)</label>
         <div class="row">
           <button class="btn ghost" id="eImgPick">+ Add picture</button>
+          <button class="btn ghost" id="eGifSearchToggle">🔍 Search GIFs</button>
           <button class="btn ghost danger" id="eImgClear" hidden>Remove picture</button>
+        </div>
+        <div class="gifsearch" id="eGifSearch" hidden>
+          <div class="row">
+            <input class="inp" id="eGifQuery" placeholder="Search Giphy…" maxlength="100">
+            <button class="btn ghost" id="eGifSearchBtn">Search</button>
+          </div>
+          <p class="sub" id="eGifStatus"></p>
+          <div class="gifgrid" id="eGifResults"></div>
         </div>
         <img id="eImgPreview" class="qimg small" hidden alt="">
         <input type="file" id="eImgFile" accept="image/*" hidden>
@@ -221,6 +231,7 @@
     <div class="timerwrap" id="pTimerWrap"><div class="track"><div class="fill" id="pFill"></div></div><div class="clock" id="pClock">—</div></div>
     <div class="answers" id="pAnswers"></div>
     <p class="counter" id="pFoot">—</p>
+    <p class="counter fastest" id="pFastest" hidden></p>
     <div class="row" style="justify-content:center"><button class="btn big" id="pNext" hidden>Next</button></div>
   </div>
 </section>
@@ -297,6 +308,7 @@
 
 <div class="offline" id="offline">Connection lost. Reconnecting…</div>
 
+<button class="soundtoggle" data-sound-toggle type="button" aria-label="Mute sound effects" title="Mute sound effects">🔊</button>
 <button class="themetoggle" id="themeToggle" type="button" aria-label="Switch color theme" title="Switch color theme">
   <svg class="ic-sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
   <svg class="ic-moon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>

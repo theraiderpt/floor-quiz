@@ -12,15 +12,16 @@ import { store } from "./db.js";
 import { Rooms, sanitiseQuiz, cleanName } from "./game.js";
 import { Attempts } from "./selfpaced.js";
 import { hashPassword, verifyPassword, randomToken } from "./auth.js";
+import { saveImageUpload, searchGiphy } from "./media.js";
 
 const app = express();
 const server = http.createServer(app);
 const io = new IOServer(server, {
   pingInterval: 20000,
   pingTimeout: 25000,
-  /* Raised from the 100KB default so a quiz whose questions carry pictures
-     (base64, capped per-image in sanitiseQuiz) can still travel in one
-     host:create payload. */
+  /* Raised from the 100KB default. Questions carry only a short image URL
+     now (server/media.js), not the picture itself, but a large question
+     bank in one host:create payload still benefits from the headroom. */
   maxHttpBufferSize: 8e6
 });
 const rooms = new Rooms(io);
@@ -42,7 +43,11 @@ app.use(
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        imgSrc: ["'self'", "data:"],
+        /* data: for the tiny inline QR code and file-picker preview; Giphy's
+           CDN for GIFs picked from the search panel (server/media.js proxies
+           the search itself, but the picked GIF's own pixels load straight
+           from Giphy, not through us). */
+        imgSrc: ["'self'", "data:", "https://*.giphy.com"],
         connectSrc: ["'self'", "ws:", "wss:"],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"]
@@ -313,6 +318,35 @@ app.get("/api/bank", requireHost, (req, res) =>
   res.json(store.bank.list(req.query.category ? Number(req.query.category) : null, req.query.q || null))
 );
 
+/* -------------------------------------------------------------- media --- */
+/* Both are host-only and rate-limited: the upload writes to disk, the
+   Giphy search spends a call against our API key's quota per request. */
+const mediaLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Wait a moment." }
+});
+
+app.post("/api/uploads/image", requireHost, mediaLimiter, async (req, res) => {
+  try {
+    const url = await saveImageUpload(req.body?.dataUrl);
+    res.status(201).json({ url });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get("/api/giphy/search", requireHost, mediaLimiter, async (req, res) => {
+  try {
+    const results = await searchGiphy(String(req.query.q || "").trim().slice(0, 100), req.query.limit);
+    res.json({ data: results });
+  } catch (err) {
+    res.status(err.code === "no_key" ? 501 : 502).json({ error: err.message });
+  }
+});
+
 /* ------------------------------------------------------------ quizzes --- */
 
 app.get("/api/quizzes", requireHost, (req, res) => res.json(store.quizzes.list(req.hostAccount.id)));
@@ -439,6 +473,9 @@ app.post("/api/selfpaced/attempts/:attemptId/answer", selfpacedLimiter, (req, re
 
 /* ------------------------------------------------------------- static --- */
 
+/* Filenames are random UUIDs (server/media.js) and a question's picture
+   never changes once saved, so these are safe to cache hard. */
+app.use("/uploads", express.static(config.uploadsDir, { maxAge: "30d", fallthrough: true }));
 app.use(express.static(PUBLIC_DIR, { maxAge: config.isProd ? "1h" : 0, extensions: ["html"] }));
 app.get("/host", (req, res) => res.sendFile("host.html", { root: PUBLIC_DIR }));
 app.get("/admin", (req, res) => res.sendFile("admin.html", { root: PUBLIC_DIR }));

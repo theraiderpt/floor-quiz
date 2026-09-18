@@ -159,7 +159,12 @@ socket.on("result", r => {
   $("rSub").textContent = r.correct
     ? "Total " + r.score + " points."
     : guessNote + "The answer was " + correctDescription + ". Total " + r.score + " points.";
-  if (r.correct && r.streak > 1) $("rStreak").appendChild(streakBadge(r.streak));
+  /* A small burst on a building streak (matches the streak badge's own
+     threshold), not on every single correct answer - a 20-question quiz
+     would make that feel like spam rather than a reward. Purely visual, no
+     sound: see public/js/sound.js's note on why the live player screen
+     stays silent in a room full of phones. */
+  if (r.correct && r.streak > 1) { $("rStreak").appendChild(streakBadge(r.streak)); confetti(16); }
   show("s-result");
 });
 
@@ -186,6 +191,8 @@ socket.on("kicked", () => {
 function renderPad(s) {
   $("aQn").textContent = (s.qIndex + 1) + "/" + s.total;
   $("aQ").textContent = s.question.q;
+  $("aImg").hidden = !s.question.img;
+  $("aImg").src = s.question.img || "";
   const pad = $("aPad");
   pad.innerHTML = "";
   pad.className = "pad";

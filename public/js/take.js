@@ -94,6 +94,8 @@ function renderQuestion(q) {
   S.qIndex = q.qIndex;
   $("tQn").textContent = (S.qIndex + 1) + "/" + S.total;
   $("tQ").textContent = q.q;
+  $("tImg").hidden = !q.img;
+  $("tImg").src = q.img || "";
   $("tScore").textContent = S.score;
   const hint = TYPE_HINTS[q.type];
   $("tHint").textContent = hint || "";
@@ -198,6 +200,7 @@ function showFeedback(res) {
     $("fbPts").textContent = "";
     $("fbSub").textContent = "Total " + S.score + " points.";
   } else {
+    Sound.play(res.correct ? "correct" : "incorrect");
     v.textContent = res.correct ? "Correct" : "Not this time";
     v.className = "verdict " + (res.correct ? "good" : "bad");
     $("fbPts").textContent = res.points ? "+" + res.points : "+0";
@@ -220,6 +223,7 @@ function showFeedback(res) {
 function showFinal(res) {
   $("finScore").textContent = res.score + " pts";
   $("finSub").textContent = res.correctCount + " right out of " + res.answered + ".";
+  Sound.play("podium");
   confetti();
   show("t-final");
 }
