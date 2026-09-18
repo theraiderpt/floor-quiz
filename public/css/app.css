@@ -94,6 +94,13 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .card p{color:var(--muted);font-size:14px;line-height:1.5}
 .picker{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));width:100%;max-width:720px}
 
+.whatsnew{border:1px solid var(--line);border-radius:18px;background:var(--ink-2);padding:20px 22px;
+  text-align:left;width:min(340px,88vw);display:flex;flex-direction:column;gap:14px}
+.whatsnew-release+.whatsnew-release{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.whatsnew-date{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.whatsnew-release ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.whatsnew-release li{font-size:13px;line-height:1.5;color:var(--chalk)}
+
 /* lobby */
 .lobbygrid{display:grid;gap:clamp(18px,3vw,42px);grid-template-columns:auto auto;align-items:center;justify-content:center}
 .pinbox{border:1px solid var(--line);border-radius:22px;background:var(--ink-2);padding:clamp(20px,3.5vw,34px) clamp(24px,5vw,56px);text-align:center}
