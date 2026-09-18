@@ -63,8 +63,10 @@ sudo tail -30 /var/log/nginx/floor-quiz.error.log
   Use commas, colons, or periods.
 - Comments explain *why*, not *what*. Do not narrate the obvious.
 - Any change to game flow or scoring needs a matching assertion in `test/smoke.js`.
-
-## Current task
-
-See `HANDOFF.md` in this directory for where the deployment got to and what to check next.
-Delete that file once the deployment is working.
+- Any user-facing feature, fix, or enhancement gets an entry in `public/js/changelog.js`'s
+  `CHANGELOG` array (newest first, add an item to today's entry if one already exists for the
+  date). That feeds the "What's new" panel on the host sign-in screen. Keep entries short,
+  host-facing, and free of file names or implementation detail.
+- Never stop a process by `pkill -f <command string>` on this box: dev/test instances and the
+  real PM2-managed production process often run the literal same command, just with different env
+  vars, so a substring match can hit production. Kill by the specific PID instead.
