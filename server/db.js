@@ -153,6 +153,7 @@ const stmt = {
      ORDER BY sessions.started_at DESC LIMIT ?`
   ),
   getSession: db.prepare("SELECT * FROM sessions WHERE id = ?"),
+  discardSession: db.prepare("DELETE FROM sessions WHERE id = ? AND ended_at IS NULL"),
   countSessions: db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE ended_at IS NOT NULL"),
   insertResult: db.prepare(
     `INSERT INTO results (session_id, rank, name, score, correct_count, answered, email, answers_json)
@@ -367,6 +368,10 @@ export const store = {
       });
       tx(standings);
     },
+
+    /* A lobby cancelled before the first question: drop the row opened for
+       it. Never touches a session that actually finished. */
+    discard: sessionId => stmt.discardSession.run(sessionId).changes > 0,
 
     list: (hostId, limit = 40) => stmt.listSessions.all(hostId, limit),
     listAll: (limit = 100) => stmt.listAllSessions.all(limit),

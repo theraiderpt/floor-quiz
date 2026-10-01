@@ -107,6 +107,7 @@ function renderQuestion(q) {
   pad.innerHTML = "";
   pad.className = "pad";
   S.answered = false;
+  $("tQErr").textContent = "";
 
   if (q.type === "text") renderTextPad(pad);
   else if (q.type === "numeric") renderNumericPad(pad);
@@ -116,12 +117,19 @@ function renderQuestion(q) {
   show("t-question");
 }
 
-function submitAnswer(value) {
+/* `unlock` hands the pad back on failure. Without it, a dropped request
+   left every button disabled and the player stuck on the question. */
+function submitAnswer(value, unlock) {
   if (S.answered) return;
   S.answered = true;
+  $("tQErr").textContent = "";
   api("/api/selfpaced/attempts/" + S.attemptId + "/answer", { method: "POST", body: { answer: value, qIndex: S.qIndex } })
     .then(showFeedback)
-    .catch(e => { S.answered = false; alert(e.message); });
+    .catch(e => {
+      S.answered = false;
+      $("tQErr").textContent = e instanceof TypeError ? t("play.unreachable") : e.message;
+      unlock?.();
+    });
 }
 
 function renderSinglePad(pad, q) {
@@ -132,7 +140,7 @@ function renderSinglePad(pad, q) {
     b.addEventListener("click", () => {
       if (S.answered) return;
       [...pad.children].forEach((n, k) => { n.classList.add(k === i ? "picked" : "faded"); n.disabled = true; });
-      submitAnswer(i);
+      submitAnswer(i, () => [...pad.children].forEach(n => { n.classList.remove("picked", "faded"); n.disabled = false; }));
     });
     pad.appendChild(b);
   });
@@ -156,7 +164,7 @@ function renderMultiPad(pad, q) {
     if (!picks.length) return;
     tiles().forEach(n => { n.disabled = true; if (!n.classList.contains("picked")) n.classList.add("faded"); });
     submitBtn.disabled = true;
-    submitAnswer(picks);
+    submitAnswer(picks, () => { tiles().forEach(n => { n.disabled = false; n.classList.remove("faded"); }); submitBtn.disabled = false; });
   });
   pad.appendChild(submitBtn);
 }
@@ -171,7 +179,7 @@ function renderTextPad(pad) {
     const text = input.value.trim();
     if (!text) return;
     input.disabled = true; submitBtn.disabled = true;
-    submitAnswer(text);
+    submitAnswer(text, () => { input.disabled = false; submitBtn.disabled = false; });
   });
   pad.append(input, submitBtn);
 }
@@ -186,7 +194,7 @@ function renderNumericPad(pad) {
     const value = Number(input.value);
     if (!Number.isFinite(value)) return;
     input.disabled = true; submitBtn.disabled = true;
-    submitAnswer(value);
+    submitAnswer(value, () => { input.disabled = false; submitBtn.disabled = false; });
   });
   pad.append(input, submitBtn);
 }

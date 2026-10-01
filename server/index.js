@@ -385,7 +385,15 @@ app.get("/api/sessions/:id", requireHost, (req, res) => {
 app.get("/api/sessions/:id/csv", requireHost, (req, res) => {
   const s = store.sessions.get(Number(req.params.id), req.hostAccount.id);
   if (!s) return res.status(404).send("No such session.");
-  const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  /* Player names and free-text answers come from the public. A cell that
+     starts with = + - @ (or a tab/CR) is run as a formula by Excel and
+     Sheets, so prefix those with an apostrophe (OWASP's advice for CSV
+     injection). Numbers, like scores, pass through untouched. */
+  const cell = v => {
+    let text = String(v ?? "");
+    if (typeof v === "string" && /^[=+\-@\t\r]/.test(text)) text = "'" + text;
+    return `"${text.replace(/"/g, '""')}"`;
+  };
   let questions = [];
   try { questions = JSON.parse(s.questions_json || "[]"); } catch { questions = []; }
   const L = csvLabels(req.query.lang);
@@ -499,6 +507,18 @@ io.use((socket, next) => {
   next();
 });
 
+/* The join link and its QR code, for a fresh lobby and for a host resuming one. */
+async function joinInfo(pin) {
+  const joinUrl = `${config.publicUrl || ""}/play?pin=${pin}`;
+  let qr = null;
+  if (config.publicUrl) {
+    try {
+      qr = await QRCode.toDataURL(joinUrl, { margin: 1, width: 340, color: { dark: "#09092d", light: "#f3f3f7" } });
+    } catch { /* a missing QR is cosmetic, never fatal */ }
+  }
+  return { joinUrl, qr };
+}
+
 io.on("connection", socket => {
   /* Every client event goes through here. `ack` is only ever a function or
      undefined (a client can put anything in that slot, and "x"?.() throws),
@@ -537,15 +557,39 @@ io.on("connection", socket => {
     socket.join(game.hostRoom);
     socket.data.pin = game.pin;
 
-    const joinUrl = `${config.publicUrl || ""}/play?pin=${game.pin}`;
-    let qr = null;
-    if (config.publicUrl) {
-      try {
-        qr = await QRCode.toDataURL(joinUrl, { margin: 1, width: 340, color: { dark: "#09092d", light: "#f3f3f7" } });
-      } catch { /* a missing QR is cosmetic, never fatal */ }
-    }
+    const { joinUrl, qr } = await joinInfo(game.pin);
     ack?.({ pin: game.pin, joinUrl, qr, state: game.publicState() });
     game.broadcastLobby();
+  });
+
+  /* A host socket that reconnects (network blip, laptop sleep, page
+     reload) is a brand new socket outside the game's rooms, so the
+     projector froze and every host:* event answered "no game". This puts
+     it back, only for the account that created the game, and hands over
+     whatever the room is currently looking at. */
+  on("host:resume", async (payload, ack) => {
+    if (!socket.data.isHost) return ack?.({ error: "Sign in first.", code: "auth" });
+    const game = rooms.get(String(payload?.pin ?? "").trim());
+    if (!game || game.hostId !== socket.data.hostId) {
+      return ack?.({ error: "That game is no longer running.", code: "no_game" });
+    }
+    socket.join(game.room);
+    socket.join(game.hostRoom);
+    socket.data.pin = game.pin;
+    const { joinUrl, qr } = await joinInfo(game.pin);
+    ack?.({
+      pin: game.pin,
+      joinUrl,
+      qr,
+      title: game.quiz.title,
+      total: game.total,
+      state: game.publicState(),
+      answered: { answered: game.answers.size, connected: game.connectedCount() },
+      reveal: game.phase === "reveal" ? game.lastReveal : null,
+      scores: game.phase === "scores" ? game.lastScores : null,
+      final: game.finished ? game.lastFinal : null
+    });
+    if (game.phase === "lobby") game.broadcastLobby();
   });
 
   const hostGame = () => {
@@ -588,8 +632,20 @@ io.on("connection", socket => {
     const g = hostGame();
     if (!g) return ack?.({ error: "No game.", code: "no_game" });
     const p = g.players.get(playerId);
-    if (p?.socketId) io.to(p.socketId).emit("kicked");
+    if (p?.socketId) {
+      io.to(p.socketId).emit("kicked");
+      /* Without this the kicked phone stayed in the game room, kept
+         receiving room broadcasts, and kept a playerId on its socket. */
+      const kicked = io.sockets.sockets.get(p.socketId);
+      if (kicked) {
+        kicked.leave(g.room);
+        delete kicked.data.pin;
+        delete kicked.data.playerId;
+      }
+      rooms.playerIndex.delete(p.socketId);
+    }
     g.players.delete(playerId);
+    g.answers.delete(playerId);
     g.broadcastLobby();
     g.broadcastState();
     ack?.({ ok: true });
@@ -619,7 +675,10 @@ io.on("connection", socket => {
       name: res.player.name,
       rejoined: res.rejoined,
       score: res.player.score,
-      state: game.publicState()
+      /* Personalised: a rejoin mid-question needs this player's own shuffled
+         option order (taps are mapped back through it) and whether they
+         already answered. */
+      state: game.publicState(res.player)
     });
     game.broadcastLobby();
     game.broadcastState();

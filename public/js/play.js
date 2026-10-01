@@ -106,6 +106,16 @@ function join(rejoinWith) {
 function applyState(s) {
   if (!s) return;
   if (s.phase === "question") {
+    /* Rejoined (reload, locked phone) after already answering this one:
+       go straight to "locked in" rather than offering a pad the server
+       will only refuse. */
+    if (s.youAnswered) {
+      currentQ = s.qIndex;
+      answered = true;
+      stopClock();
+      showLockedIn();
+      return;
+    }
     if (s.qIndex !== currentQ) {
       currentQ = s.qIndex;
       answered = false;
@@ -181,6 +191,13 @@ socket.on("gameover", g => {
   show("s-final");
 });
 
+socket.on("cancelled", () => {
+  Session.clear();
+  stopClock();
+  $("jErr").textContent = t("play.cancelled");
+  show("s-join");
+});
+
 socket.on("kicked", () => {
   Session.clear();
   stopClock();
@@ -212,16 +229,28 @@ function sendAnswer(value, onError) {
   if (answered) return;
   answered = true;
   socket.emit("player:answer", { answer: value }, res => {
+    /* "Already answered" means an earlier submit did land (say, before a
+       reconnect), so this is locked in, not a failure to retry forever.
+       "Too late" can't be retried either. */
+    if (res?.code === "already_answered" || res?.code === "too_late") {
+      stopClock();
+      showLockedIn(res.code === "too_late" ? t("err.too_late") : null);
+      return;
+    }
     if (res && res.error) {
       answered = false;
       onError?.();
       return;
     }
     stopClock();
-    $("wMsg").textContent = t("play.lockedIn");
-    $("wSub").textContent = t("play.holdTight");
-    setTimeout(() => { if (answered) show("s-wait"); }, 420);
+    setTimeout(() => { if (answered) showLockedIn(); }, 420);
   });
+}
+
+function showLockedIn(note) {
+  $("wMsg").textContent = note || t("play.lockedIn");
+  $("wSub").textContent = t("play.holdTight");
+  show("s-wait");
 }
 
 function renderSinglePad(pad, s) {

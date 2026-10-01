@@ -224,6 +224,14 @@ export class Game {
     this.touchedAt = Date.now();
     this.sessionId = store.sessions.open(pin, this.quizId, quiz.title, hostId);
     this.finished = false;
+    /* The last host-facing payload of each kind, replayed to a host socket
+       that reconnects (or a host page that reloads) mid-game, so the
+       projector lands back on the exact screen the room is looking at. */
+    this.lastReveal = null;
+    this.lastScores = null;
+    this.lastFinal = null;
+    /* Set by Rooms: called once when the game ends, to drop it from memory. */
+    this.onFinish = null;
   }
 
   get room() { return `g:${this.pin}`; }
@@ -339,7 +347,10 @@ export class Game {
       players: this.players.size,
       connected: this.connectedCount(),
       msLeft: this.phase === "question" ? Math.max(0, this.questionEndsAt - Date.now()) : 0,
-      question
+      question,
+      /* Lets a player who rejoins mid-question go straight to "locked in"
+         instead of seeing a fresh pad the server will refuse. */
+      youAnswered: forPlayer ? this.answers.has(forPlayer.id) : undefined
     };
   }
 
@@ -504,6 +515,7 @@ export class Game {
       reveal.guesses = guesses;
       reveal.gotItRight = [...this.answers.values()].filter(a => a.correct === true).length;
     }
+    this.lastReveal = reveal;
     this.io.to(this.hostRoom).emit("reveal", reveal);
 
     /* Each player gets their own result, addressed to their socket only. */
@@ -525,7 +537,8 @@ export class Game {
       if (this.qIndex + 1 < this.total) {
         this.phase = "scores";
         this.broadcastState();
-        this.io.to(this.hostRoom).emit("scores", { board: this.standings().slice(0, 10) });
+        this.lastScores = { board: this.standings().slice(0, 10) };
+        this.io.to(this.hostRoom).emit("scores", this.lastScores);
         this.timer = setTimeout(() => this.next(), this.quiz.gapSeconds * 1000);
       } else {
         this.end();
@@ -543,6 +556,17 @@ export class Game {
     if (this.finished) return;
     this.clearTimer();
     this.finished = true;
+
+    /* Ended before the first question: a cancelled lobby, not a game.
+       Nothing was played, so nothing goes into history or the stats. */
+    if (this.qIndex < 0) {
+      this.phase = "final";
+      store.sessions.discard(this.sessionId);
+      this.io.to(this.room).emit("cancelled");
+      this.onFinish?.(true);
+      return;
+    }
+
     this.phase = "final";
     const board = this.standings();
     try {
@@ -552,7 +576,8 @@ export class Game {
       console.error("Could not save results for session", this.sessionId, err.message);
     }
     this.broadcastState();
-    this.io.to(this.hostRoom).emit("final", { board, sessionId: this.sessionId });
+    this.lastFinal = { board, sessionId: this.sessionId };
+    this.io.to(this.hostRoom).emit("final", this.lastFinal);
     const rankById = new Map(board.map((p, i) => [p.id, i + 1]));
     for (const p of this.players.values()) {
       if (!p.socketId) continue;
@@ -564,6 +589,7 @@ export class Game {
         total: this.total
       });
     }
+    this.onFinish?.(false);
   }
 
   clearTimer() {
@@ -601,7 +627,27 @@ export class Rooms {
     const pin = this.newPin();
     const game = new Game({ pin, quiz, quizId, io: this.io, hostId, maxPlayers });
     this.games.set(pin, game);
+    /* A finished game used to sit in memory until the 4-hour sweep, so
+       /api/health over-reported live games (which the deploy rule reads to
+       decide whether a restart is safe). A cancelled lobby goes at once; a
+       played game stays briefly so a host who reloads on the podium, or a
+       player whose phone reconnects, still finds it. */
+    game.onFinish = cancelled => {
+      if (cancelled) return this.remove(pin, game);
+      setTimeout(() => this.remove(pin, game), FLOW.finishedGraceMs).unref?.();
+    };
     return game;
+  }
+
+  /* Only removes `game` itself: by the time a grace timer fires, the PIN
+     may already belong to a newer game. */
+  remove(pin, game) {
+    if (this.games.get(pin) !== game) return;
+    game.destroy();
+    this.games.delete(pin);
+    for (const [socketId, ref] of this.playerIndex) {
+      if (ref.pin === pin) this.playerIndex.delete(socketId);
+    }
   }
 
   get(pin) { return this.games.get(String(pin)); }
