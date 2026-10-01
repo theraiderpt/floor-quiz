@@ -9,7 +9,9 @@
    need to change between themes: they're independent bright backgrounds
    with dark text on top, not dependent on the page's own ink/chalk. */
 :root{
-  --disp:"Space Grotesk","Trebuchet MS",sans-serif;
+  /* Space Grotesk has no Greek glyphs; Noto Sans (already loaded for body
+     text) picks those up so Greek headings don't drop to a system font. */
+  --disp:"Space Grotesk","Noto Sans","Trebuchet MS",sans-serif;
   --body:"Noto Sans",system-ui,-apple-system,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --pad:clamp(16px,3vw,34px);
@@ -257,6 +259,17 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
   border:1px solid var(--line);background:var(--ink-2);color:var(--chalk);display:grid;place-items:center;
   cursor:pointer;transition:border-color .15s ease;font-size:16px}
 .soundtoggle:hover{border-color:var(--muted)}
+
+/* language picker (js/i18n.js): a pill showing the current code, with the
+   native <select> stretched invisibly over it so the phone's own picker
+   opens on tap. Bottom-left, clear of the theme and sound toggles. */
+.langpick{position:fixed;left:16px;bottom:16px;z-index:55;height:38px;min-width:48px;padding:0 12px;
+  border-radius:19px;border:1px solid var(--line);background:var(--ink-2);color:var(--chalk);
+  display:grid;place-items:center;font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.08em;
+  cursor:pointer;transition:border-color .15s ease}
+.langpick:hover,.langpick:focus-within{border-color:var(--muted)}
+.langpick:focus-within{outline:2px solid var(--live);outline-offset:3px}
+.langpick select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px}
 
 /* admin dashboard tabs */
 .tab{opacity:.7} .tab.active{opacity:1;color:var(--chalk)}

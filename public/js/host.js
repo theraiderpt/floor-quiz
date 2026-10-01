@@ -16,7 +16,7 @@ const SHAPES = [
 function shapeTag(i) {
   const t = el("span", "tag");
   t.innerHTML = SHAPES[i];
-  t.setAttribute("aria-label", "Option " + LETTERS[i]);
+  t.setAttribute("aria-label", window.t("common.optionX", { x: LETTERS[i] }));
   return t;
 }
 const SWATCH = ["var(--a1)", "var(--a2)", "var(--a3)", "var(--a4)"];
@@ -38,9 +38,9 @@ async function api(path, opts = {}) {
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined
   });
-  if (res.status === 401 && path !== "/login") { show("s-login"); throw new Error("Sign in first."); }
+  if (res.status === 401 && path !== "/login") { show("s-login"); throw new Error(t("err.auth")); }
   const data = res.headers.get("content-type")?.includes("json") ? await res.json() : null;
-  if (!res.ok) throw new Error((data && data.error) || "Request failed.");
+  if (!res.ok) throw new Error(I18N.errorText(data));
   return data;
 }
 
@@ -109,7 +109,7 @@ async function openLibrary() {
   $("libCount").textContent = list.length;
 
   if (!list.length) {
-    wrap.appendChild(el("p", "note", "Nothing saved yet. Start a new quiz, or drop in the sample to see how it plays."));
+    wrap.appendChild(el("p", "note", t("host.libEmpty")));
   }
 
   list.forEach(q => {
@@ -118,16 +118,16 @@ async function openLibrary() {
     const body = el("div", "body");
     body.appendChild(el("p", "qt", q.title));
     const meta = el("div", "meta");
-    meta.appendChild(el("span", null, q.questions.length + " questions"));
-    meta.appendChild(el("span", null, "~" + Math.ceil(q.questions.reduce((s, x) => s + x.t + 12, 0) / 60) + " min"));
-    meta.appendChild(el("span", null, "edited " + q.updated_at.replace("T", " ").slice(0, 16)));
+    meta.appendChild(el("span", null, t("host.nQuestions", { n: q.questions.length })));
+    meta.appendChild(el("span", null, t("host.approxMin", { n: Math.ceil(q.questions.reduce((s, x) => s + x.t + 12, 0) / 60) })));
+    meta.appendChild(el("span", null, t("host.edited", { when: q.updated_at.replace("T", " ").slice(0, 16) })));
     body.appendChild(meta);
     item.appendChild(body);
 
     const acts = el("div", "acts");
-    const play = el("button", "iconbtn", "▶"); play.title = "Open lobby";
+    const play = el("button", "iconbtn", "▶"); play.title = t("host.openLobby");
     play.addEventListener("click", () => { S.quiz = structuredClone(q); createGame(); });
-    const ed = el("button", "iconbtn", "✎"); ed.title = "Edit";
+    const ed = el("button", "iconbtn", "✎"); ed.title = t("common.edit");
     ed.addEventListener("click", () => { S.quiz = structuredClone(q); openSetup(); });
     acts.append(play, ed);
     item.appendChild(acts);
@@ -136,7 +136,7 @@ async function openLibrary() {
   show("s-library");
 }
 
-$("libNew").addEventListener("click", () => { S.quiz = { id: null, title: "New quiz", questions: [], categoryId: null, joinMode: "name", gapSeconds: 5, deliveryMode: "live", shareToken: null }; openSetup(); });
+$("libNew").addEventListener("click", () => { S.quiz = { id: null, title: t("host.newQuizTitle"), questions: [], categoryId: null, joinMode: "name", gapSeconds: 5, deliveryMode: "live", shareToken: null }; openSetup(); });
 $("libSample").addEventListener("click", async () => {
   const saved = await api("/quizzes", { method: "POST", body: SAMPLE });
   S.quiz = saved;
@@ -160,7 +160,7 @@ $("fileIn").addEventListener("change", e => {
   const r = new FileReader();
   r.onload = () => {
     const parsed = parseImport(f.name, String(r.result));
-    if (!parsed) return alert("That file didn't parse. CSV needs: question, option A, option B, option C, option D, correct letter, seconds.");
+    if (!parsed) return alert(t("host.importFailed"));
     S.quiz = { id: null, title: parsed.title, questions: parsed.questions };
     openSetup();
   };
@@ -170,12 +170,27 @@ $("fileIn").addEventListener("change", e => {
 
 /* ------------------------------------------------------------- setup ---- */
 
-const TYPE_LABELS = { single: "single choice", multi: "multiple choice", text: "open text", numeric: "numeric guess" };
+const TYPE_LABELS = { single: "host.lblSingle", multi: "host.lblMulti", text: "host.lblText", numeric: "host.lblNumeric" };
+
+/* Built from the DOM rather than an innerHTML string: category names are
+   free text typed by an admin, so they must never be parsed as markup. */
+function fillCategorySelect(select, emptyLabel, cats) {
+  select.innerHTML = "";
+  const none = el("option", null, emptyLabel);
+  none.value = "";
+  select.appendChild(none);
+  cats.forEach(c => { const o = el("option", null, c.name); o.value = String(c.id); select.appendChild(o); });
+}
+
+function fillGapOptions() {
+  [...$("quizGap").options].forEach(o => { o.textContent = t("common.nSeconds", { n: Number(o.value) }); });
+}
+fillGapOptions();
 
 async function openSetup() {
   $("quizTitle").value = S.quiz.title;
   const cats = await loadCategories();
-  $("quizCategory").innerHTML = `<option value="">None</option>` + cats.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+  fillCategorySelect($("quizCategory"), t("common.none"), cats);
   $("quizCategory").value = S.quiz.categoryId || "";
   $("quizJoinMode").value = S.quiz.joinMode || "name";
   $("quizGap").value = S.quiz.gapSeconds || 5;
@@ -188,7 +203,7 @@ async function openSetup() {
 function updateDeliveryVisibility() {
   const isSelfPaced = S.quiz.deliveryMode === "selfpaced";
   $("quizGapField").hidden = isSelfPaced;
-  $("openLobby").textContent = isSelfPaced ? "Save & get link" : "Open lobby";
+  $("openLobby").textContent = isSelfPaced ? t("host.saveGetLink") : t("host.openLobby");
   if (isSelfPaced && S.quiz.shareToken) showShareLink(); else $("selfpacedShare").hidden = true;
 }
 
@@ -201,7 +216,7 @@ function renderSetup() {
   const wrap = $("qlist");
   wrap.innerHTML = "";
   const qs = S.quiz.questions;
-  if (!qs.length) wrap.appendChild(el("p", "note", "No questions yet."));
+  if (!qs.length) wrap.appendChild(el("p", "note", t("host.noQuestions")));
 
   qs.forEach((q, i) => {
     const item = el("div", "qitem");
@@ -210,26 +225,26 @@ function renderSetup() {
     body.appendChild(el("p", "qt", q.q));
     const meta = el("div", "meta");
     meta.appendChild(el("span", null, q.t + "s"));
-    meta.appendChild(el("span", null, TYPE_LABELS[q.type] || TYPE_LABELS.single));
+    meta.appendChild(el("span", null, t(TYPE_LABELS[q.type] || TYPE_LABELS.single)));
     if (q.type === "multi") {
-      meta.appendChild(el("span", null, q.opts.length + " options"));
-      meta.appendChild(el("span", null, "correct: " + q.correct.map(idx => LETTERS[idx]).join(", ")));
+      meta.appendChild(el("span", null, t("common.nOptions", { n: q.opts.length })));
+      meta.appendChild(el("span", null, t("common.correctIs", { letters: q.correct.map(idx => LETTERS[idx]).join(", ") })));
     } else if (q.type === "numeric") {
-      meta.appendChild(el("span", null, "target " + q.target + " ± " + q.tolerance));
+      meta.appendChild(el("span", null, t("host.targetMeta", { target: q.target, tolerance: q.tolerance })));
     } else if (q.type !== "text") {
-      meta.appendChild(el("span", null, q.opts.length + " options"));
-      meta.appendChild(el("span", null, "correct: " + LETTERS[q.correct]));
+      meta.appendChild(el("span", null, t("common.nOptions", { n: q.opts.length })));
+      meta.appendChild(el("span", null, t("common.correctIs", { letters: LETTERS[q.correct] })));
     }
-    if (q.shuffle) meta.appendChild(el("span", null, "shuffled"));
+    if (q.shuffle) meta.appendChild(el("span", null, t("host.shuffled")));
     body.appendChild(meta);
     item.appendChild(body);
 
     const acts = el("div", "acts");
-    const up = el("button", "iconbtn", "↑"); up.title = "Move up";
+    const up = el("button", "iconbtn", "↑"); up.title = t("host.moveUp");
     up.addEventListener("click", () => { if (i > 0) { [qs[i - 1], qs[i]] = [qs[i], qs[i - 1]]; renderSetup(); } });
-    const ed = el("button", "iconbtn", "✎"); ed.title = "Edit";
+    const ed = el("button", "iconbtn", "✎"); ed.title = t("common.edit");
     ed.addEventListener("click", () => openEditor(i));
-    const rm = el("button", "iconbtn", "✕"); rm.title = "Delete";
+    const rm = el("button", "iconbtn", "✕"); rm.title = t("common.delete");
     rm.addEventListener("click", () => { qs.splice(i, 1); renderSetup(); });
     acts.append(up, ed, rm);
     item.appendChild(acts);
@@ -241,8 +256,8 @@ function renderSetup() {
   $("openLobby").disabled = qs.length === 0;
   $("deleteQuiz").hidden = !S.quiz.id;
   $("setupNote").textContent = qs.length
-    ? qs.length + " questions · about " + Math.ceil(qs.reduce((s, q) => s + q.t + 12, 0) / 60) + " min to play"
-    : "Add at least one question to open a lobby.";
+    ? t("host.nQuestions", { n: qs.length }) + " · " + t("host.aboutMin", { n: Math.ceil(qs.reduce((s, q) => s + q.t + 12, 0) / 60) })
+    : t("host.addOneToOpen");
 }
 
 $("quizTitle").addEventListener("input", e => { S.quiz.title = e.target.value; $("setupTitle").textContent = e.target.value; });
@@ -253,8 +268,8 @@ $("quizDelivery").addEventListener("change", e => { S.quiz.deliveryMode = e.targ
 $("copyShareLink").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText($("shareLinkInput").value);
-    $("copyShareLink").textContent = "Copied!";
-    setTimeout(() => { $("copyShareLink").textContent = "Copy link"; }, 1500);
+    $("copyShareLink").textContent = t("host.copied");
+    setTimeout(() => { $("copyShareLink").textContent = t("host.copyLink"); }, 1500);
   } catch {
     $("shareLinkInput").select();
   }
@@ -269,7 +284,7 @@ $("saveQuiz").addEventListener("click", async () => {
 });
 
 $("deleteQuiz").addEventListener("click", async () => {
-  if (!S.quiz.id || !confirm("Delete this quiz? Past results stay in history.")) return;
+  if (!S.quiz.id || !confirm(t("host.confirmDeleteQuiz"))) return;
   await api("/quizzes/" + S.quiz.id, { method: "DELETE" });
   await openLibrary();
 });
@@ -314,17 +329,17 @@ function readImageForUpload(file, maxDim = 900) {
   if (file.type === "image/gif") {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onerror = () => reject(new Error("Could not read that file."));
+      reader.onerror = () => reject(new Error(t("host.fileReadError")));
       reader.onload = () => resolve(reader.result);
       reader.readAsDataURL(file);
     });
   }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Could not read that file."));
+    reader.onerror = () => reject(new Error(t("host.fileReadError")));
     reader.onload = () => {
       const img = new Image();
-      img.onerror = () => reject(new Error("That doesn't look like an image."));
+      img.onerror = () => reject(new Error(t("err.img_type")));
       img.onload = () => {
         const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
         const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
@@ -344,7 +359,7 @@ function readImageForUpload(file, maxDim = 900) {
 async function uploadImage(dataUrl) {
   $("eImgPick").disabled = true;
   const label = $("eImgPick").textContent;
-  $("eImgPick").textContent = "Uploading…";
+  $("eImgPick").textContent = t("host.uploading");
   try {
     const { url } = await api("/uploads/image", { method: "POST", body: { dataUrl } });
     setEditorImage(url);
@@ -362,7 +377,7 @@ $("eImgFile").addEventListener("change", async e => {
   e.target.value = "";
   if (!file) return;
   if (file.type === "image/gif" && file.size > 4_000_000) {
-    alert("That GIF is too large (max 4MB uncompressed, it isn't re-encoded). Try a shorter or smaller one, or search Giphy instead.");
+    alert(t("host.gifTooLarge"));
     return;
   }
   try {
@@ -383,12 +398,12 @@ $("eGifSearchToggle").addEventListener("click", () => {
 let gifSearchSeq = 0;
 async function runGifSearch(query) {
   const seq = ++gifSearchSeq;
-  $("eGifStatus").textContent = "Searching…";
+  $("eGifStatus").textContent = t("host.searching");
   $("eGifResults").innerHTML = "";
   try {
     const { data } = await api("/giphy/search?q=" + encodeURIComponent(query));
     if (seq !== gifSearchSeq) return; // a newer search finished first
-    if (!data.length) { $("eGifStatus").textContent = "No GIFs found."; return; }
+    if (!data.length) { $("eGifStatus").textContent = t("host.noGifs"); return; }
     $("eGifStatus").textContent = "";
     data.forEach(g => {
       const b = document.createElement("button");
@@ -413,8 +428,8 @@ $("eGifQuery").addEventListener("keydown", e => { if (e.key === "Enter") { e.pre
 function openEditor(i) {
   S.editing = i;
   const q = i >= 0 ? S.quiz.questions[i] : { type: "single", q: "", t: 20, opts: ["", "", "", ""], correct: 0, img: null, shuffle: false };
-  $("editTitle").textContent = i >= 0 ? "Edit question" : "New question";
-  $("editIdx").textContent = i >= 0 ? String(i + 1).padStart(2, "0") : "new";
+  $("editTitle").textContent = i >= 0 ? t("host.editQuestion") : t("host.newQuestion");
+  $("editIdx").textContent = i >= 0 ? String(i + 1).padStart(2, "0") : t("host.new");
   $("eQType").value = q.type || "single";
   $("eQ").value = q.q;
   $("eTime").value = String(q.t);
@@ -436,7 +451,7 @@ function updateEditorVisibility() {
   $("eTypeField").hidden = !isChoice;
   $("eShuffleField").hidden = !isChoice;
   $("eNumericFields").hidden = type !== "numeric";
-  $("eOptsNote").textContent = type === "multi" ? "Mark every option that's correct." : "Mark exactly one option as correct.";
+  $("eOptsNote").textContent = type === "multi" ? t("host.markEvery") : t("host.markOne");
 }
 
 /* Reads whatever is currently typed into the option inputs, regardless of
@@ -464,8 +479,10 @@ function renderOpts(opts, correct) {
     const row = el("div", "optrow");
     const sw = el("span", "swatch"); sw.style.background = SWATCH[i];
     const inp = el("input", "inp");
-    inp.value = count === 2 ? ["True", "False"][i] : (opts[i] || "");
-    inp.placeholder = "Option " + LETTERS[i];
+    /* True/false labels are written into the quiz itself in the host's
+       language at edit time, since players see options exactly as saved. */
+    inp.value = count === 2 ? [t("common.true"), t("common.false")][i] : (opts[i] || "");
+    inp.placeholder = t("common.optionX", { x: LETTERS[i] });
     inp.maxLength = 120;
     if (count === 2) inp.readOnly = true;
     const lab = el("label", "correct");
@@ -473,7 +490,7 @@ function renderOpts(opts, correct) {
     box.value = String(i);
     if (isMulti) { box.type = "checkbox"; box.checked = correctSet.has(i); }
     else { box.type = "radio"; box.name = "correct"; box.checked = i === correct; }
-    lab.append(box, document.createTextNode("correct"));
+    lab.append(box, document.createTextNode(t("common.correctLower")));
     row.append(sw, inp, lab);
     wrap.appendChild(row);
   }
@@ -492,29 +509,29 @@ $("eCancel").addEventListener("click", () => show("s-setup"));
 $("eSave").addEventListener("click", () => {
   const type = $("eQType").value;
   const text = $("eQ").value.trim();
-  if (!text) return alert("Add the question text.");
-  const t = parseInt($("eTime").value, 10);
+  if (!text) return alert(t("common.addQuestionText"));
+  const secs = parseInt($("eTime").value, 10);
 
   let q;
   if (type === "text") {
-    q = { type, q: text, t, img: editingImg };
+    q = { type, q: text, t: secs, img: editingImg };
   } else if (type === "numeric") {
     const target = Number($("eTarget").value);
-    if (!Number.isFinite(target)) return alert("Enter the correct number.");
+    if (!Number.isFinite(target)) return alert(t("host.enterNumber"));
     const tolerance = Math.max(0, Number($("eTolerance").value) || 0);
-    q = { type, q: text, t, img: editingImg, target, tolerance };
+    q = { type, q: text, t: secs, img: editingImg, target, tolerance };
   } else if (type === "multi") {
     const opts = currentOptVals().map(o => o.trim());
-    if (opts.some(o => !o)) return alert("Fill in every answer option.");
+    if (opts.some(o => !o)) return alert(t("common.fillEveryOption"));
     const correct = currentCorrect();
-    if (!correct.length) return alert("Mark at least one option as correct.");
-    q = { type, q: text, t, img: editingImg, opts, correct, shuffle: $("eShuffle").checked };
+    if (!correct.length) return alert(t("host.markAtLeastOne"));
+    q = { type, q: text, t: secs, img: editingImg, opts, correct, shuffle: $("eShuffle").checked };
   } else {
     const opts = currentOptVals().map(o => o.trim());
-    if (opts.some(o => !o)) return alert("Fill in every answer option.");
+    if (opts.some(o => !o)) return alert(t("common.fillEveryOption"));
     const picked = $("eOpts").querySelector("input[type=radio]:checked");
-    if (!picked) return alert("Mark one option as correct.");
-    q = { type: "single", q: text, t, img: editingImg, opts, correct: Number(picked.value), shuffle: $("eShuffle").checked };
+    if (!picked) return alert(t("host.markOneAlert"));
+    q = { type: "single", q: text, t: secs, img: editingImg, opts, correct: Number(picked.value), shuffle: $("eShuffle").checked };
   }
 
   if (S.editing >= 0) S.quiz.questions[S.editing] = q; else S.quiz.questions.push(q);
@@ -526,7 +543,7 @@ $("eSave").addEventListener("click", () => {
 
 async function openBank() {
   const cats = await loadCategories();
-  $("bankFilter").innerHTML = `<option value="">All categories</option>` + cats.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+  fillCategorySelect($("bankFilter"), t("common.allCategories"), cats);
   await renderBankPick();
   show("s-bank");
 }
@@ -539,17 +556,17 @@ async function renderBankPick() {
   const list = await api("/bank" + (cat ? "?category=" + cat : ""));
   const wrap = $("bankPickList");
   wrap.innerHTML = "";
-  if (!list.length) wrap.appendChild(el("p", "note", "Nothing in this category yet."));
+  if (!list.length) wrap.appendChild(el("p", "note", t("host.bankEmpty")));
   list.forEach(q => {
     const item = el("div", "qitem");
     item.appendChild(el("span", "idx", q.t + "s"));
     const body = el("div", "body");
     body.appendChild(el("p", "qt", q.q));
     const meta = el("div", "meta");
-    meta.append(el("span", null, q.categoryName), el("span", null, q.opts.length + " options"));
+    meta.append(el("span", null, q.categoryName), el("span", null, t("common.nOptions", { n: q.opts.length })));
     body.appendChild(meta);
     item.appendChild(body);
-    const add = el("button", "iconbtn", "+"); add.title = "Add to quiz";
+    const add = el("button", "iconbtn", "+"); add.title = t("host.addToQuiz");
     add.addEventListener("click", () => {
       S.quiz.questions.push({ q: q.q, t: q.t, opts: [...q.opts], correct: q.correct });
       add.textContent = "✓";
@@ -571,11 +588,13 @@ $("openLobby").addEventListener("click", async () => {
 
 function createGame() {
   socket.emit("host:create", { quiz: { title: S.quiz.title, questions: S.quiz.questions, joinMode: S.quiz.joinMode, gapSeconds: S.quiz.gapSeconds }, quizId: S.quiz.id }, res => {
-    if (!res || res.error) return alert((res && res.error) || "Could not open a lobby.");
+    if (!res || res.error) return alert(I18N.errorText(res, "host.lobbyFailed"));
     S.pin = res.pin;
     S.players = [];
     $("lobbyPin").textContent = res.pin;
     $("lobbyUrl").textContent = (res.joinUrl || "").replace(/^https?:\/\//, "") || "set PUBLIC_URL in .env";
+    $("lobbyQr").alt = t("host.qrAlt");
+    $("lobbyHint").textContent = t("host.waitingPlayers");
     $("lobbyQuiz").textContent = S.quiz.title;
     $("lobbyQs").textContent = S.quiz.questions.length;
     $("roster").innerHTML = "";
@@ -597,15 +616,13 @@ socket.on("lobby", d => {
   r.innerHTML = "";
   d.players.forEach(p => {
     const c = el("span", "chip" + (p.connected ? "" : " off"), p.name);
-    c.title = (p.email ? p.email + " — " : "") + "Click to remove";
-    c.addEventListener("click", () => { if (confirm("Remove " + p.name + "?")) socket.emit("host:kick", { playerId: p.id }); });
+    c.title = (p.email ? p.email + " · " : "") + t("host.clickToRemove");
+    c.addEventListener("click", () => { if (confirm(t("host.confirmRemove", { name: p.name }))) socket.emit("host:kick", { playerId: p.id }); });
     r.appendChild(c);
   });
   $("lobbyCount").textContent = d.count;
   $("startQuiz").disabled = d.count === 0;
-  $("lobbyHint").textContent = d.count
-    ? d.count + (d.count === 1 ? " player is in." : " players are in.") + " Start when the room settles."
-    : "Waiting for players…";
+  $("lobbyHint").textContent = d.count ? t("host.playersIn", { n: d.count }) : t("host.waitingPlayers");
 });
 
 socket.on("state", s => {
@@ -624,14 +641,14 @@ socket.on("state", s => {
   }
 });
 
-const TYPE_HINTS = { multi: "Select all that apply", text: "Players type their answer", numeric: "Players enter their best guess" };
+const TYPE_HINTS = { multi: "hint.selectAll", text: "hint.playersType", numeric: "hint.playersGuess" };
 
 function renderQuestion(s) {
   $("pPin").textContent = S.pin;
   $("pQn").textContent = (s.qIndex + 1) + "/" + s.total;
   $("pQ").textContent = s.question.q;
   $("pAnswered").textContent = "0";
-  $("pFoot").textContent = "Answers are locked in as they arrive";
+  $("pFoot").textContent = t("host.lockedAsArrive");
   $("pNext").hidden = true;
   $("pSkip").hidden = false;
   $("pTimerWrap").style.visibility = "visible";
@@ -639,18 +656,18 @@ function renderQuestion(s) {
   $("pImg").src = s.question.img || "";
   $("pFastest").hidden = true;
 
-  const hint = TYPE_HINTS[s.question.type];
-  $("pTypeHint").textContent = hint || "";
+  const hint = TYPE_HINTS[s.question.type] ? t(TYPE_HINTS[s.question.type]) : "";
+  $("pTypeHint").textContent = hint;
   $("pTypeHint").hidden = !hint;
 
   const wrap = $("pAnswers");
   wrap.innerHTML = "";
   if (s.question.type === "text") {
     wrap.className = "resplist";
-    wrap.appendChild(el("p", "placeholder", "Responses will appear here once time is up."));
+    wrap.appendChild(el("p", "placeholder", t("host.responsesPending")));
   } else if (s.question.type === "numeric") {
     wrap.className = "resplist";
-    wrap.appendChild(el("p", "placeholder", "Guesses will appear here, closest first, once time is up."));
+    wrap.appendChild(el("p", "placeholder", t("host.guessesPending")));
   } else {
     wrap.className = "answers";
     s.question.opts.forEach((o, i) => {
@@ -674,27 +691,27 @@ socket.on("reveal", d => {
   if (d.type === "text") {
     const wrap = $("pAnswers");
     wrap.innerHTML = "";
-    if (!d.responses.length) wrap.appendChild(el("p", "placeholder", "No responses received."));
+    if (!d.responses.length) wrap.appendChild(el("p", "placeholder", t("host.noResponses")));
     d.responses.forEach((r, i) => {
       const item = el("div", "respitem");
       item.style.animationDelay = i * 40 + "ms";
       item.append(el("span", "who", r.name), el("span", "what", r.text));
       wrap.appendChild(item);
     });
-    $("pFoot").textContent = d.responses.length + " response" + (d.responses.length === 1 ? "" : "s") + " collected";
+    $("pFoot").textContent = t("host.responsesCollected", { n: d.responses.length });
   } else if (d.type === "numeric") {
     const wrap = $("pAnswers");
     wrap.innerHTML = "";
-    if (!d.guesses.length) wrap.appendChild(el("p", "placeholder", "No guesses received."));
+    if (!d.guesses.length) wrap.appendChild(el("p", "placeholder", t("host.noGuesses")));
     d.guesses.forEach((g, i) => {
       const hit = g.distance <= d.tolerance;
       const item = el("div", "respitem" + (hit ? " hit" : ""));
       item.style.animationDelay = i * 40 + "ms";
-      item.append(el("span", "who", g.name), el("span", "what", String(g.value)), el("span", "dist", (hit ? "within" : "off by ") + " " + g.distance));
+      item.append(el("span", "who", g.name), el("span", "what", String(g.value)), el("span", "dist", t(hit ? "host.within" : "host.offBy", { d: g.distance })));
       wrap.appendChild(item);
     });
-    $("pFoot").textContent = "Target was " + d.target + " (±" + d.tolerance + "). " +
-      (d.answered ? d.gotItRight + " of " + d.answered + " within tolerance" : "No answers received");
+    $("pFoot").textContent = t("host.targetWas", { target: d.target, tolerance: d.tolerance }) + " " +
+      (d.answered ? t("host.withinTolerance", { right: d.gotItRight, n: d.answered }) : t("host.noAnswers"));
   } else {
     const correctSet = d.type === "multi" ? new Set(d.correct) : new Set([d.correct]);
     const total = Math.max(1, d.answered);
@@ -706,24 +723,24 @@ socket.on("reveal", d => {
       node.classList.add(correctSet.has(i) ? "hit" : "dim");
     });
     $("pFoot").textContent = d.answered
-      ? d.gotItRight + " of " + d.answered + " got it (" + Math.round((d.gotItRight / d.answered) * 100) + "%)"
-      : "No answers received";
+      ? t("host.gotIt", { right: d.gotItRight, n: d.answered, pct: Math.round((d.gotItRight / d.answered) * 100) })
+      : t("host.noAnswers");
   }
 
   if (d.fastestCorrect) {
     $("pFastest").hidden = false;
-    $("pFastest").textContent = "⚡ Fastest correct: " + d.fastestCorrect.name + " (" + (d.fastestCorrect.usedMs / 1000).toFixed(1) + "s)";
+    $("pFastest").textContent = "⚡ " + t("host.fastest", { name: d.fastestCorrect.name, secs: (d.fastestCorrect.usedMs / 1000).toFixed(1) });
   } else {
     $("pFastest").hidden = true;
   }
 
   $("pNext").hidden = false;
-  $("pNext").textContent = S.qIndex + 1 < S.quiz.questions.length ? "Show standings" : "Show final result";
+  $("pNext").textContent = S.qIndex + 1 < S.quiz.questions.length ? t("host.showStandings") : t("host.showFinal");
 });
 
 socket.on("scores", d => {
   $("sPin").textContent = S.pin;
-  $("sQn").textContent = "Q" + (S.qIndex + 1);
+  $("sQn").textContent = t("host.qN", { n: S.qIndex + 1 });
   const board = $("sBoard");
   board.innerHTML = "";
   d.board.forEach((p, i) => {
@@ -732,8 +749,8 @@ socket.on("scores", d => {
     row.append(el("span", "rank", String(i + 1)), el("span", "nm", p.name), el("span", "pts", String(p.score)));
     board.appendChild(row);
   });
-  if (!d.board.length) board.appendChild(el("p", "note", "No scores yet."));
-  $("sNext").textContent = S.qIndex + 1 < S.quiz.questions.length ? "Next question" : "Final result";
+  if (!d.board.length) board.appendChild(el("p", "note", t("host.noScores")));
+  $("sNext").textContent = S.qIndex + 1 < S.quiz.questions.length ? t("common.nextQuestion") : t("host.finalResult");
   show("s-scores");
 });
 
@@ -743,15 +760,15 @@ socket.on("final", d => {
   S.sessionId = d.sessionId;
   $("fQuiz").textContent = S.quiz.title;
   $("fPlayers").textContent = d.board.length;
-  $("fWinner").textContent = d.board.length ? d.board[0].name + " takes it" : "No players";
-  $("fExport").href = "/api/sessions/" + d.sessionId + "/csv";
+  $("fWinner").textContent = d.board.length ? t("host.takesIt", { name: d.board[0].name }) : t("host.noPlayers");
+  $("fExport").href = csvHref(d.sessionId);
 
   const pod = $("fPodium");
   pod.innerHTML = "";
   [1, 0, 2].forEach(r => {
     const p = d.board[r];
     const box = el("div", "pod r" + (r + 1));
-    box.append(el("span", "medal", String(r + 1)), el("span", "pn", p ? p.name : "—"), el("span", "ps", p ? p.score + " pts" : ""));
+    box.append(el("span", "medal", String(r + 1)), el("span", "pn", p ? p.name : "—"), el("span", "ps", p ? t("common.pts", { n: p.score }) : ""));
     pod.appendChild(box);
   });
 
@@ -819,7 +836,7 @@ async function openHistory() {
   const wrap = $("histList");
   wrap.innerHTML = "";
   $("histCount").textContent = list.length;
-  if (!list.length) wrap.appendChild(el("p", "note", "No completed games yet."));
+  if (!list.length) wrap.appendChild(el("p", "note", t("common.noCompletedGames")));
 
   list.forEach(s => {
     const item = el("div", "qitem click");
@@ -829,14 +846,14 @@ async function openHistory() {
     const meta = el("div", "meta");
     meta.append(
       el("span", null, s.started_at.replace("T", " ").slice(0, 16)),
-      el("span", null, "pin " + s.pin),
-      el("span", null, s.player_count + " players")
+      el("span", null, t("common.pinX", { pin: s.pin })),
+      el("span", null, t("common.nPlayers", { n: s.player_count }))
     );
     body.appendChild(meta);
     item.appendChild(body);
     const a = el("a", "iconbtn", "↓");
-    a.href = "/api/sessions/" + s.id + "/csv";
-    a.title = "Download CSV";
+    a.href = csvHref(s.id);
+    a.title = t("common.downloadCsv");
     a.addEventListener("click", e => e.stopPropagation());
     item.appendChild(a);
     item.addEventListener("click", () => openSessionDetail(s.id, "history"));
@@ -848,11 +865,14 @@ async function openHistory() {
 /* ----------------------------------------------------------- dashboard --- */
 
 function statTile(label, value) {
-  const t = el("div", "stat");
-  t.appendChild(el("span", "n", String(value)));
-  t.appendChild(el("span", "l", label));
-  return t;
+  const tile = el("div", "stat");
+  tile.appendChild(el("span", "n", String(value)));
+  tile.appendChild(el("span", "l", label));
+  return tile;
 }
+
+/* The CSV's own headers and Right/Wrong cells follow the host's language. */
+const csvHref = id => "/api/sessions/" + id + "/csv?lang=" + I18N.lang;
 
 function accClass(pct) {
   return pct == null ? "" : pct < 40 ? " crit" : pct < 70 ? " warn" : "";
@@ -870,16 +890,16 @@ async function openDashboard() {
   const stats = $("dashStats");
   stats.innerHTML = "";
   [
-    ["Games played", overview.games],
-    ["Total players", overview.totalPlayers],
-    ["Avg players / game", overview.avgPlayers],
-    ["Quizzes in library", overview.quizzes],
-    ["Last played", overview.lastPlayed ? overview.lastPlayed.replace("T", " ").slice(0, 16) : "—"]
+    [t("host.statGames"), overview.games],
+    [t("host.statPlayers"), overview.totalPlayers],
+    [t("host.statAvgPlayers"), overview.avgPlayers],
+    [t("host.statQuizzes"), overview.quizzes],
+    [t("host.statLastPlayed"), overview.lastPlayed ? overview.lastPlayed.replace("T", " ").slice(0, 16) : "—"]
   ].forEach(([label, value]) => stats.appendChild(statTile(label, value)));
 
   const wrap = $("dashList");
   wrap.innerHTML = "";
-  if (!quizzes.length) wrap.appendChild(el("p", "note", "No completed games yet."));
+  if (!quizzes.length) wrap.appendChild(el("p", "note", t("common.noCompletedGames")));
 
   quizzes.forEach(q => {
     const item = el("div", "qitem click");
@@ -888,11 +908,11 @@ async function openDashboard() {
     body.appendChild(el("p", "qt", q.title));
     const meta = el("div", "meta");
     meta.append(
-      el("span", null, q.games + (q.games === 1 ? " game" : " games")),
-      el("span", null, q.totalPlayers + " total players"),
-      el("span", null, "avg score " + q.avgScore),
-      el("span", null, q.accuracy != null ? q.accuracy + "% correct" : "—"),
-      el("span", null, "last played " + (q.lastPlayed ? q.lastPlayed.replace("T", " ").slice(0, 16) : "—"))
+      el("span", null, t("host.nGames", { n: q.games })),
+      el("span", null, t("host.nTotalPlayers", { n: q.totalPlayers })),
+      el("span", null, t("host.avgScoreX", { n: q.avgScore })),
+      el("span", null, q.accuracy != null ? t("host.pctCorrect", { pct: q.accuracy }) : "—"),
+      el("span", null, t("host.lastPlayedX", { when: q.lastPlayed ? q.lastPlayed.replace("T", " ").slice(0, 16) : "—" }))
     );
     body.appendChild(meta);
     item.appendChild(body);
@@ -922,15 +942,15 @@ async function openQuizSessions(groupKey) {
   const stats = $("qsStats");
   stats.innerHTML = "";
   [
-    ["Games", quiz.games],
-    ["Total players", quiz.totalPlayers],
-    ["Avg score", quiz.avgScore],
-    ["Accuracy", quiz.accuracy != null ? quiz.accuracy + "%" : "—"]
+    [t("host.games"), quiz.games],
+    [t("host.statPlayers"), quiz.totalPlayers],
+    [t("host.statAvgScore"), quiz.avgScore],
+    [t("host.statAccuracy"), quiz.accuracy != null ? quiz.accuracy + "%" : "—"]
   ].forEach(([label, value]) => stats.appendChild(statTile(label, value)));
 
   const qwrap = $("qsQuestions");
   qwrap.innerHTML = "";
-  if (!questions.length) qwrap.appendChild(el("p", "note", "No answers recorded yet."));
+  if (!questions.length) qwrap.appendChild(el("p", "note", t("host.noAnswersYet")));
   questions
     .slice()
     .sort((a, b) => (a.accuracy ?? 101) - (b.accuracy ?? 101))
@@ -948,7 +968,7 @@ async function openQuizSessions(groupKey) {
 
   const wrap = $("qsList");
   wrap.innerHTML = "";
-  if (!list.length) wrap.appendChild(el("p", "note", "No games recorded for this quiz."));
+  if (!list.length) wrap.appendChild(el("p", "note", t("host.noGamesForQuiz")));
 
   list.forEach(s => {
     const item = el("div", "qitem click");
@@ -956,12 +976,12 @@ async function openQuizSessions(groupKey) {
     const body = el("div", "body");
     body.appendChild(el("p", "qt", s.started_at.replace("T", " ").slice(0, 16)));
     const meta = el("div", "meta");
-    meta.append(el("span", null, "pin " + s.pin), el("span", null, s.player_count + " players"));
+    meta.append(el("span", null, t("common.pinX", { pin: s.pin })), el("span", null, t("common.nPlayers", { n: s.player_count })));
     body.appendChild(meta);
     item.appendChild(body);
     const a = el("a", "iconbtn", "↓");
-    a.href = "/api/sessions/" + s.id + "/csv";
-    a.title = "Download CSV";
+    a.href = csvHref(s.id);
+    a.title = t("common.downloadCsv");
     a.addEventListener("click", e => e.stopPropagation());
     item.appendChild(a);
     item.addEventListener("click", () => openSessionDetail(s.id, "quiz"));
@@ -981,16 +1001,16 @@ async function openSessionDetail(id, backTo) {
   }
   $("detTitle").textContent = s.title;
   $("detPin").textContent = s.pin;
-  $("detWhen").textContent = s.started_at.replace("T", " ").slice(0, 16) + " · " + s.player_count + " players";
-  $("detExport").href = "/api/sessions/" + s.id + "/csv";
+  $("detWhen").textContent = s.started_at.replace("T", " ").slice(0, 16) + " · " + t("common.nPlayers", { n: s.player_count });
+  $("detExport").href = csvHref(s.id);
 
   const board = $("detBoard");
   board.innerHTML = "";
   const head = el("div", "lrow detail head");
-  head.append(el("span", null, "Rank"), el("span", null, "Name"), el("span", null, "Correct"), el("span", null, "Score"));
+  head.append(el("span", null, t("host.colRank")), el("span", null, t("host.colName")), el("span", null, t("host.colCorrect")), el("span", null, t("host.colScore")));
   board.appendChild(head);
 
-  if (!s.results.length) board.appendChild(el("p", "note", "No results recorded."));
+  if (!s.results.length) board.appendChild(el("p", "note", t("host.noResults")));
   s.results.forEach((r, i) => {
     const row = el("div", "lrow detail" + (r.rank === 1 ? " p1" : ""));
     row.style.animationDelay = i * 30 + "ms";
@@ -1068,6 +1088,19 @@ function download(filename, text, type) {
 const banner = $("offline");
 socket.on("connect", () => { banner.classList.remove("on"); document.querySelectorAll(".dot").forEach(d => d.classList.remove("down")); });
 socket.on("disconnect", () => { banner.classList.add("on"); document.querySelectorAll(".dot").forEach(d => d.classList.add("down")); });
+
+/* Switching language re-renders the screens that are cheap to rebuild;
+   live game screens pick it up from the next question onward. */
+document.addEventListener("langchange", () => {
+  fillGapOptions();
+  const on = document.querySelector(".screen.on")?.id;
+  if (on === "s-library") openLibrary();
+  else if (on === "s-setup") { updateDeliveryVisibility(); renderSetup(); }
+  else if (on === "s-edit") { updateEditorVisibility(); $("editTitle").textContent = S.editing >= 0 ? t("host.editQuestion") : t("host.newQuestion"); }
+  else if (on === "s-history") openHistory();
+  else if (on === "s-dashboard") openDashboard();
+  else if (on === "s-quiz-sessions" && S.dash.groupKey) openQuizSessions(S.dash.groupKey);
+});
 
 /* Resume straight into the library if the cookie is still good. */
 api("/me").then(r => { if (r.host) openLibrary(); }).catch(() => { });

@@ -13,6 +13,7 @@ import { Rooms, sanitiseQuiz, cleanName } from "./game.js";
 import { Attempts } from "./selfpaced.js";
 import { hashPassword, verifyPassword, randomToken } from "./auth.js";
 import { saveImageUpload, searchGiphy } from "./media.js";
+import { csvLabels, csvOutcome } from "./csv-labels.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -123,7 +124,7 @@ function clearAuthCookie(res) {
 function requireHost(req, res, next) {
   const payload = currentAuth(req);
   const host = payload?.role === "host" ? store.hosts.get(payload.id) : null;
-  if (!host || host.status !== "active") return res.status(401).json({ error: "Sign in first." });
+  if (!host || host.status !== "active") return res.status(401).json({ error: "Sign in first.", code: "auth" });
   req.hostAccount = { id: host.id, email: host.email, maxPlayers: host.max_players };
   next();
 }
@@ -131,7 +132,7 @@ function requireHost(req, res, next) {
 function requireAdmin(req, res, next) {
   const payload = currentAuth(req);
   const admin = payload?.role === "admin" ? store.admins.get(payload.id) : null;
-  if (!admin) return res.status(401).json({ error: "Sign in first." });
+  if (!admin) return res.status(401).json({ error: "Sign in first.", code: "auth" });
   req.admin = { id: admin.id, email: admin.email };
   next();
 }
@@ -141,21 +142,21 @@ const loginLimiter = rateLimit({
   limit: 12,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many attempts. Wait fifteen minutes." }
+  message: { error: "Too many attempts. Wait fifteen minutes.", code: "rate_login" }
 });
 const adminLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 12,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many attempts. Wait fifteen minutes." }
+  message: { error: "Too many attempts. Wait fifteen minutes.", code: "rate_login" }
 });
 const inviteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many attempts. Wait fifteen minutes." }
+  message: { error: "Too many attempts. Wait fifteen minutes.", code: "rate_login" }
 });
 
 app.post("/api/login", loginLimiter, (req, res) => {
@@ -163,7 +164,7 @@ app.post("/api/login", loginLimiter, (req, res) => {
   const given = String(req.body?.password || "");
   const host = store.hosts.getByEmail(email);
   if (!host || host.status !== "active" || !host.password_hash || !verifyPassword(given, host.password_hash)) {
-    return res.status(401).json({ error: "That email or password is not right." });
+    return res.status(401).json({ error: "That email or password is not right.", code: "bad_login" });
   }
   setAuthCookie(req, res, { role: "host", id: host.id });
   res.json({ ok: true });
@@ -182,7 +183,7 @@ app.post("/api/admin/login", adminLoginLimiter, (req, res) => {
   const given = String(req.body?.password || "");
   const admin = store.admins.getByEmail(email);
   if (!admin || !verifyPassword(given, admin.password_hash)) {
-    return res.status(401).json({ error: "That email or password is not right." });
+    return res.status(401).json({ error: "That email or password is not right.", code: "bad_login" });
   }
   setAuthCookie(req, res, { role: "admin", id: admin.id });
   res.json({ ok: true });
@@ -213,9 +214,9 @@ app.get("/api/invite/:token", inviteLimiter, (req, res) => {
 
 app.post("/api/invite/:token/complete", inviteLimiter, (req, res) => {
   const { inv, valid } = inviteStatus(req.params.token);
-  if (!valid) return res.status(400).json({ error: "That invite link is invalid or has expired." });
+  if (!valid) return res.status(400).json({ error: "That invite link is invalid or has expired.", code: "invite_invalid" });
   const password = String(req.body?.password || "");
-  if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters." });
+  if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters.", code: "pw_short" });
   store.hosts.setPassword(inv.host_id, hashPassword(password));
   store.invites.markUsed(inv.id);
   res.json({ ok: true });
@@ -227,8 +228,8 @@ app.get("/api/admin/hosts", requireAdmin, (req, res) => res.json(store.hosts.lis
 
 app.post("/api/admin/hosts", requireAdmin, (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
-  if (!isEmail(email)) return res.status(400).json({ error: "Enter a valid email." });
-  if (store.hosts.getByEmail(email)) return res.status(409).json({ error: "A host with that email already exists." });
+  if (!isEmail(email)) return res.status(400).json({ error: "Enter a valid email.", code: "email_invalid" });
+  if (store.hosts.getByEmail(email)) return res.status(409).json({ error: "A host with that email already exists.", code: "host_exists" });
   const maxPlayers = clamp(Number(req.body?.maxPlayers) || 400, 1, 2000);
   const host = store.hosts.create(email, maxPlayers);
   const token = randomToken();
@@ -238,7 +239,7 @@ app.post("/api/admin/hosts", requireAdmin, (req, res) => {
 
 app.post("/api/admin/hosts/:id/reinvite", requireAdmin, (req, res) => {
   const host = store.hosts.get(Number(req.params.id));
-  if (!host) return res.status(404).json({ error: "No such host." });
+  if (!host) return res.status(404).json({ error: "No such host.", code: "no_host" });
   const token = randomToken();
   store.invites.create(host.id, token, new Date(Date.now() + INVITE_TTL_MS).toISOString());
   res.json({ inviteLink: `${config.publicUrl || ""}/invite/${token}` });
@@ -246,7 +247,7 @@ app.post("/api/admin/hosts/:id/reinvite", requireAdmin, (req, res) => {
 
 app.patch("/api/admin/hosts/:id", requireAdmin, (req, res) => {
   const id = Number(req.params.id);
-  if (!store.hosts.get(id)) return res.status(404).json({ error: "No such host." });
+  if (!store.hosts.get(id)) return res.status(404).json({ error: "No such host.", code: "no_host" });
   if (req.body?.maxPlayers != null) store.hosts.updateQuota(id, clamp(Number(req.body.maxPlayers) || 400, 1, 2000));
   if (["active", "disabled"].includes(req.body?.status)) store.hosts.setStatus(id, req.body.status);
   res.json(store.hosts.get(id));
@@ -262,11 +263,11 @@ app.get("/api/admin/categories", requireAdmin, (req, res) => res.json(store.cate
 
 app.post("/api/admin/categories", requireAdmin, (req, res) => {
   const name = String(req.body?.name || "").trim().slice(0, 60);
-  if (!name) return res.status(400).json({ error: "Name a category." });
+  if (!name) return res.status(400).json({ error: "Name a category.", code: "cat_name" });
   try {
     res.status(201).json(store.categories.create(name));
   } catch {
-    res.status(409).json({ error: "That category already exists." });
+    res.status(409).json({ error: "That category already exists.", code: "cat_exists" });
   }
 });
 
@@ -282,11 +283,11 @@ app.get("/api/admin/bank", requireAdmin, (req, res) =>
 
 app.post("/api/admin/bank", requireAdmin, (req, res) => {
   const categoryId = Number(req.body?.categoryId);
-  if (!store.categories.get(categoryId)) return res.status(400).json({ error: "Pick a valid category." });
+  if (!store.categories.get(categoryId)) return res.status(400).json({ error: "Pick a valid category.", code: "cat_invalid" });
   const q = String(req.body?.q || "").trim().slice(0, 200);
   const opts = (Array.isArray(req.body?.opts) ? req.body.opts : [])
     .map(o => String(o || "").trim().slice(0, 120)).filter(Boolean).slice(0, 4);
-  if (!q || opts.length < 2) return res.status(400).json({ error: "Add question text and at least two options." });
+  if (!q || opts.length < 2) return res.status(400).json({ error: "Add question text and at least two options.", code: "bank_incomplete" });
   const t = clamp(Number(req.body?.t) || 20, 5, 120);
   const correct = clamp(Number(req.body?.correct) || 0, 0, opts.length - 1);
   res.status(201).json(store.bank.create(categoryId, q, t, opts, correct));
@@ -326,7 +327,7 @@ const mediaLimiter = rateLimit({
   limit: 30,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many requests. Wait a moment." }
+  message: { error: "Too many requests. Wait a moment.", code: "rate_media" }
 });
 
 app.post("/api/uploads/image", requireHost, mediaLimiter, async (req, res) => {
@@ -334,7 +335,7 @@ app.post("/api/uploads/image", requireHost, mediaLimiter, async (req, res) => {
     const url = await saveImageUpload(req.body?.dataUrl);
     res.status(201).json({ url });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: err.message, code: err.code, ...err.vars });
   }
 });
 
@@ -343,7 +344,7 @@ app.get("/api/giphy/search", requireHost, mediaLimiter, async (req, res) => {
     const results = await searchGiphy(String(req.query.q || "").trim().slice(0, 100), req.query.limit);
     res.json({ data: results });
   } catch (err) {
-    res.status(err.code === "no_key" ? 501 : 502).json({ error: err.message });
+    res.status(err.code === "giphy_no_key" ? 501 : 502).json({ error: err.message, code: err.code || "giphy_failed", ...err.vars });
   }
 });
 
@@ -353,16 +354,16 @@ app.get("/api/quizzes", requireHost, (req, res) => res.json(store.quizzes.list(r
 
 app.post("/api/quizzes", requireHost, (req, res) => {
   const { title, questions, joinMode, gapSeconds, deliveryMode } = sanitiseQuiz(req.body);
-  if (!questions.length) return res.status(400).json({ error: "Add at least one usable question." });
+  if (!questions.length) return res.status(400).json({ error: "Add at least one usable question.", code: "quiz_empty" });
   const categoryId = req.body?.categoryId ? Number(req.body.categoryId) : null;
   res.status(201).json(store.quizzes.create(title, questions, req.hostAccount.id, categoryId, joinMode, gapSeconds, deliveryMode));
 });
 
 app.put("/api/quizzes/:id", requireHost, (req, res) => {
   const id = Number(req.params.id);
-  if (!store.quizzes.get(id, req.hostAccount.id)) return res.status(404).json({ error: "No such quiz." });
+  if (!store.quizzes.get(id, req.hostAccount.id)) return res.status(404).json({ error: "No such quiz.", code: "no_quiz" });
   const { title, questions, joinMode, gapSeconds, deliveryMode } = sanitiseQuiz(req.body);
-  if (!questions.length) return res.status(400).json({ error: "Add at least one usable question." });
+  if (!questions.length) return res.status(400).json({ error: "Add at least one usable question.", code: "quiz_empty" });
   const categoryId = req.body?.categoryId ? Number(req.body.categoryId) : null;
   res.json(store.quizzes.update(id, title, questions, categoryId, req.hostAccount.id, joinMode, gapSeconds, deliveryMode));
 });
@@ -377,7 +378,7 @@ app.get("/api/sessions", requireHost, (req, res) => res.json(store.sessions.list
 
 app.get("/api/sessions/:id", requireHost, (req, res) => {
   const s = store.sessions.get(Number(req.params.id), req.hostAccount.id);
-  if (!s) return res.status(404).json({ error: "No such session." });
+  if (!s) return res.status(404).json({ error: "No such session.", code: "no_session" });
   res.json(s);
 });
 
@@ -387,12 +388,13 @@ app.get("/api/sessions/:id/csv", requireHost, (req, res) => {
   const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
   let questions = [];
   try { questions = JSON.parse(s.questions_json || "[]"); } catch { questions = []; }
-  const qHeaders = questions.map((q, i) => `Q${i + 1}: ${q}`);
-  const lines = [["Rank", "Name", "Email", "Score", "Correct", "Answered", ...qHeaders].map(cell).join(",")];
+  const L = csvLabels(req.query.lang);
+  const qHeaders = questions.map((q, i) => `${L.q}${i + 1}: ${q}`);
+  const lines = [[L.rank, L.name, L.email, L.score, L.correct, L.answered, ...qHeaders].map(cell).join(",")];
   s.results.forEach(r => {
     let log = [];
     try { log = JSON.parse(r.answers_json || "[]"); } catch { log = []; }
-    const perQuestion = questions.map((_, i) => log[i] || "");
+    const perQuestion = questions.map((_, i) => csvOutcome(log[i] || "", L));
     lines.push([r.rank, r.name, r.email, r.score, r.correct_count, r.answered, ...perQuestion].map(cell).join(","));
   });
   const slug = s.title.replace(/[^\w]+/g, "_").slice(0, 40);
@@ -413,7 +415,7 @@ app.get("/api/stats/quizzes", requireHost, (req, res) => res.json(store.stats.by
 function parseGroupKey(raw, res) {
   if (typeof raw === "string" && raw.startsWith("t:")) return { quizId: null, title: raw.slice(2) };
   const quizId = Number(raw);
-  if (!Number.isInteger(quizId)) { res.status(400).json({ error: "Bad quiz id." }); return null; }
+  if (!Number.isInteger(quizId)) { res.status(400).json({ error: "Bad quiz id.", code: "bad_id" }); return null; }
   return { quizId, title: null };
 }
 
@@ -446,18 +448,18 @@ const selfpacedLimiter = rateLimit({
   limit: 60,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many attempts. Wait a bit and try again." }
+  message: { error: "Too many attempts. Wait a bit and try again.", code: "rate_selfpaced" }
 });
 
 app.get("/api/selfpaced/:token", selfpacedLimiter, (req, res) => {
   const quiz = store.quizzes.getByShareToken(req.params.token);
-  if (!quiz) return res.status(404).json({ error: "That link isn't valid." });
+  if (!quiz) return res.status(404).json({ error: "That link isn't valid.", code: "link_invalid" });
   res.json({ title: quiz.title, total: quiz.questions.length, joinMode: quiz.joinMode });
 });
 
 app.post("/api/selfpaced/:token/start", selfpacedLimiter, (req, res) => {
   const quiz = store.quizzes.getByShareToken(req.params.token);
-  if (!quiz) return res.status(404).json({ error: "That link isn't valid." });
+  if (!quiz) return res.status(404).json({ error: "That link isn't valid.", code: "link_invalid" });
   const result = attempts.start(quiz, req.body?.name, req.body?.email);
   if (result.error) return res.status(400).json(result);
   res.status(201).json(result);
@@ -465,7 +467,7 @@ app.post("/api/selfpaced/:token/start", selfpacedLimiter, (req, res) => {
 
 app.post("/api/selfpaced/attempts/:attemptId/answer", selfpacedLimiter, (req, res) => {
   const attempt = attempts.get(req.params.attemptId);
-  if (!attempt) return res.status(404).json({ error: "That attempt has expired. Start again." });
+  if (!attempt) return res.status(404).json({ error: "That attempt has expired. Start again.", code: "attempt_expired" });
   const result = attempt.answer(req.body?.answer, req.body?.qIndex);
   if (result.error) return res.status(400).json(result);
   res.json(result);
@@ -498,23 +500,38 @@ io.use((socket, next) => {
 });
 
 io.on("connection", socket => {
+  /* Every client event goes through here. `ack` is only ever a function or
+     undefined (a client can put anything in that slot, and "x"?.() throws),
+     and a handler that throws answers with an error instead of escaping
+     socket.io as an uncaught exception, which would restart the process and
+     end every live game on the box. */
+  const on = (event, handler) => socket.on(event, async (payload, ack) => {
+    const reply = typeof ack === "function" ? ack : undefined;
+    try {
+      await handler(payload, reply);
+    } catch (err) {
+      console.error(`socket ${event} failed:`, err);
+      reply?.({ error: "Something went wrong.", code: "server" });
+    }
+  });
+
   /* ---- host side ---- */
 
-  socket.on("host:create", async (payload, ack) => {
-    if (!socket.data.isHost) return ack?.({ error: "Sign in first." });
+  on("host:create", async (payload, ack) => {
+    if (!socket.data.isHost) return ack?.({ error: "Sign in first.", code: "auth" });
     const quiz = sanitiseQuiz(payload?.quiz);
-    if (!quiz.questions.length) return ack?.({ error: "That quiz has no usable questions." });
+    if (!quiz.questions.length) return ack?.({ error: "That quiz has no usable questions.", code: "quiz_empty" });
     /* Only stamp the session with a quizId this host actually owns. */
     const ownedQuiz = payload?.quizId ? store.quizzes.get(payload.quizId, socket.data.hostId) : null;
     if (ownedQuiz?.deliveryMode === "selfpaced") {
-      return ack?.({ error: "This quiz is set to self-paced. Share its link instead of opening a live lobby." });
+      return ack?.({ error: "This quiz is set to self-paced. Share its link instead of opening a live lobby.", code: "quiz_is_selfpaced" });
     }
     const ownedQuizId = ownedQuiz ? payload.quizId : null;
     let game;
     try {
       game = rooms.create(quiz, ownedQuizId, socket.data.hostId, socket.data.hostMaxPlayers);
     } catch (err) {
-      return ack?.({ error: err.message });
+      return ack?.({ error: err.message, code: err.code });
     }
     socket.join(game.room);
     socket.join(game.hostRoom);
@@ -536,39 +553,40 @@ io.on("connection", socket => {
     return socket.data.isHost && g ? g : null;
   };
 
-  socket.on("host:start", (_, ack) => {
+  on("host:start", (_, ack) => {
     const g = hostGame();
-    if (!g) return ack?.({ error: "No game." });
+    if (!g) return ack?.({ error: "No game.", code: "no_game" });
     /* Evaluate first. `ack?.(g.start())` would skip the call entirely
        whenever the client emitted without a callback. */
     const ok = g.start();
     ack?.({ ok });
   });
 
-  socket.on("host:next", (_, ack) => {
+  on("host:next", (_, ack) => {
     const g = hostGame();
-    if (!g) return ack?.({ error: "No game." });
+    if (!g) return ack?.({ error: "No game.", code: "no_game" });
     const ok = g.next();
     ack?.({ ok });
   });
 
-  socket.on("host:skip", (_, ack) => {
+  on("host:skip", (_, ack) => {
     const g = hostGame();
-    if (!g) return ack?.({ error: "No game." });
+    if (!g) return ack?.({ error: "No game.", code: "no_game" });
     g.closeQuestion();
     ack?.({ ok: true });
   });
 
-  socket.on("host:end", (_, ack) => {
+  on("host:end", (_, ack) => {
     const g = hostGame();
-    if (!g) return ack?.({ error: "No game." });
+    if (!g) return ack?.({ error: "No game.", code: "no_game" });
     g.end();
     ack?.({ ok: true });
   });
 
-  socket.on("host:kick", ({ playerId } = {}, ack) => {
+  on("host:kick", (payload, ack) => {
+    const { playerId } = payload ?? {};
     const g = hostGame();
-    if (!g) return ack?.({ error: "No game." });
+    if (!g) return ack?.({ error: "No game.", code: "no_game" });
     const p = g.players.get(playerId);
     if (p?.socketId) io.to(p.socketId).emit("kicked");
     g.players.delete(playerId);
@@ -579,9 +597,14 @@ io.on("connection", socket => {
 
   /* ---- player side ---- */
 
-  socket.on("player:join", ({ pin, name, playerId, email } = {}, ack) => {
-    const game = rooms.get(String(pin || "").trim());
-    if (!game) return ack?.({ error: `No game running on PIN ${pin}.` });
+  /* `payload ?? {}` rather than a destructuring default: the default only
+     covers undefined, so emit("player:join", null) used to throw here and
+     take the whole process (and every live game) down. */
+  on("player:join", (payload, ack) => {
+    const { pin, name, playerId, email } = payload ?? {};
+    const pinText = String(pin ?? "").trim().slice(0, 8);
+    const game = rooms.get(pinText);
+    if (!game) return ack?.({ error: `No game running on PIN ${pinText}.`, code: "no_pin", pin: pinText });
 
     const res = game.addPlayer(socket, cleanName(name), playerId, email);
     if (res.error) return ack?.({ error: res.error });
@@ -602,9 +625,10 @@ io.on("connection", socket => {
     game.broadcastState();
   });
 
-  socket.on("player:answer", ({ answer } = {}, ack) => {
+  on("player:answer", (payload, ack) => {
+    const { answer } = payload ?? {};
     const game = rooms.get(socket.data.pin);
-    if (!game || !socket.data.playerId) return ack?.({ error: "Not in a game." });
+    if (!game || !socket.data.playerId) return ack?.({ error: "Not in a game.", code: "not_in_game" });
     const outcome = game.submitAnswer(socket.data.playerId, answer);
     ack?.(outcome);
   });

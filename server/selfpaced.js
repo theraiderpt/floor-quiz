@@ -84,13 +84,13 @@ class Attempt {
      silently score against whatever question came next instead. */
   answer(rawAnswer, qIndex) {
     const q = this.current;
-    if (!q || this.finished) return { error: "This attempt is already finished." };
+    if (!q || this.finished) return { error: "This attempt is already finished.", code: "attempt_finished" };
     if (qIndex != null && Number(qIndex) !== this.qIndex) {
-      return { error: "That question has already moved on. Refresh to see where you are." };
+      return { error: "That question has already moved on. Refresh to see where you are.", code: "stale_question" };
     }
 
     const evaluated = evaluateAnswer(q, this.translate(q, rawAnswer));
-    if (!evaluated.valid) return { error: "Invalid answer." };
+    if (!evaluated.valid) return { error: "Invalid answer.", code: "invalid_answer" };
 
     const points = evaluated.correct === true ? SCORING.BASE : 0;
     this.touch();
@@ -145,10 +145,10 @@ export class Attempts {
      self-paced attempt can't start without an identity the host asked for. */
   start(quiz, rawName, rawEmail) {
     const name = cleanName(rawName);
-    if (!name) return { error: "Add your name to start." };
+    if (!name) return { error: "Add your name to start.", code: "name_required" };
     const email = String(rawEmail || "").trim().toLowerCase();
     if (quiz.joinMode === "name_email" && !isValidEmail(email)) {
-      return { error: "This quiz needs your email to start." };
+      return { error: "This quiz needs your email to start.", code: "email_required" };
     }
 
     const attempt = new Attempt({
@@ -160,7 +160,7 @@ export class Attempts {
     });
     this.attempts.set(attempt.id, attempt);
     const question = attempt.advance();
-    if (!question) return { error: "That quiz has no usable questions." };
+    if (!question) return { error: "That quiz has no usable questions.", code: "quiz_empty" };
     return { attemptId: attempt.id, total: attempt.total, question };
   }
 

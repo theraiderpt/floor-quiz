@@ -7,44 +7,46 @@
 <title>CX Quiz</title>
 <link rel="stylesheet" href="/css/app.css">
 <script src="/js/theme.js"></script>
+<script src="/js/locales.js"></script>
+<script src="/js/i18n.js"></script>
 </head>
 <body>
 
 <section class="screen on" id="s-join">
-  <div class="strip"><span class="dot idle" id="jDot"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><a href="/host" class="k" style="text-decoration:none">Host sign in</a></span></div>
+  <div class="strip"><span class="dot idle" id="jDot"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><a href="/host" class="k" style="text-decoration:none" data-i18n="play.hostSignIn">Host sign in</a></span></div>
   <div class="stage center">
-    <p class="eyebrow">Enter the PIN on the screen</p>
+    <p class="eyebrow" data-i18n="play.enterPin">Enter the PIN on the screen</p>
     <div class="field" style="width:min(340px,88vw)">
-      <label for="jPin">Game PIN</label>
+      <label for="jPin" data-i18n="play.pin">Game PIN</label>
       <input class="inp pin" id="jPin" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
     </div>
     <div class="field" style="width:min(340px,88vw)">
-      <label for="jName">Your name</label>
+      <label for="jName" data-i18n="common.yourName">Your name</label>
       <div class="row" style="flex-wrap:nowrap">
-        <input class="inp" id="jName" maxlength="18" placeholder="First name and team" autocomplete="off">
-        <button class="btn ghost" id="jNick" type="button" title="Give me a nickname" style="padding:14px 16px;flex:none">🎲</button>
+        <input class="inp" id="jName" maxlength="18" placeholder="First name and team" data-i18n-ph="common.namePh" autocomplete="off">
+        <button class="btn ghost" id="jNick" type="button" title="Give me a nickname" data-i18n-title="play.nickname" data-i18n-aria="play.nickname" style="padding:14px 16px;flex:none">🎲</button>
       </div>
     </div>
     <div class="field" style="width:min(340px,88vw)">
-      <label for="jEmail">Email <span style="text-transform:none;font-weight:400">(only if your host asked for it)</span></label>
-      <input class="inp" id="jEmail" type="email" placeholder="you@company.com" autocomplete="email">
+      <label for="jEmail"><span data-i18n="common.email">Email</span> <span style="text-transform:none;font-weight:400" data-i18n="play.emailIfAsked">(only if your host asked for it)</span></label>
+      <input class="inp" id="jEmail" type="email" placeholder="you@company.com" data-i18n-ph="common.emailPh" autocomplete="email">
     </div>
     <p class="err" id="jErr"></p>
-    <button class="btn big" id="jGo">Join</button>
+    <button class="btn big" id="jGo" data-i18n="play.join">Join</button>
   </div>
 </section>
 
 <section class="screen" id="s-wait">
-  <div class="strip"><span class="dot" id="wDot"></span><span class="cell"><span class="k">you</span><span class="v" id="wName">—</span></span><span class="spacer"></span><span class="cell"><span class="k">score</span><span class="v" id="wScore">0</span></span></div>
+  <div class="strip"><span class="dot" id="wDot"></span><span class="cell"><span class="k" data-i18n="strip.you">you</span><span class="v" id="wName">—</span></span><span class="spacer"></span><span class="cell"><span class="k" data-i18n="strip.score">score</span><span class="v" id="wScore">0</span></span></div>
   <div class="stage center">
     <div class="pulse"></div>
-    <h2 id="wMsg">You're in</h2>
-    <p class="sub" id="wSub">Keep this screen open. The question appears here when the host starts.</p>
+    <h2 id="wMsg"></h2>
+    <p class="sub" id="wSub"></p>
   </div>
 </section>
 
 <section class="screen" id="s-answer">
-  <div class="strip"><span class="dot"></span><span class="cell"><span class="k">q</span><span class="v" id="aQn">1/1</span></span><span class="spacer"></span><span class="cell"><span class="k">time</span><span class="v" id="aClock">—</span></span><span class="cell"><span class="k">score</span><span class="v" id="aScore">0</span></span></div>
+  <div class="strip"><span class="dot"></span><span class="cell"><span class="k" data-i18n="strip.q">q</span><span class="v" id="aQn">1/1</span></span><span class="spacer"></span><span class="cell"><span class="k" data-i18n="strip.time">time</span><span class="v" id="aClock">—</span></span><span class="cell"><span class="k" data-i18n="strip.score">score</span><span class="v" id="aScore">0</span></span></div>
   <div class="stage" style="gap:14px">
     <p id="aQ" style="text-align:center;font-weight:600;line-height:1.35;font-size:clamp(15px,2.2vh,19px)">…</p>
     <img id="aImg" class="qimg compact" hidden alt="">
@@ -54,7 +56,7 @@
 </section>
 
 <section class="screen" id="s-result">
-  <div class="strip"><span class="dot"></span><span class="cell"><span class="k">you</span><span class="v" id="rName">—</span></span><span class="spacer"></span><span class="cell"><span class="k">rank</span><span class="v" id="rRank">—</span></span></div>
+  <div class="strip"><span class="dot"></span><span class="cell"><span class="k" data-i18n="strip.you">you</span><span class="v" id="rName">—</span></span><span class="spacer"></span><span class="cell"><span class="k" data-i18n="strip.rank">rank</span><span class="v" id="rRank">—</span></span></div>
   <div class="stage center">
     <p class="verdict" id="rVerdict">—</p>
     <p class="bigpts" id="rPts">+0</p>
@@ -64,19 +66,19 @@
 </section>
 
 <section class="screen" id="s-final">
-  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">finished</span><span class="v" id="fName">—</span></span></div>
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k" data-i18n="strip.finished">finished</span><span class="v" id="fName">—</span></span></div>
   <div class="stage center">
-    <p class="eyebrow">That's the lot</p>
+    <p class="eyebrow" data-i18n="common.thatsTheLot">That's the lot</p>
     <h1 id="fRank">—</h1>
     <p class="bigpts" id="fScore">0</p>
     <p class="sub" id="fSub"></p>
-    <button class="btn ghost" id="fAgain">Join another game</button>
+    <button class="btn ghost" id="fAgain" data-i18n="play.joinAnother">Join another game</button>
   </div>
 </section>
 
-<div class="offline" id="offline">Connection lost. Reconnecting…</div>
+<div class="offline" id="offline" data-i18n="common.offline">Connection lost. Reconnecting…</div>
 
-<button class="themetoggle" id="themeToggle" type="button" aria-label="Switch color theme" title="Switch color theme">
+<button class="themetoggle" id="themeToggle" type="button" aria-label="Switch color theme" title="Switch color theme" data-i18n-aria="ui.theme" data-i18n-title="ui.theme">
   <svg class="ic-sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
   <svg class="ic-moon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
 </button>

@@ -16,9 +16,9 @@ async function api(path, opts = {}) {
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined
   });
-  if (res.status === 401 && path !== "/admin/login") { show("s-login"); throw new Error("Sign in first."); }
+  if (res.status === 401 && path !== "/admin/login") { show("s-login"); throw new Error(t("err.auth")); }
   const data = res.headers.get("content-type")?.includes("json") ? await res.json() : null;
-  if (!res.ok) throw new Error((data && data.error) || "Request failed.");
+  if (!res.ok) throw new Error(I18N.errorText(data));
   return data;
 }
 
@@ -67,11 +67,11 @@ async function loadOverview() {
   const wrap = $("statCards");
   wrap.innerHTML = "";
   const cards = [
-    ["Hosts", o.hosts, `${o.activeHosts} active · ${o.invitedHosts} invited`],
-    ["Categories", o.categories, ""],
-    ["Bank questions", o.bankQuestions, ""],
-    ["Completed games", o.completedGames, ""],
-    ["Live right now", o.live.games, `${o.live.players} players connected`]
+    [t("admin.hosts"), o.hosts, t("admin.activeInvited", { active: o.activeHosts, invited: o.invitedHosts })],
+    [t("admin.categories"), o.categories, ""],
+    [t("admin.bankQuestions"), o.bankQuestions, ""],
+    [t("admin.completedGames"), o.completedGames, ""],
+    [t("admin.liveNow"), o.live.games, t("admin.playersConnected", { n: o.live.players })]
   ];
   cards.forEach(([label, n, note]) => {
     const c = el("div", "card");
@@ -84,7 +84,7 @@ async function loadOverview() {
   const games = await api("/admin/games");
   const gl = $("gamesList");
   gl.innerHTML = "";
-  if (!games.length) gl.appendChild(el("p", "note", "No completed games yet."));
+  if (!games.length) gl.appendChild(el("p", "note", t("common.noCompletedGames")));
   games.forEach(g => {
     const item = el("div", "qitem");
     item.appendChild(el("span", "idx", String(g.player_count).padStart(2, "0")));
@@ -92,10 +92,10 @@ async function loadOverview() {
     body.appendChild(el("p", "qt", g.title));
     const meta = el("div", "meta");
     meta.append(
-      el("span", null, g.host_email || "unassigned"),
+      el("span", null, g.host_email || t("admin.unassigned")),
       el("span", null, g.started_at.replace("T", " ").slice(0, 16)),
-      el("span", null, "pin " + g.pin),
-      el("span", null, g.mode === "selfpaced" ? "self-paced" : "live")
+      el("span", null, t("common.pinX", { pin: g.pin })),
+      el("span", null, g.mode === "selfpaced" ? t("strip.selfPaced") : t("admin.live"))
     );
     body.appendChild(meta);
     item.appendChild(body);
@@ -112,7 +112,7 @@ $("hCreate").addEventListener("click", async () => {
     const maxPlayers = parseInt($("hMax").value, 10) || 400;
     const res = await api("/admin/hosts", { method: "POST", body: { email, maxPlayers } });
     $("hEmail").value = "";
-    $("hInviteNote").textContent = `Invite link for ${res.host.email}: ${res.inviteLink}`;
+    $("hInviteNote").textContent = t("admin.inviteLink", { email: res.host.email, link: res.inviteLink });
     await loadHosts();
   } catch (e) {
     $("hInviteNote").textContent = e.message;
@@ -123,7 +123,7 @@ async function loadHosts() {
   const hosts = await api("/admin/hosts");
   const wrap = $("hostsList");
   wrap.innerHTML = "";
-  if (!hosts.length) wrap.appendChild(el("p", "note", "No hosts yet. Create one above."));
+  if (!hosts.length) wrap.appendChild(el("p", "note", t("admin.noHosts")));
 
   hosts.forEach(h => {
     const item = el("div", "qitem");
@@ -132,10 +132,10 @@ async function loadHosts() {
     body.appendChild(el("p", "qt", h.email));
     const meta = el("div", "meta");
     meta.append(
-      el("span", null, h.status),
-      el("span", null, h.quiz_count + " quizzes"),
-      el("span", null, h.game_count + " games"),
-      el("span", null, "limit " + h.max_players)
+      el("span", null, t("admin.status." + h.status)),
+      el("span", null, t("admin.nQuizzes", { n: h.quiz_count })),
+      el("span", null, t("host.nGames", { n: h.game_count })),
+      el("span", null, t("admin.limitX", { n: h.max_players }))
     );
     body.appendChild(meta);
 
@@ -144,7 +144,7 @@ async function loadHosts() {
     quotaInp.type = "number"; quotaInp.min = "1"; quotaInp.max = "2000";
     quotaInp.value = String(h.max_players);
     quotaInp.style.maxWidth = "110px";
-    const saveQuota = el("button", "iconbtn", "✓"); saveQuota.title = "Save limit";
+    const saveQuota = el("button", "iconbtn", "✓"); saveQuota.title = t("admin.saveLimit");
     saveQuota.addEventListener("click", async () => {
       await api("/admin/hosts/" + h.id, { method: "PATCH", body: { maxPlayers: parseInt(quotaInp.value, 10) || 400 } });
       await loadHosts();
@@ -155,19 +155,19 @@ async function loadHosts() {
 
     const acts = el("div", "acts");
     const toggle = el("button", "iconbtn", h.status === "disabled" ? "▶" : "⏸");
-    toggle.title = h.status === "disabled" ? "Enable" : "Disable";
+    toggle.title = h.status === "disabled" ? t("admin.enable") : t("admin.disable");
     toggle.addEventListener("click", async () => {
       await api("/admin/hosts/" + h.id, { method: "PATCH", body: { status: h.status === "disabled" ? "active" : "disabled" } });
       await loadHosts();
     });
-    const invite = el("button", "iconbtn", "↻"); invite.title = "New invite link";
+    const invite = el("button", "iconbtn", "↻"); invite.title = t("admin.newInvite");
     invite.addEventListener("click", async () => {
       const res = await api("/admin/hosts/" + h.id + "/reinvite", { method: "POST" });
-      $("hInviteNote").textContent = `Invite link for ${h.email}: ${res.inviteLink}`;
+      $("hInviteNote").textContent = t("admin.inviteLink", { email: h.email, link: res.inviteLink });
     });
-    const del = el("button", "iconbtn", "✕"); del.title = "Delete host";
+    const del = el("button", "iconbtn", "✕"); del.title = t("admin.deleteHost");
     del.addEventListener("click", async () => {
-      if (!confirm("Delete " + h.email + "? Their quizzes and games stay in history, unassigned.")) return;
+      if (!confirm(t("admin.confirmDeleteHost", { email: h.email }))) return;
       await api("/admin/hosts/" + h.id, { method: "DELETE" });
       await loadHosts();
     });
@@ -195,16 +195,16 @@ async function loadCategories() {
   categories = await api("/admin/categories");
   const wrap = $("categoriesList");
   wrap.innerHTML = "";
-  if (!categories.length) wrap.appendChild(el("p", "note", "No categories yet."));
+  if (!categories.length) wrap.appendChild(el("p", "note", t("admin.noCategories")));
   categories.forEach(c => {
     const item = el("div", "qitem");
     item.appendChild(el("span", "idx", "—"));
     const body = el("div", "body");
     body.appendChild(el("p", "qt", c.name));
     item.appendChild(body);
-    const del = el("button", "iconbtn", "✕"); del.title = "Delete category";
+    const del = el("button", "iconbtn", "✕"); del.title = t("admin.deleteCategory");
     del.addEventListener("click", async () => {
-      if (!confirm("Delete “" + c.name + "”? Its bank questions go with it.")) return;
+      if (!confirm(t("admin.confirmDeleteCategory", { name: c.name }))) return;
       await api("/admin/categories/" + c.id, { method: "DELETE" });
       await loadCategories();
     });
@@ -216,10 +216,14 @@ async function loadCategories() {
 
 /* --------------------------------------------------------------- bank --- */
 
+/* Built from the DOM rather than an innerHTML string, so a category name
+   is always shown as text and never parsed as markup. */
 function fillCategorySelects() {
-  const opts = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
-  $("bCategory").innerHTML = opts;
-  $("bFilter").innerHTML = `<option value="">All categories</option>` + opts;
+  const option = (value, label) => { const o = el("option", null, label); o.value = value; return o; };
+  const filterValue = $("bFilter").value;
+  $("bCategory").replaceChildren(...categories.map(c => option(String(c.id), c.name)));
+  $("bFilter").replaceChildren(option("", t("common.allCategories")), ...categories.map(c => option(String(c.id), c.name)));
+  $("bFilter").value = filterValue;
 }
 
 $("bFilter").addEventListener("change", () => renderBankList());
@@ -233,14 +237,14 @@ function renderBankOpts(existingOpts, existingCorrect) {
     const row = el("div", "optrow");
     const sw = el("span", "swatch"); sw.style.background = SWATCH[i];
     const inp = el("input", "inp");
-    inp.value = count === 2 ? ["True", "False"][i] : ((existingOpts && existingOpts[i]) || "");
-    inp.placeholder = "Option " + LETTERS[i];
+    inp.value = count === 2 ? [t("common.true"), t("common.false")][i] : ((existingOpts && existingOpts[i]) || "");
+    inp.placeholder = t("common.optionX", { x: LETTERS[i] });
     inp.maxLength = 120;
     if (count === 2) inp.readOnly = true;
     const lab = el("label", "correct");
     const rad = el("input"); rad.type = "radio"; rad.name = "bcorrect"; rad.value = String(i);
     if (i === (existingCorrect || 0)) rad.checked = true;
-    lab.append(rad, document.createTextNode("correct"));
+    lab.append(rad, document.createTextNode(t("common.correctLower")));
     row.append(sw, inp, lab);
     wrap.appendChild(row);
   }
@@ -251,9 +255,9 @@ $("bAdd").addEventListener("click", async () => {
   const categoryId = Number($("bCategory").value);
   const opts = [...$("bOpts").querySelectorAll("input.inp")].map(n => n.value.trim());
   const picked = $("bOpts").querySelector("input[type=radio]:checked");
-  if (!q) return alert("Add the question text.");
-  if (opts.some(o => !o)) return alert("Fill in every answer option.");
-  if (!categoryId) return alert("Pick a category.");
+  if (!q) return alert(t("common.addQuestionText"));
+  if (opts.some(o => !o)) return alert(t("common.fillEveryOption"));
+  if (!categoryId) return alert(t("err.cat_invalid"));
   const body = {
     q, categoryId,
     t: parseInt($("bTime").value, 10),
@@ -271,17 +275,17 @@ async function renderBankList() {
   const list = await api("/admin/bank" + (categoryId ? "?category=" + categoryId : ""));
   const wrap = $("bankList");
   wrap.innerHTML = "";
-  if (!list.length) wrap.appendChild(el("p", "note", "No bank questions yet."));
+  if (!list.length) wrap.appendChild(el("p", "note", t("admin.noBank")));
   list.forEach(q => {
     const item = el("div", "qitem");
     item.appendChild(el("span", "idx", "—"));
     const body = el("div", "body");
     body.appendChild(el("p", "qt", q.q));
     const meta = el("div", "meta");
-    meta.append(el("span", null, q.categoryName), el("span", null, q.t + "s"), el("span", null, "correct: " + LETTERS[q.correct]));
+    meta.append(el("span", null, q.categoryName), el("span", null, q.t + "s"), el("span", null, t("common.correctIs", { letters: LETTERS[q.correct] })));
     body.appendChild(meta);
     item.appendChild(body);
-    const del = el("button", "iconbtn", "✕"); del.title = "Delete";
+    const del = el("button", "iconbtn", "✕"); del.title = t("common.delete");
     del.addEventListener("click", async () => {
       await api("/admin/bank/" + q.id, { method: "DELETE" });
       await renderBankList();
@@ -298,6 +302,12 @@ async function loadBank() {
   renderBankOpts();
   await renderBankList();
 }
+
+/* Re-render the open tab so its dynamic text follows a language switch. */
+document.addEventListener("langchange", () => {
+  const active = document.querySelector(".tab.active")?.dataset.tab;
+  if ($("s-dash").classList.contains("on") && active) switchTab(active);
+});
 
 /* Resume straight into the dashboard if the cookie is still good. */
 api("/admin/me").then(r => { if (r.admin) { show("s-dash"); switchTab("overview"); } }).catch(() => { });
