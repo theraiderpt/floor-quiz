@@ -16,7 +16,7 @@ const SHAPES = [
 function shapeTag(i) {
   const t = el("span", "tag");
   t.innerHTML = SHAPES[i];
-  t.setAttribute("aria-label", "Option " + LETTERS[i]);
+  t.setAttribute("aria-label", window.t("common.optionX", { x: LETTERS[i] }));
   return t;
 }
 
@@ -74,15 +74,15 @@ function join(rejoinWith) {
   const email = rejoinWith ? rejoinWith.email : $("jEmail").value.trim();
   $("jErr").textContent = "";
 
-  if (!/^\d{4}$/.test(pin)) return ($("jErr").textContent = "The PIN is four digits.");
-  if (!name) return ($("jErr").textContent = "Add a name so the host can see you.");
+  if (!/^\d{4}$/.test(pin)) return ($("jErr").textContent = t("play.pinFormat"));
+  if (!name) return ($("jErr").textContent = t("err.name_required"));
 
   $("jGo").disabled = true;
   socket.emit("player:join", { pin, name, email, playerId: rejoinWith?.playerId }, res => {
     $("jGo").disabled = false;
     if (!res || res.error) {
       Session.clear();
-      $("jErr").textContent = (res && res.error) || "Could not reach the game.";
+      $("jErr").textContent = I18N.errorText(res, "play.unreachable");
       show("s-join");
       return;
     }
@@ -95,7 +95,7 @@ function join(rejoinWith) {
     $("wName").textContent = me.name;
     $("rName").textContent = me.name;
     $("fName").textContent = me.name;
-    $("wMsg").textContent = res.rejoined ? "Back in" : "You're in, " + me.name.split(" ")[0];
+    $("wMsg").textContent = res.rejoined ? t("play.backIn") : t("play.youreIn", { name: me.name.split(" ")[0] });
     updateScore();
     applyState(res.state);
   });
@@ -115,12 +115,12 @@ function applyState(s) {
     show("s-answer");
     runClock(s.question.t * 1000);
   } else if (s.phase === "lobby") {
-    $("wMsg").textContent = "You're in, " + me.name.split(" ")[0];
-    $("wSub").textContent = "Keep this screen open. The question appears here when the host starts.";
+    $("wMsg").textContent = t("play.youreIn", { name: me.name.split(" ")[0] });
+    $("wSub").textContent = t("play.waitSub");
     show("s-wait");
   } else if (s.phase === "scores") {
-    $("wMsg").textContent = "Standings are on the big screen";
-    $("wSub").textContent = "You're on " + me.score + " points. Next question coming up.";
+    $("wMsg").textContent = t("play.standingsMsg");
+    $("wSub").textContent = t("play.standingsSub", { n: me.score });
     show("s-wait");
   }
 }
@@ -137,17 +137,17 @@ socket.on("result", r => {
   /* Unscored text questions have no right/wrong verdict - they're a
      discussion prompt, not something to grade. */
   if (r.type === "text") {
-    v.textContent = r.answered ? "Answer recorded" : "No answer";
+    v.textContent = r.answered ? t("common.answerRecorded") : t("common.noAnswer");
     v.className = "verdict";
     $("rPts").textContent = "";
     $("rRank").textContent = "—";
-    $("rSub").textContent = "Total " + r.score + " points.";
+    $("rSub").textContent = t("common.totalPoints", { n: r.score });
     return show("s-result");
   }
 
-  if (!r.answered) { v.textContent = "No answer"; v.className = "verdict"; }
-  else if (r.correct) { v.textContent = "Correct"; v.className = "verdict good"; }
-  else { v.textContent = "Not this time"; v.className = "verdict bad"; }
+  if (!r.answered) { v.textContent = t("common.noAnswer"); v.className = "verdict"; }
+  else if (r.correct) { v.textContent = t("common.correct"); v.className = "verdict good"; }
+  else { v.textContent = t("common.notThisTime"); v.className = "verdict bad"; }
 
   $("rPts").textContent = r.points ? "+" + r.points : "+0";
   $("rRank").textContent = r.rank ? "#" + r.rank : "—";
@@ -155,10 +155,11 @@ socket.on("result", r => {
   const correctDescription = r.type === "multi" ? r.correctTexts.join(", ")
     : r.type === "numeric" ? String(r.target)
     : r.correctText;
-  const guessNote = r.type === "numeric" && r.answered ? "You guessed " + r.value + ". " : "";
+  const guessNote = r.type === "numeric" && r.answered ? t("play.youGuessed", { value: r.value }) + " " : "";
+  const total = t("common.totalPoints", { n: r.score });
   $("rSub").textContent = r.correct
-    ? "Total " + r.score + " points."
-    : guessNote + "The answer was " + correctDescription + ". Total " + r.score + " points.";
+    ? total
+    : guessNote + t("common.answerWas", { answer: correctDescription }) + " " + total;
   /* A small burst on a building streak (matches the streak badge's own
      threshold), not on every single correct answer - a 20-question quiz
      would make that feel like spam rather than a reward. Purely visual, no
@@ -171,10 +172,11 @@ socket.on("result", r => {
 socket.on("gameover", g => {
   stopClock();
   Session.clear();
-  $("fRank").textContent = g.rank ? "You finished #" + g.rank : "Thanks for playing";
-  $("fScore").textContent = g.score + " pts";
-  $("fSub").textContent = g.correctCount + " right out of " + g.total +
-    (g.of ? ", against " + g.of + " players." : ".");
+  $("fRank").textContent = g.rank ? t("play.finishedRank", { rank: g.rank }) : t("play.thanks");
+  $("fScore").textContent = t("common.pts", { n: g.score });
+  $("fSub").textContent = g.of
+    ? t("play.finalSub", { right: g.correctCount, total: g.total, n: g.of })
+    : t("common.rightOutOf", { right: g.correctCount, total: g.total });
   if (g.rank && g.rank <= 3) confetti();
   show("s-final");
 });
@@ -182,7 +184,7 @@ socket.on("gameover", g => {
 socket.on("kicked", () => {
   Session.clear();
   stopClock();
-  $("jErr").textContent = "The host removed you from that game.";
+  $("jErr").textContent = t("play.kicked");
   show("s-join");
 });
 
@@ -216,8 +218,8 @@ function sendAnswer(value, onError) {
       return;
     }
     stopClock();
-    $("wMsg").textContent = "Locked in";
-    $("wSub").textContent = "Hold tight for the reveal.";
+    $("wMsg").textContent = t("play.lockedIn");
+    $("wSub").textContent = t("play.holdTight");
     setTimeout(() => { if (answered) show("s-wait"); }, 420);
   });
 }
@@ -250,7 +252,7 @@ function renderMultiPad(pad, s) {
     pad.appendChild(b);
   });
   const tiles = () => [...pad.querySelectorAll(".ans")];
-  const submit = el("button", "btn big", "Submit answer");
+  const submit = el("button", "btn big", t("common.submitAnswer"));
   submit.addEventListener("click", () => {
     if (answered) return;
     const picks = tiles().filter(n => n.classList.contains("picked")).map(n => Number(n.dataset.i));
@@ -265,8 +267,8 @@ function renderMultiPad(pad, s) {
 function renderTextPad(pad) {
   pad.className = "pad stack";
   const input = el("textarea", "inp");
-  input.rows = 3; input.maxLength = 300; input.placeholder = "Type your answer…";
-  const submit = el("button", "btn big", "Submit");
+  input.rows = 3; input.maxLength = 300; input.placeholder = t("common.typeAnswerPh");
+  const submit = el("button", "btn big", t("common.submit"));
   submit.addEventListener("click", () => {
     if (answered) return;
     const text = input.value.trim();
@@ -280,8 +282,8 @@ function renderTextPad(pad) {
 function renderNumericPad(pad) {
   pad.className = "pad stack";
   const input = el("input", "inp");
-  input.type = "number"; input.inputMode = "decimal"; input.placeholder = "Your best guess";
-  const submit = el("button", "btn big", "Submit");
+  input.type = "number"; input.inputMode = "decimal"; input.placeholder = t("common.guessPh");
+  const submit = el("button", "btn big", t("common.submit"));
   submit.addEventListener("click", () => {
     if (answered) return;
     const value = Number(input.value);
@@ -314,7 +316,8 @@ function stopClock() { if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
 const FLAME_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 3-3 4-3 8a3 3 0 106 0c0-1-1-2-1-3 2 1 4 4 4 7a6 6 0 11-12 0c0-6 4-9 6-12z"/></svg>';
 function streakBadge(n) {
   const b = el("span", "streakbadge");
-  b.innerHTML = FLAME_ICON + "<span>" + n + " in a row</span>";
+  b.innerHTML = FLAME_ICON;
+  b.appendChild(el("span", null, t("common.inARow", { n })));
   return b;
 }
 
@@ -358,4 +361,4 @@ socket.on("disconnect", () => {
   banner.classList.add("on");
   document.querySelectorAll(".dot").forEach(d => d.classList.add("down"));
 });
-socket.io.on("reconnect_attempt", () => { banner.textContent = "Connection lost. Reconnecting…"; });
+socket.io.on("reconnect_attempt", () => { banner.textContent = t("common.offline"); });

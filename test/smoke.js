@@ -15,6 +15,10 @@ process.env.HOST = "127.0.0.1";
 process.env.SESSION_SECRET = "0".repeat(64);
 process.env.DB_PATH = path.join(tmp, "test.db");
 process.env.PUBLIC_URL = "http://127.0.0.1";
+/* Set (empty) before the server loads so dotenv, which never overrides an
+   existing variable, can't pull the real key in from .env: the Giphy check
+   below is about the "not configured" path, not a live API call. */
+process.env.GIPHY_API_KEY = "";
 
 const { server, attempts } = await import("../server/index.js");
 const { store } = await import("../server/db.js");
@@ -290,6 +294,7 @@ check("upload needs auth", uploadNoAuth.status === 401, "got " + uploadNoAuth.st
    path rather than a real Giphy call. */
 const giphyNoKey = await fetch(base + "/api/giphy/search?q=cat", { headers: { Cookie: cookie } });
 check("Giphy search without an API key fails clearly", giphyNoKey.status === 501, "got " + giphyNoKey.status);
+check("Giphy not-configured error carries a translatable code", (await giphyNoKey.json()).code === "giphy_no_key");
 
 /* ---- host socket, host A ---- */
 const hostSocket = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
@@ -331,6 +336,22 @@ const ghost = ioc(base, { transports: ["websocket"] });
 await new Promise(r => ghost.on("connect", r));
 const ghostRes = await new Promise(r => ghost.emit("player:join", { pin: "0000", name: "X" }, r));
 check("joining a dead PIN is refused", Boolean(ghostRes.error), JSON.stringify(ghostRes));
+check("a refused join carries a translatable code and the PIN", ghostRes.code === "no_pin" && ghostRes.pin === "0000", JSON.stringify(ghostRes));
+
+/* Malformed emits from any client used to throw out of socket.io and kill
+   the process (and every game on it): a null payload skips a destructuring
+   default, and a non-function in the ack slot throws on ack?.(). The game
+   above must still be alive and answering afterwards. */
+ghost.emit("player:join", null);
+ghost.emit("player:answer", null);
+ghost.emit("host:kick", null);
+ghost.emit("player:join", { pin: "0000" }, "not-a-callback");
+ghost.emit("host:start", null, 42);
+await sleep(150);
+const aliveRes = await new Promise(r => ghost.emit("player:join", { pin: "0000", name: "X" }, r));
+check("server survives null payloads and non-function acks", aliveRes?.code === "no_pin", JSON.stringify(aliveRes));
+const health = await (await fetch(base + "/api/health")).json();
+check("the live game is still registered after malformed emits", health.games >= 1, JSON.stringify(health));
 ghost.disconnect();
 
 /* ---- question one ---- */
@@ -420,6 +441,14 @@ const perQ = row => row.split(",").slice(6).join(",");
 check("CSV marks Ana right on both questions", perQ(rowFor("Ana")) === '"Right","Right"', rowFor("Ana"));
 check("CSV marks Kostas right on both questions", perQ(rowFor("Kostas")) === '"Right","Right"', rowFor("Kostas"));
 check("CSV marks Marta wrong then right", perQ(rowFor("Marta")) === '"Wrong","Right"', rowFor("Marta"));
+
+const csvFr = await (await fetch(base + "/api/sessions/" + sessionId + "/csv?lang=fr", { headers: { Cookie: cookie } })).text();
+/* The export opens with a UTF-8 BOM (so Excel reads accents right); strip it before matching. */
+const csvFrRows = csvFr.replace(/^\uFEFF/, "").trim().split("\r\n");
+check("CSV headers follow ?lang", csvFrRows[0].startsWith('"Rang","Nom"') && csvFrRows[0].includes('"Q1: Fast one"'), csvFrRows[0]);
+check("CSV outcome cells follow ?lang", csvFrRows.slice(1).some(r => r.endsWith('"Faux","Juste"')), csvFr);
+const csvBogus = await (await fetch(base + "/api/sessions/" + sessionId + "/csv?lang=xx", { headers: { Cookie: cookie } })).text();
+check("an unknown CSV language falls back to English", csvBogus.replace(/^\uFEFF/, "").startsWith('"Rank"'), csvBogus.slice(0, 40));
 
 const history = await (await fetch(base + "/api/sessions", { headers: { Cookie: cookie } })).json();
 check("session appears in history", history.some(s => s.id === sessionId));

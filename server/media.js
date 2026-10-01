@@ -25,6 +25,12 @@ const EXT_BY_MIME = {
    ~33% overhead (a 4MB GIF becomes a ~5.3MB request body). */
 const MAX_BYTES = { "image/gif": 4_000_000, default: 1_000_000 };
 
+/* `code` (and `vars`) let the client show the message in the host's own
+   language; `message` stays the English fallback. */
+function codedError(code, message, vars) {
+  return Object.assign(new Error(message), { code, vars });
+}
+
 let dirReady = null;
 function ensureDir() {
   if (!dirReady) dirReady = fs.mkdir(config.uploadsDir, { recursive: true });
@@ -36,12 +42,13 @@ function ensureDir() {
  *  URL to store on the question, or throws with a message safe to show the host. */
 export async function saveImageUpload(dataUrl) {
   const m = typeof dataUrl === "string" && dataUrl.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,(.+)$/);
-  if (!m) throw new Error("That doesn't look like a supported image (JPEG, PNG, WebP or GIF).");
+  if (!m) throw codedError("img_type", "That doesn't look like a supported image (JPEG, PNG, WebP or GIF).");
   const [, mime, b64] = m;
   const bytes = Buffer.from(b64, "base64");
   const cap = MAX_BYTES[mime] || MAX_BYTES.default;
   if (bytes.length > cap) {
-    throw new Error(`That file is too large (${(bytes.length / 1e6).toFixed(1)}MB, max ${(cap / 1e6).toFixed(1)}MB).`);
+    const size = (bytes.length / 1e6).toFixed(1), max = (cap / 1e6).toFixed(1);
+    throw codedError("img_too_big", `That file is too large (${size}MB, max ${max}MB).`, { size, max });
   }
   await ensureDir();
   const filename = randomUUID() + EXT_BY_MIME[mime];
@@ -53,9 +60,7 @@ export async function saveImageUpload(dataUrl) {
  *  client. Empty `query` returns trending GIFs, matching Giphy's own picker UX. */
 export async function searchGiphy(query, limit = 15) {
   if (!config.giphyApiKey) {
-    const err = new Error("Giphy isn't configured on this server (missing GIPHY_API_KEY).");
-    err.code = "no_key";
-    throw err;
+    throw codedError("giphy_no_key", "Giphy isn't configured on this server (missing GIPHY_API_KEY).");
   }
   const endpoint = query ? "search" : "trending";
   const params = new URLSearchParams({
@@ -68,7 +73,7 @@ export async function searchGiphy(query, limit = 15) {
   const res = await fetch(`https://api.giphy.com/v1/gifs/${endpoint}?${params}`, {
     signal: AbortSignal.timeout(8000)
   });
-  if (!res.ok) throw new Error("Giphy search failed (" + res.status + ").");
+  if (!res.ok) throw codedError("giphy_failed", "Giphy search failed (" + res.status + ").", { status: res.status });
   const body = await res.json();
 
   return (body.data || []).map(g => ({

@@ -243,15 +243,15 @@ export class Game {
       p.socketId = socket.id;
       return { player: p, rejoined: true };
     }
-    if (this.phase !== "lobby") return { error: "That game has already started." };
-    if (this.players.size >= this.maxPlayers) return { error: "This game is full." };
+    if (this.phase !== "lobby") return { error: "That game has already started.", code: "game_started" };
+    if (this.players.size >= this.maxPlayers) return { error: "This game is full.", code: "game_full" };
 
     let name = cleanName(rawName);
-    if (!name) return { error: "Add a name so the host can see you." };
+    if (!name) return { error: "Add a name so the host can see you.", code: "name_required" };
 
     const email = String(rawEmail || "").trim().toLowerCase();
     if (this.joinMode === "name_email" && !isValidEmail(email)) {
-      return { error: "This quiz needs your email to join." };
+      return { error: "This quiz needs your email to join.", code: "email_required" };
     }
 
     const taken = new Set([...this.players.values()].map(p => p.name.toLowerCase()));
@@ -403,15 +403,15 @@ export class Game {
   }
 
   submitAnswer(playerId, rawAnswer) {
-    if (this.phase !== "question") return { error: "Too late." };
+    if (this.phase !== "question") return { error: "Too late.", code: "too_late" };
     const p = this.players.get(playerId);
-    if (!p) return { error: "You are not in this game." };
-    if (this.answers.has(playerId)) return { error: "Already answered." };
+    if (!p) return { error: "You are not in this game.", code: "not_in_game" };
+    if (this.answers.has(playerId)) return { error: "Already answered.", code: "already_answered" };
 
     const q = this.current;
     const translated = this.translateAnswer(p, q, rawAnswer);
     const evaluated = evaluateAnswer(q, translated);
-    if (!evaluated.valid) return { error: "Invalid answer." };
+    if (!evaluated.valid) return { error: "Invalid answer.", code: "invalid_answer" };
 
     const limitMs = q.t * 1000;
     const usedMs = clamp(limitMs - (this.questionEndsAt - Date.now()), 0, limitMs);
@@ -594,7 +594,7 @@ export class Rooms {
       const pin = String(Math.floor(1000 + Math.random() * 9000));
       if (!this.games.has(pin)) return pin;
     }
-    throw new Error("No free PINs. Too many games are running at once.");
+    throw Object.assign(new Error("No free PINs. Too many games are running at once."), { code: "no_pins" });
   }
 
   create(quiz, quizId, hostId, maxPlayers) {

@@ -16,7 +16,7 @@ const SHAPES = [
 function shapeTag(i) {
   const t = el("span", "tag");
   t.innerHTML = SHAPES[i];
-  t.setAttribute("aria-label", "Option " + LETTERS[i]);
+  t.setAttribute("aria-label", window.t("common.optionX", { x: LETTERS[i] }));
   return t;
 }
 
@@ -41,17 +41,19 @@ async function api(path, opts = {}) {
     body: opts.body ? JSON.stringify(opts.body) : undefined
   });
   const data = res.headers.get("content-type")?.includes("json") ? await res.json() : null;
-  if (!res.ok) throw new Error((data && data.error) || "Something went wrong.");
+  if (!res.ok) throw new Error(I18N.errorText(data));
   return data;
 }
 
 const S = { meta: null, attemptId: null, total: 0, qIndex: 0, name: "", score: 0, answered: false };
 
+$("tIntro").textContent = t("take.intro");
+
 async function init() {
   try {
     S.meta = await api("/api/selfpaced/" + token);
   } catch (e) {
-    $("tTitle").textContent = "Link not found";
+    $("tTitle").textContent = t("take.linkNotFound");
     $("tIntro").textContent = e.message;
     $("tStart").hidden = true;
     return;
@@ -68,7 +70,7 @@ async function start() {
   $("tErr").textContent = "";
   const name = $("tName").value.trim();
   const email = $("tEmail").value.trim();
-  if (!name) { $("tErr").textContent = "Add your name to start."; return; }
+  if (!name) { $("tErr").textContent = t("err.name_required"); return; }
   $("tStart").disabled = true;
   try {
     const res = await api("/api/selfpaced/" + token + "/start", { method: "POST", body: { name, email } });
@@ -85,7 +87,7 @@ async function start() {
   }
 }
 
-const TYPE_HINTS = { multi: "Select all that apply", text: "Type your answer", numeric: "Enter your best guess" };
+const TYPE_HINTS = { multi: "hint.selectAll", text: "hint.typeAnswer", numeric: "hint.enterGuess" };
 
 function renderQuestion(q) {
   /* Trust the server's qIndex rather than counting locally, since that's
@@ -97,8 +99,8 @@ function renderQuestion(q) {
   $("tImg").hidden = !q.img;
   $("tImg").src = q.img || "";
   $("tScore").textContent = S.score;
-  const hint = TYPE_HINTS[q.type];
-  $("tHint").textContent = hint || "";
+  const hint = TYPE_HINTS[q.type] ? t(TYPE_HINTS[q.type]) : "";
+  $("tHint").textContent = hint;
   $("tHint").hidden = !hint;
 
   const pad = $("tPad");
@@ -147,7 +149,7 @@ function renderMultiPad(pad, q) {
     pad.appendChild(b);
   });
   const tiles = () => [...pad.querySelectorAll(".ans")];
-  const submitBtn = el("button", "btn big", "Submit answer");
+  const submitBtn = el("button", "btn big", t("common.submitAnswer"));
   submitBtn.addEventListener("click", () => {
     if (S.answered) return;
     const picks = tiles().filter(n => n.classList.contains("picked")).map(n => Number(n.dataset.i));
@@ -162,8 +164,8 @@ function renderMultiPad(pad, q) {
 function renderTextPad(pad) {
   pad.className = "pad stack";
   const input = el("textarea", "inp");
-  input.rows = 3; input.maxLength = 300; input.placeholder = "Type your answer…";
-  const submitBtn = el("button", "btn big", "Submit");
+  input.rows = 3; input.maxLength = 300; input.placeholder = t("common.typeAnswerPh");
+  const submitBtn = el("button", "btn big", t("common.submit"));
   submitBtn.addEventListener("click", () => {
     if (S.answered) return;
     const text = input.value.trim();
@@ -177,8 +179,8 @@ function renderTextPad(pad) {
 function renderNumericPad(pad) {
   pad.className = "pad stack";
   const input = el("input", "inp");
-  input.type = "number"; input.inputMode = "decimal"; input.placeholder = "Your best guess";
-  const submitBtn = el("button", "btn big", "Submit");
+  input.type = "number"; input.inputMode = "decimal"; input.placeholder = t("common.guessPh");
+  const submitBtn = el("button", "btn big", t("common.submit"));
   submitBtn.addEventListener("click", () => {
     if (S.answered) return;
     const value = Number(input.value);
@@ -195,24 +197,25 @@ function showFeedback(res) {
   $("fbScore").textContent = S.score;
 
   if (res.correct === null) {
-    v.textContent = "Answer recorded";
+    v.textContent = t("common.answerRecorded");
     v.className = "verdict";
     $("fbPts").textContent = "";
-    $("fbSub").textContent = "Total " + S.score + " points.";
+    $("fbSub").textContent = t("common.totalPoints", { n: S.score });
   } else {
     Sound.play(res.correct ? "correct" : "incorrect");
-    v.textContent = res.correct ? "Correct" : "Not this time";
+    v.textContent = res.correct ? t("common.correct") : t("common.notThisTime");
     v.className = "verdict " + (res.correct ? "good" : "bad");
     $("fbPts").textContent = res.points ? "+" + res.points : "+0";
     const correctDescription = res.correctTexts ? res.correctTexts.join(", ")
       : res.target != null ? String(res.target)
       : res.correctText;
+    const total = t("common.totalPoints", { n: S.score });
     $("fbSub").textContent = res.correct
-      ? "Total " + S.score + " points."
-      : "The answer was " + correctDescription + ". Total " + S.score + " points.";
+      ? total
+      : t("common.answerWas", { answer: correctDescription }) + " " + total;
   }
 
-  $("fbNext").textContent = res.done ? "See results" : "Next question";
+  $("fbNext").textContent = res.done ? t("take.seeResults") : t("common.nextQuestion");
   $("fbNext").onclick = () => {
     if (res.done) return showFinal(res);
     renderQuestion(res.next);
@@ -221,8 +224,8 @@ function showFeedback(res) {
 }
 
 function showFinal(res) {
-  $("finScore").textContent = res.score + " pts";
-  $("finSub").textContent = res.correctCount + " right out of " + res.answered + ".";
+  $("finScore").textContent = t("common.pts", { n: res.score });
+  $("finSub").textContent = t("common.rightOutOf", { right: res.correctCount, total: res.answered });
   Sound.play("podium");
   confetti();
   show("t-final");

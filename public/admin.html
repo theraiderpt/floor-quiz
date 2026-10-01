@@ -4,27 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#09092d">
-<title>CX Quiz — admin</title>
+<title data-i18n="title.admin">CX Quiz: admin</title>
 <link rel="stylesheet" href="/css/app.css">
 <script src="/js/theme.js"></script>
+<script src="/js/locales.js"></script>
+<script src="/js/i18n.js"></script>
 </head>
 <body>
 
 <!-- LOGIN -->
 <section class="screen on" id="s-login">
-  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><span class="k">admin console</span></span></div>
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><span data-i18n="strip.adminConsole" class="k">admin console</span></span></div>
   <div class="stage center">
-    <h1>Admin sign in</h1>
+    <h1 data-i18n="admin.signInHeading">Admin sign in</h1>
     <div class="field" style="width:min(340px,88vw)">
-      <label for="aEmail">Email</label>
+      <label data-i18n="common.email" for="aEmail">Email</label>
       <input class="inp" id="aEmail" type="email" autocomplete="username">
     </div>
     <div class="field" style="width:min(340px,88vw)">
-      <label for="aPw">Password</label>
+      <label data-i18n="common.password" for="aPw">Password</label>
       <input class="inp" id="aPw" type="password" autocomplete="current-password">
     </div>
     <p class="err" id="loginErr"></p>
-    <button class="btn big" id="loginGo">Sign in</button>
+    <button data-i18n="common.signIn" class="btn big" id="loginGo">Sign in</button>
   </div>
 </section>
 
@@ -32,41 +34,41 @@
 <section class="screen" id="s-dash">
   <div class="strip">
     <span class="dot idle"></span>
-    <span class="cell"><span class="v">CX Quiz admin</span></span>
+    <span class="cell"><span data-i18n="admin.brand" class="v">CX Quiz admin</span></span>
     <span class="spacer"></span>
-    <span class="cell"><button class="k tab" data-tab="overview" style="text-transform:uppercase;letter-spacing:.09em">Overview</button></span>
-    <span class="cell"><button class="k tab" data-tab="hosts" style="text-transform:uppercase;letter-spacing:.09em">Hosts</button></span>
-    <span class="cell"><button class="k tab" data-tab="categories" style="text-transform:uppercase;letter-spacing:.09em">Categories</button></span>
-    <span class="cell"><button class="k tab" data-tab="bank" style="text-transform:uppercase;letter-spacing:.09em">Question bank</button></span>
-    <span class="cell"><button class="k" id="logout" style="text-transform:uppercase;letter-spacing:.09em">Sign out</button></span>
+    <span class="cell"><button data-i18n="admin.overview" class="k tab" data-tab="overview" style="text-transform:uppercase;letter-spacing:.09em">Overview</button></span>
+    <span class="cell"><button data-i18n="admin.hosts" class="k tab" data-tab="hosts" style="text-transform:uppercase;letter-spacing:.09em">Hosts</button></span>
+    <span class="cell"><button data-i18n="admin.categories" class="k tab" data-tab="categories" style="text-transform:uppercase;letter-spacing:.09em">Categories</button></span>
+    <span class="cell"><button data-i18n="admin.bank" class="k tab" data-tab="bank" style="text-transform:uppercase;letter-spacing:.09em">Question bank</button></span>
+    <span class="cell"><button data-i18n="common.signOut" class="k" id="logout" style="text-transform:uppercase;letter-spacing:.09em">Sign out</button></span>
   </div>
 
   <!-- overview -->
   <div class="stage tabpage" id="tab-overview">
-    <div><p class="eyebrow">Overview</p><h2>Everything running right now</h2></div>
+    <div><p data-i18n="admin.overview" class="eyebrow">Overview</p><h2 data-i18n="admin.overviewHeading">Everything running right now</h2></div>
     <div class="picker" id="statCards"></div>
     <hr class="divider">
-    <div><p class="eyebrow">Recent games</p><h2>Across all hosts</h2></div>
+    <div><p data-i18n="admin.recentGames" class="eyebrow">Recent games</p><h2 data-i18n="admin.acrossHosts">Across all hosts</h2></div>
     <div class="qlist" id="gamesList"></div>
   </div>
 
   <!-- hosts -->
   <div class="stage tabpage" id="tab-hosts">
     <div class="row between">
-      <div><p class="eyebrow">Hosts</p><h2>Who can run games</h2></div>
+      <div><p data-i18n="admin.hosts" class="eyebrow">Hosts</p><h2 data-i18n="admin.hostsHeading">Who can run games</h2></div>
     </div>
     <div class="panel">
       <div class="editgrid">
         <div class="field">
-          <label for="hEmail">Email</label>
+          <label data-i18n="common.email" for="hEmail">Email</label>
           <input class="inp" id="hEmail" type="email" placeholder="host@company.com">
         </div>
         <div class="field">
-          <label for="hMax">Player limit</label>
+          <label data-i18n="admin.playerLimit" for="hMax">Player limit</label>
           <input class="inp" id="hMax" type="number" min="1" max="2000" value="400">
         </div>
       </div>
-      <div class="row"><button class="btn" id="hCreate">+ Create host</button></div>
+      <div class="row"><button data-i18n="admin.createHost" class="btn" id="hCreate">+ Create host</button></div>
       <p class="note" id="hInviteNote"></p>
     </div>
     <div class="qlist" id="hostsList"></div>
@@ -74,10 +76,10 @@
 
   <!-- categories -->
   <div class="stage tabpage" id="tab-categories">
-    <div><p class="eyebrow">Categories</p><h2>Organize the quiz library</h2></div>
+    <div><p data-i18n="admin.categories" class="eyebrow">Categories</p><h2 data-i18n="admin.categoriesHeading">Organize the quiz library</h2></div>
     <div class="row">
-      <input class="inp" id="cName" placeholder="Category name" style="max-width:260px">
-      <button class="btn" id="cCreate">+ Add category</button>
+      <input class="inp" id="cName" placeholder="Category name" data-i18n-ph="admin.categoryName" style="max-width:260px">
+      <button data-i18n="admin.addCategory" class="btn" id="cCreate">+ Add category</button>
     </div>
     <div class="qlist" id="categoriesList"></div>
   </div>
@@ -85,30 +87,30 @@
   <!-- bank -->
   <div class="stage tabpage" id="tab-bank">
     <div class="row between">
-      <div><p class="eyebrow">Question bank</p><h2>Pre-written questions hosts can pull in</h2></div>
+      <div><p data-i18n="admin.bank" class="eyebrow">Question bank</p><h2 data-i18n="admin.bankHeading">Pre-written questions hosts can pull in</h2></div>
       <select class="inp" id="bFilter" style="max-width:260px"></select>
     </div>
     <div class="panel">
       <div class="field">
-        <label for="bQ">Question</label>
+        <label data-i18n="common.question" for="bQ">Question</label>
         <textarea class="inp" id="bQ" rows="2" maxlength="200"></textarea>
       </div>
       <div class="editgrid">
         <div class="field">
-          <label for="bCategory">Category</label>
+          <label data-i18n="common.category" for="bCategory">Category</label>
           <select class="inp" id="bCategory"></select>
         </div>
         <div class="field">
-          <label for="bTime">Seconds to answer</label>
+          <label data-i18n="common.secondsToAnswer" for="bTime">Seconds to answer</label>
           <select class="inp" id="bTime"><option>10</option><option selected>20</option><option>30</option><option>45</option><option>60</option></select>
         </div>
         <div class="field">
-          <label for="bType">Answer options</label>
-          <select class="inp" id="bType"><option value="4">Four choices</option><option value="2">True / false</option></select>
+          <label data-i18n="common.answerOptions" for="bType">Answer options</label>
+          <select class="inp" id="bType"><option data-i18n="common.fourChoices" value="4">Four choices</option><option data-i18n="common.trueFalse" value="2">True / false</option></select>
         </div>
       </div>
       <div class="qlist" id="bOpts"></div>
-      <div class="row"><button class="btn" id="bAdd">+ Add to bank</button></div>
+      <div class="row"><button data-i18n="admin.addToBank" class="btn" id="bAdd">+ Add to bank</button></div>
     </div>
     <div class="qlist" id="bankList"></div>
   </div>
@@ -116,7 +118,7 @@
 
 <div class="offline" id="offline" style="display:none"></div>
 
-<button class="themetoggle" id="themeToggle" type="button" aria-label="Switch color theme" title="Switch color theme">
+<button class="themetoggle" id="themeToggle" type="button" aria-label="Switch color theme" title="Switch color theme" data-i18n-aria="ui.theme" data-i18n-title="ui.theme">
   <svg class="ic-sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
   <svg class="ic-moon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
 </button>

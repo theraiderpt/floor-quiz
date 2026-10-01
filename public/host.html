@@ -4,9 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#09092d">
-<title>CX Quiz — host</title>
+<title data-i18n="title.host">CX Quiz: host</title>
 <link rel="stylesheet" href="/css/app.css">
 <script src="/js/theme.js"></script>
+<script src="/js/locales.js"></script>
+<script src="/js/i18n.js"></script>
 <script src="/js/sound.js"></script>
 <script src="/js/changelog.js"></script>
 </head>
@@ -14,22 +16,22 @@
 
 <!-- LOGIN -->
 <section class="screen on" id="s-login">
-  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><span class="k">host console</span></span></div>
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><span data-i18n="strip.hostConsole" class="k">host console</span></span></div>
   <div class="stage center">
-    <h1>Host sign in</h1>
+    <h1 data-i18n="host.signInHeading">Host sign in</h1>
     <div class="field" style="width:min(340px,88vw)">
-      <label for="email">Email</label>
+      <label data-i18n="common.email" for="email">Email</label>
       <input class="inp" id="email" type="email" autocomplete="username">
     </div>
     <div class="field" style="width:min(340px,88vw)">
-      <label for="pw">Password</label>
+      <label data-i18n="common.password" for="pw">Password</label>
       <input class="inp" id="pw" type="password" autocomplete="current-password">
     </div>
     <p class="err" id="loginErr"></p>
-    <button class="btn big" id="loginGo">Sign in</button>
+    <button data-i18n="common.signIn" class="btn big" id="loginGo">Sign in</button>
 
     <div class="whatsnew" id="whatsNew" hidden>
-      <p class="eyebrow">What's new</p>
+      <p data-i18n="host.whatsNew" class="eyebrow">What's new</p>
       <div id="whatsNewList"></div>
     </div>
   </div>
@@ -37,82 +39,82 @@
 
 <!-- LIBRARY -->
 <section class="screen" id="s-library">
-  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">library</span><span class="v" id="libCount">0</span></span><span class="spacer"></span><span class="cell"><button class="k" id="goDashboard" style="text-transform:uppercase;letter-spacing:.09em">Dashboard</button></span><span class="cell"><button class="k" id="goHistory" style="text-transform:uppercase;letter-spacing:.09em">Past games</button></span><span class="cell"><button class="k" id="logout" style="text-transform:uppercase;letter-spacing:.09em">Sign out</button></span></div>
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span data-i18n="strip.library" class="k">library</span><span class="v" id="libCount">0</span></span><span class="spacer"></span><span class="cell"><button data-i18n="host.dashboard" class="k" id="goDashboard" style="text-transform:uppercase;letter-spacing:.09em">Dashboard</button></span><span class="cell"><button data-i18n="host.pastGames" class="k" id="goHistory" style="text-transform:uppercase;letter-spacing:.09em">Past games</button></span><span class="cell"><button data-i18n="common.signOut" class="k" id="logout" style="text-transform:uppercase;letter-spacing:.09em">Sign out</button></span></div>
   <div class="stage">
-    <div><p class="eyebrow">Quiz library</p><h2>Pick a quiz, or build a new one</h2></div>
+    <div><p data-i18n="host.libEyebrow" class="eyebrow">Quiz library</p><h2 data-i18n="host.libHeading">Pick a quiz, or build a new one</h2></div>
     <div class="qlist" id="libList"></div>
     <div class="row">
-      <button class="btn" id="libNew">+ New quiz</button>
-      <button class="btn ghost" id="libSample">Add sample quiz</button>
-      <button class="btn ghost" id="libImport">Import CSV / JSON</button>
+      <button data-i18n="host.newQuiz" class="btn" id="libNew">+ New quiz</button>
+      <button data-i18n="host.addSample" class="btn ghost" id="libSample">Add sample quiz</button>
+      <button data-i18n="host.import" class="btn ghost" id="libImport">Import CSV / JSON</button>
     </div>
     <input type="file" id="fileIn" accept=".csv,.json,.txt" hidden>
-    <p class="note">CSV columns: question, option A, option B, option C, option D, correct letter, seconds.</p>
+    <p data-i18n="host.csvColumns" class="note">CSV columns: question, option A, option B, option C, option D, correct letter, seconds.</p>
   </div>
 </section>
 
 <!-- SETUP -->
 <section class="screen" id="s-setup">
-  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">editing</span><span class="v" id="setupTitle">—</span></span><span class="spacer"></span><span class="cell"><span class="k">questions</span><span class="v" id="setupCount">0</span></span></div>
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span data-i18n="strip.editing" class="k">editing</span><span class="v" id="setupTitle">—</span></span><span class="spacer"></span><span class="cell"><span data-i18n="strip.questions" class="k">questions</span><span class="v" id="setupCount">0</span></span></div>
   <div class="stage">
     <div class="row between">
-      <div><p class="eyebrow">Build</p><h2>Questions</h2></div>
-      <button class="btn ghost" id="setupBack">Back to library</button>
+      <div><p data-i18n="host.build" class="eyebrow">Build</p><h2 data-i18n="host.questions">Questions</h2></div>
+      <button data-i18n="common.backToLibrary" class="btn ghost" id="setupBack">Back to library</button>
     </div>
     <div class="editgrid" style="max-width:640px">
       <div class="field">
-        <label for="quizTitle">Quiz name</label>
+        <label data-i18n="host.quizName" for="quizTitle">Quiz name</label>
         <input class="inp" id="quizTitle" maxlength="60">
       </div>
       <div class="field">
-        <label for="quizCategory">Category</label>
-        <select class="inp" id="quizCategory"><option value="">None</option></select>
+        <label data-i18n="common.category" for="quizCategory">Category</label>
+        <select class="inp" id="quizCategory"></select>
       </div>
       <div class="field">
-        <label for="quizJoinMode">Joining this quiz</label>
+        <label data-i18n="host.joinMode" for="quizJoinMode">Joining this quiz</label>
         <select class="inp" id="quizJoinMode">
-          <option value="name">Just a name, nicknames welcome (fun)</option>
-          <option value="name_email">Name + work email required (formal)</option>
+          <option data-i18n="host.joinName" value="name">Just a name, nicknames welcome (fun)</option>
+          <option data-i18n="host.joinNameEmail" value="name_email">Name + work email required (formal)</option>
         </select>
       </div>
       <div class="field" id="quizGapField">
-        <label for="quizGap">Time between questions</label>
+        <label data-i18n="host.gap" for="quizGap">Time between questions</label>
         <select class="inp" id="quizGap">
-          <option value="2">2 seconds</option>
-          <option value="5" selected>5 seconds</option>
-          <option value="10">10 seconds</option>
-          <option value="15">15 seconds</option>
-          <option value="20">20 seconds</option>
-          <option value="30">30 seconds</option>
+          <option value="2"></option>
+          <option value="5" selected></option>
+          <option value="10"></option>
+          <option value="15"></option>
+          <option value="20"></option>
+          <option value="30"></option>
         </select>
       </div>
       <div class="field">
-        <label for="quizDelivery">Delivery</label>
+        <label data-i18n="host.delivery" for="quizDelivery">Delivery</label>
         <select class="inp" id="quizDelivery">
-          <option value="live">Live game — host runs it, scored, leaderboard</option>
-          <option value="selfpaced">Self-paced test — shareable link, no live session</option>
+          <option data-i18n="host.deliveryLive" value="live">Live game — host runs it, scored, leaderboard</option>
+          <option data-i18n="host.deliverySelf" value="selfpaced">Self-paced test — shareable link, no live session</option>
         </select>
       </div>
     </div>
     <div class="qlist" id="qlist"></div>
     <div class="row">
-      <button class="btn ghost" id="addQ">+ Add question</button>
-      <button class="btn ghost" id="browseBank">+ From question bank</button>
-      <button class="btn ghost" id="exportBtn">Export JSON</button>
-      <button class="btn ghost danger" id="deleteQuiz">Delete quiz</button>
+      <button data-i18n="host.addQuestion" class="btn ghost" id="addQ">+ Add question</button>
+      <button data-i18n="host.fromBank" class="btn ghost" id="browseBank">+ From question bank</button>
+      <button data-i18n="host.exportJson" class="btn ghost" id="exportBtn">Export JSON</button>
+      <button data-i18n="host.deleteQuiz" class="btn ghost danger" id="deleteQuiz">Delete quiz</button>
     </div>
     <div class="row between" id="selfpacedShare" hidden>
-      <p class="note">Share this link so people can take the test on their own time.</p>
+      <p data-i18n="host.shareNote" class="note">Share this link so people can take the test on their own time.</p>
       <div class="row">
         <input class="inp" id="shareLinkInput" readonly style="max-width:360px">
-        <button class="btn ghost" id="copyShareLink">Copy link</button>
+        <button class="btn ghost" id="copyShareLink" data-i18n="host.copyLink">Copy link</button>
       </div>
     </div>
     <hr class="divider">
     <div class="row between">
       <p class="note" id="setupNote">—</p>
       <div class="row">
-        <button class="btn ghost" id="saveQuiz">Save</button>
+        <button data-i18n="common.save" class="btn ghost" id="saveQuiz">Save</button>
         <button class="btn big" id="openLobby">Open lobby</button>
       </div>
     </div>
@@ -121,34 +123,34 @@
 
 <!-- QUESTION EDITOR -->
 <section class="screen" id="s-edit">
-  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">question</span><span class="v" id="editIdx">—</span></span></div>
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span data-i18n="strip.question" class="k">question</span><span class="v" id="editIdx">—</span></span></div>
   <div class="stage">
-    <h2 id="editTitle">Question</h2>
+    <h2 id="editTitle"></h2>
     <div class="panel">
       <div class="field">
-        <label for="eQType">Question type</label>
+        <label data-i18n="host.qType" for="eQType">Question type</label>
         <select class="inp" id="eQType">
-          <option value="single">Single choice</option>
-          <option value="multi">Multiple choice (more than one correct)</option>
-          <option value="text">Open text (unscored, for discussion)</option>
-          <option value="numeric">Numeric guess (closest within tolerance)</option>
+          <option data-i18n="host.typeSingle" value="single">Single choice</option>
+          <option data-i18n="host.typeMulti" value="multi">Multiple choice (more than one correct)</option>
+          <option data-i18n="host.typeText" value="text">Open text (unscored, for discussion)</option>
+          <option data-i18n="host.typeNumeric" value="numeric">Numeric guess (closest within tolerance)</option>
         </select>
       </div>
       <div class="field">
-        <label for="eQ">Question</label>
-        <textarea class="inp" id="eQ" rows="2" maxlength="200" placeholder="What does FCR measure?"></textarea>
+        <label data-i18n="common.question" for="eQ">Question</label>
+        <textarea class="inp" id="eQ" rows="2" maxlength="200" placeholder="What does FCR measure?" data-i18n-ph="host.questionPh"></textarea>
       </div>
       <div class="field">
-        <label>Picture (optional, shown to the host screen and every player's phone)</label>
+        <label data-i18n="host.picture">Picture (optional, shown to the host screen and every player's phone)</label>
         <div class="row">
-          <button class="btn ghost" id="eImgPick">+ Add picture</button>
-          <button class="btn ghost" id="eGifSearchToggle">🔍 Search GIFs</button>
-          <button class="btn ghost danger" id="eImgClear" hidden>Remove picture</button>
+          <button class="btn ghost" id="eImgPick" data-i18n="host.addPicture">+ Add picture</button>
+          <button data-i18n="host.searchGifs" class="btn ghost" id="eGifSearchToggle">🔍 Search GIFs</button>
+          <button data-i18n="host.removePicture" class="btn ghost danger" id="eImgClear" hidden>Remove picture</button>
         </div>
         <div class="gifsearch" id="eGifSearch" hidden>
           <div class="row">
-            <input class="inp" id="eGifQuery" placeholder="Search Giphy…" maxlength="100">
-            <button class="btn ghost" id="eGifSearchBtn">Search</button>
+            <input class="inp" id="eGifQuery" placeholder="Search Giphy…" data-i18n-ph="host.giphyPh" maxlength="100">
+            <button data-i18n="common.search" class="btn ghost" id="eGifSearchBtn">Search</button>
           </div>
           <p class="sub" id="eGifStatus"></p>
           <div class="gifgrid" id="eGifResults"></div>
@@ -158,78 +160,78 @@
       </div>
       <div class="editgrid" id="eNumericFields" hidden>
         <div class="field">
-          <label for="eTarget">Correct number</label>
+          <label data-i18n="host.correctNumber" for="eTarget">Correct number</label>
           <input class="inp" id="eTarget" type="number" step="any">
         </div>
         <div class="field">
-          <label for="eTolerance">Tolerance (plus or minus)</label>
+          <label data-i18n="host.tolerance" for="eTolerance">Tolerance (plus or minus)</label>
           <input class="inp" id="eTolerance" type="number" step="any" min="0" value="0">
         </div>
       </div>
       <div class="editgrid">
         <div class="field" id="eTimeField">
-          <label for="eTime">Seconds to answer</label>
+          <label data-i18n="common.secondsToAnswer" for="eTime">Seconds to answer</label>
           <select class="inp" id="eTime"><option>10</option><option selected>20</option><option>30</option><option>45</option><option>60</option></select>
         </div>
         <div class="field" id="eTypeField">
-          <label for="eType">Answer options</label>
-          <select class="inp" id="eType"><option value="4">Four choices</option><option value="2">True / false</option></select>
+          <label data-i18n="common.answerOptions" for="eType">Answer options</label>
+          <select class="inp" id="eType"><option data-i18n="common.fourChoices" value="4">Four choices</option><option data-i18n="common.trueFalse" value="2">True / false</option></select>
         </div>
         <div class="field" id="eShuffleField">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:normal;font-family:var(--body);font-size:15px;color:var(--chalk)">
-            <input type="checkbox" id="eShuffle" style="width:17px;height:17px;accent-color:var(--live)"> Shuffle order per player
+            <input type="checkbox" id="eShuffle" style="width:17px;height:17px;accent-color:var(--live)"> <span data-i18n="host.shuffle">Shuffle order per player</span>
           </label>
         </div>
       </div>
       <div id="eOptsWrap">
         <hr class="divider">
         <div class="qlist" id="eOpts"></div>
-        <p class="note" id="eOptsNote">Mark exactly one option as correct.</p>
+        <p class="note" id="eOptsNote"></p>
       </div>
     </div>
     <div class="row between">
-      <button class="btn ghost" id="eCancel">Cancel</button>
-      <button class="btn" id="eSave">Save question</button>
+      <button data-i18n="common.cancel" class="btn ghost" id="eCancel">Cancel</button>
+      <button data-i18n="host.saveQuestion" class="btn" id="eSave">Save question</button>
     </div>
   </div>
 </section>
 
 <!-- QUESTION BANK -->
 <section class="screen" id="s-bank">
-  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">question bank</span></span></div>
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span data-i18n="strip.questionBank" class="k">question bank</span></span></div>
   <div class="stage">
     <div class="row between">
-      <div><p class="eyebrow">Pick from the bank</p><h2>Pre-written questions</h2></div>
-      <button class="btn ghost" id="bankBack">Back to quiz</button>
+      <div><p data-i18n="host.bankEyebrow" class="eyebrow">Pick from the bank</p><h2 data-i18n="host.bankHeading">Pre-written questions</h2></div>
+      <button data-i18n="host.backToQuiz" class="btn ghost" id="bankBack">Back to quiz</button>
     </div>
-    <select class="inp" id="bankFilter" style="max-width:300px"><option value="">All categories</option></select>
+    <select class="inp" id="bankFilter" style="max-width:300px"></select>
     <div class="qlist" id="bankPickList"></div>
   </div>
 </section>
 
 <!-- LOBBY -->
 <section class="screen" id="s-lobby">
-  <div class="strip"><span class="dot" id="lobbyDot"></span><span class="cell"><span class="k">lobby</span><span class="v" id="lobbyQuiz">—</span></span><span class="spacer"></span><span class="cell"><span class="k">players</span><span class="v" id="lobbyCount">0</span></span><span class="cell"><span class="k">questions</span><span class="v" id="lobbyQs">0</span></span></div>
+  <div class="strip"><span class="dot" id="lobbyDot"></span><span class="cell"><span data-i18n="strip.lobby" class="k">lobby</span><span class="v" id="lobbyQuiz">—</span></span><span class="spacer"></span><span class="cell"><span data-i18n="strip.players" class="k">players</span><span class="v" id="lobbyCount">0</span></span><span class="cell"><span data-i18n="strip.questions" class="k">questions</span><span class="v" id="lobbyQs">0</span></span></div>
   <div class="stage center">
     <div class="lobbygrid">
       <div class="pinbox">
         <div class="pin" id="lobbyPin">0000</div>
         <div class="url" id="lobbyUrl">—</div>
       </div>
-      <img class="qr" id="lobbyQr" alt="QR code to join the game" hidden>
+      <img class="qr" id="lobbyQr" alt="" hidden>
     </div>
     <div class="roster" id="roster"></div>
-    <p class="note" id="lobbyHint">Waiting for players…</p>
+    <p class="note" id="lobbyHint"></p>
     <div class="row" style="justify-content:center">
-      <button class="btn big" id="startQuiz" disabled>Start quiz</button>
-      <button class="btn ghost" id="cancelGame">Cancel</button>
+      <button data-i18n="host.startQuiz" class="btn big" id="startQuiz" disabled>Start quiz</button>
+      <button data-i18n="common.cancel" class="btn ghost" id="cancelGame">Cancel</button>
     </div>
   </div>
 </section>
 
 <!-- PLAY -->
 <section class="screen" id="s-play">
-  <div class="strip"><span class="dot"></span><span class="cell"><span class="k">pin</span><span class="v" id="pPin">0000</span></span><span class="cell"><span class="k">q</span><span class="v" id="pQn">1/1</span></span><span class="cell"><span class="k">players</span><span class="v" id="pPlayers">0</span></span><span class="cell"><span class="k">answered</span><span class="v" id="pAnswered">0</span></span><span class="spacer"></span><span class="cell"><button class="k" id="pSkip" style="text-transform:uppercase;letter-spacing:.09em">Close early</button></span></div>
+  <div class="strip"><span class="dot"></span><span class="cell"><span data-i18n="strip.pin" class="k">pin</span><span class="v" id="pPin">0000</span></span><span class="cell"><span data-i18n="strip.q" class="k">q</span><span class="v" id="pQn">1/1</span></span><span class="cell"><span data-i18n="strip.players" class="k">players</span><span class="v" id="pPlayers">0</span></span><span class="cell"><span data-i18n="strip.answered" class="k">answered</span><span class="v" id="pAnswered">0</span></span><span class="spacer"></span><span class="cell"><button data-i18n="host.closeEarly" class="k" id="pSkip" style="text-transform:uppercase;letter-spacing:.09em">Close early</button></span></div>
   <div class="stage">
     <p class="qtext" id="pQ">…</p>
     <p class="counter" id="pTypeHint" hidden></p>
@@ -244,9 +246,9 @@
 
 <!-- SCORES -->
 <section class="screen" id="s-scores">
-  <div class="strip"><span class="dot"></span><span class="cell"><span class="k">pin</span><span class="v" id="sPin">0000</span></span><span class="cell"><span class="k">after</span><span class="v" id="sQn">—</span></span><span class="spacer"></span><span class="cell"><span class="k">players</span><span class="v" id="sPlayers">0</span></span></div>
+  <div class="strip"><span class="dot"></span><span class="cell"><span data-i18n="strip.pin" class="k">pin</span><span class="v" id="sPin">0000</span></span><span class="cell"><span data-i18n="strip.after" class="k">after</span><span class="v" id="sQn">—</span></span><span class="spacer"></span><span class="cell"><span data-i18n="strip.players" class="k">players</span><span class="v" id="sPlayers">0</span></span></div>
   <div class="stage center">
-    <p class="eyebrow">Standings</p>
+    <p data-i18n="host.standings" class="eyebrow">Standings</p>
     <div class="board" id="sBoard"></div>
     <button class="btn big" id="sNext">Next question</button>
   </div>
@@ -254,68 +256,68 @@
 
 <!-- FINAL -->
 <section class="screen" id="s-final">
-  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">complete</span><span class="v" id="fQuiz">—</span></span><span class="spacer"></span><span class="cell"><span class="k">players</span><span class="v" id="fPlayers">0</span></span></div>
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span data-i18n="strip.complete" class="k">complete</span><span class="v" id="fQuiz">—</span></span><span class="spacer"></span><span class="cell"><span data-i18n="strip.players" class="k">players</span><span class="v" id="fPlayers">0</span></span></div>
   <div class="stage center">
-    <p class="eyebrow">Final result</p>
+    <p data-i18n="host.finalResult" class="eyebrow">Final result</p>
     <h1 id="fWinner">—</h1>
     <div class="podium" id="fPodium"></div>
     <div class="board" id="fBoard" style="margin-top:10px"></div>
     <div class="row" style="justify-content:center">
-      <a class="btn" id="fExport" href="#">Download results (CSV)</a>
-      <button class="btn ghost" id="fDone">Back to library</button>
+      <a data-i18n="host.downloadResults" class="btn" id="fExport" href="#">Download results (CSV)</a>
+      <button data-i18n="common.backToLibrary" class="btn ghost" id="fDone">Back to library</button>
     </div>
   </div>
 </section>
 
 <!-- HISTORY -->
 <section class="screen" id="s-history">
-  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">past games</span><span class="v" id="histCount">0</span></span><span class="spacer"></span><span class="cell"><button class="k" id="histBack" style="text-transform:uppercase;letter-spacing:.09em">Back</button></span></div>
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span data-i18n="strip.pastGames" class="k">past games</span><span class="v" id="histCount">0</span></span><span class="spacer"></span><span class="cell"><button data-i18n="common.back" class="k" id="histBack" style="text-transform:uppercase;letter-spacing:.09em">Back</button></span></div>
   <div class="stage">
-    <div><p class="eyebrow">History</p><h2>Completed games</h2></div>
+    <div><p data-i18n="host.history" class="eyebrow">History</p><h2 data-i18n="host.completedGames">Completed games</h2></div>
     <div class="qlist" id="histList"></div>
   </div>
 </section>
 
 <!-- DASHBOARD -->
 <section class="screen" id="s-dashboard">
-  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">dashboard</span></span><span class="spacer"></span><span class="cell"><button class="k" id="dashBack" style="text-transform:uppercase;letter-spacing:.09em">Back</button></span></div>
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span data-i18n="strip.dashboard" class="k">dashboard</span></span><span class="spacer"></span><span class="cell"><button data-i18n="common.back" class="k" id="dashBack" style="text-transform:uppercase;letter-spacing:.09em">Back</button></span></div>
   <div class="stage">
-    <div><p class="eyebrow">Dashboard</p><h2>Results across every quiz</h2></div>
+    <div><p data-i18n="host.dashboard" class="eyebrow">Dashboard</p><h2 data-i18n="host.dashHeading">Results across every quiz</h2></div>
     <div class="stats" id="dashStats"></div>
     <hr class="divider">
-    <div><p class="eyebrow">By quiz</p><h2>Pick a quiz to drill in</h2></div>
+    <div><p data-i18n="host.byQuiz" class="eyebrow">By quiz</p><h2 data-i18n="host.drillIn">Pick a quiz to drill in</h2></div>
     <div class="qlist" id="dashList"></div>
   </div>
 </section>
 
 <!-- QUIZ SESSIONS -->
 <section class="screen" id="s-quiz-sessions">
-  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">quiz</span><span class="v" id="qsTitle">—</span></span><span class="spacer"></span><span class="cell"><button class="k" id="qsBack" style="text-transform:uppercase;letter-spacing:.09em">Back</button></span></div>
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span data-i18n="strip.quiz" class="k">quiz</span><span class="v" id="qsTitle">—</span></span><span class="spacer"></span><span class="cell"><button data-i18n="common.back" class="k" id="qsBack" style="text-transform:uppercase;letter-spacing:.09em">Back</button></span></div>
   <div class="stage">
     <div class="stats" id="qsStats"></div>
-    <div><p class="eyebrow">Hardest questions</p><h2>Accuracy across every game of this quiz</h2></div>
+    <div><p data-i18n="host.hardest" class="eyebrow">Hardest questions</p><h2 data-i18n="host.hardestHeading">Accuracy across every game of this quiz</h2></div>
     <div class="qbars" id="qsQuestions"></div>
-    <div><p class="eyebrow">Games</p><h2>Every session of this quiz</h2></div>
+    <div><p data-i18n="host.games" class="eyebrow">Games</p><h2 data-i18n="host.everySession">Every session of this quiz</h2></div>
     <div class="qlist" id="qsList"></div>
   </div>
 </section>
 
 <!-- SESSION DETAIL -->
 <section class="screen" id="s-session-detail">
-  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k">game</span><span class="v" id="detTitle">—</span></span><span class="spacer"></span><span class="cell"><span class="k">pin</span><span class="v" id="detPin">—</span></span><span class="cell"><button class="k" id="detailBack" style="text-transform:uppercase;letter-spacing:.09em">Back</button></span></div>
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span data-i18n="strip.game" class="k">game</span><span class="v" id="detTitle">—</span></span><span class="spacer"></span><span class="cell"><span data-i18n="strip.pin" class="k">pin</span><span class="v" id="detPin">—</span></span><span class="cell"><button data-i18n="common.back" class="k" id="detailBack" style="text-transform:uppercase;letter-spacing:.09em">Back</button></span></div>
   <div class="stage">
     <div class="row between">
-      <div><p class="eyebrow" id="detWhen">—</p><h2>Full results</h2></div>
-      <a class="btn ghost" id="detExport" href="#">Download CSV</a>
+      <div><p class="eyebrow" id="detWhen">—</p><h2 data-i18n="host.fullResults">Full results</h2></div>
+      <a data-i18n="common.downloadCsv" class="btn ghost" id="detExport" href="#">Download CSV</a>
     </div>
     <div class="board" id="detBoard"></div>
   </div>
 </section>
 
-<div class="offline" id="offline">Connection lost. Reconnecting…</div>
+<div data-i18n="common.offline" class="offline" id="offline">Connection lost. Reconnecting…</div>
 
-<button class="soundtoggle" data-sound-toggle type="button" aria-label="Mute sound effects" title="Mute sound effects">🔊</button>
-<button class="themetoggle" id="themeToggle" type="button" aria-label="Switch color theme" title="Switch color theme">
+<button class="soundtoggle" data-sound-toggle type="button" aria-label="Mute sound effects" title="Mute sound effects" data-i18n-aria="ui.sound" data-i18n-title="ui.sound">🔊</button>
+<button class="themetoggle" id="themeToggle" type="button" aria-label="Switch color theme" title="Switch color theme" data-i18n-aria="ui.theme" data-i18n-title="ui.theme">
   <svg class="ic-sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
   <svg class="ic-moon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
 </button>
