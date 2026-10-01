@@ -5,8 +5,13 @@ Production domain: **cxquiz.tech**. Runs on a Hostinger KVM 2 VPS, Ubuntu 24.04.
 
 ## Ground rules
 
-- **Never read, print, or edit `.env`.** It holds `HOST_PASSWORD` and `SESSION_SECRET`.
-  If a change needs a new variable, tell me the line to add and I will add it myself.
+- **`.env` edits are allowed** (user authorized this on 2026-09-18, overriding the earlier
+  "never touch it" rule). Adding or updating a variable (e.g. `GIPHY_API_KEY`) directly is fine.
+  Still avoid printing the full file's contents into chat/logs unprompted: it holds
+  `SESSION_SECRET` and `HOST_PASSWORD`/API keys, and a transcript is a wider blast radius than a
+  single scoped edit. Changing or removing an *existing* secret (not just adding a new one) can
+  break auth/sessions app-wide, so treat that as the kind of high-risk change worth flagging
+  before doing it, same as a schema change.
 - **Never run `certbot` or overwrite `/etc/nginx/sites-available/floor-quiz`.** Certbot owns
   that file after the first issuance. Copying `deploy/nginx.conf` over it drops the site off
   HTTPS. Check for `ssl_certificate` in the live file before touching it.
@@ -18,8 +23,9 @@ Production domain: **cxquiz.tech**. Runs on a Hostinger KVM 2 VPS, Ubuntu 24.04.
 - For agreed-upon work (a fix or feature already discussed and approved in chat), you have
   autonomy to implement, run `npm run smoke`, and deploy without stopping to ask first. Still
   explain a diagnosis and wait for agreement before starting on something not yet discussed, and
-  still flag anything genuinely high-risk (schema changes, anything touching `.env` or nginx,
-  anything that can't be cleanly rolled back) before doing it even if it's in scope.
+  still flag anything genuinely high-risk (schema changes, replacing an existing `.env` secret,
+  anything touching nginx, anything that can't be cleanly rolled back) before doing it even if
+  it's in scope.
 
 ## Operational facts that are easy to get wrong
 
@@ -67,6 +73,13 @@ sudo tail -30 /var/log/nginx/floor-quiz.error.log
   `CHANGELOG` array (newest first, add an item to today's entry if one already exists for the
   date). That feeds the "What's new" panel on the host sign-in screen. Keep entries short,
   host-facing, and free of file names or implementation detail.
+- **Every user-facing string is translated.** Seven languages (en, fr, de, es, el, pt, ro) live in
+  `public/js/locales.js`; never hard-code English text in a page or script. Static HTML uses
+  `data-i18n` / `data-i18n-ph` / `data-i18n-title` / `data-i18n-aria`, JS uses `t("key", vars)`
+  (a numeric `n` picks `.one` / `.few` / `.other`). Do not put `data-i18n` on an element JS also
+  writes to, or a language switch will reset it. Add the key to all seven languages, not just
+  English. Server errors return `{ error, code }`; add `err.<code>` to the dictionary for any new
+  code. Quiz content (questions, options) is never translated.
 - Never stop a process by `pkill -f <command string>` on this box: dev/test instances and the
   real PM2-managed production process often run the literal same command, just with different env
   vars, so a substring match can hit production. Kill by the specific PID instead.
