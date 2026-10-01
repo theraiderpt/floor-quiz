@@ -168,6 +168,7 @@ window.FQ_LOCALES = {
     "play.finalSub.one": "{right} right out of {total}, against {n} player.",
     "play.finalSub.other": "{right} right out of {total}, against {n} players.",
     "play.kicked": "The host removed you from that game.",
+    "play.cancelled": "The host cancelled that game before it started.",
     "play.lockedIn": "Locked in",
     "play.holdTight": "Hold tight for the reveal.",
 
@@ -540,6 +541,7 @@ window.FQ_LOCALES = {
     "play.finalSub.one": "{right} bonnes réponses sur {total}, face à {n} joueur.",
     "play.finalSub.other": "{right} bonnes réponses sur {total}, face à {n} joueurs.",
     "play.kicked": "L'animateur vous a retiré de cette partie.",
+    "play.cancelled": "L'animateur a annulé cette partie avant qu'elle ne commence.",
     "play.lockedIn": "Réponse validée",
     "play.holdTight": "Patientez jusqu'à la révélation.",
 
@@ -912,6 +914,7 @@ window.FQ_LOCALES = {
     "play.finalSub.one": "{right} von {total} richtig, gegen {n} Spieler.",
     "play.finalSub.other": "{right} von {total} richtig, gegen {n} Spieler.",
     "play.kicked": "Die Moderation hat dich aus dem Spiel entfernt.",
+    "play.cancelled": "Die Moderation hat das Spiel vor dem Start abgebrochen.",
     "play.lockedIn": "Eingeloggt",
     "play.holdTight": "Gleich kommt die Auflösung.",
 
@@ -1284,6 +1287,7 @@ window.FQ_LOCALES = {
     "play.finalSub.one": "{right} aciertos de {total}, contra {n} jugador.",
     "play.finalSub.other": "{right} aciertos de {total}, contra {n} jugadores.",
     "play.kicked": "El presentador te ha sacado de la partida.",
+    "play.cancelled": "El presentador canceló la partida antes de empezar.",
     "play.lockedIn": "Respuesta enviada",
     "play.holdTight": "Espera a que se revele la respuesta.",
 
@@ -1656,6 +1660,7 @@ window.FQ_LOCALES = {
     "play.finalSub.one": "{right} σωστές από {total}, απέναντι σε {n} παίκτη.",
     "play.finalSub.other": "{right} σωστές από {total}, απέναντι σε {n} παίκτες.",
     "play.kicked": "Ο παρουσιαστής σε αφαίρεσε από το παιχνίδι.",
+    "play.cancelled": "Ο παρουσιαστής ακύρωσε το παιχνίδι πριν ξεκινήσει.",
     "play.lockedIn": "Η απάντηση στάλθηκε",
     "play.holdTight": "Περίμενε την αποκάλυψη.",
 
@@ -2028,6 +2033,7 @@ window.FQ_LOCALES = {
     "play.finalSub.one": "{right} certas em {total}, contra {n} jogador.",
     "play.finalSub.other": "{right} certas em {total}, contra {n} jogadores.",
     "play.kicked": "O anfitrião removeu-o deste jogo.",
+    "play.cancelled": "O anfitrião cancelou o jogo antes de começar.",
     "play.lockedIn": "Resposta enviada",
     "play.holdTight": "Aguarde pela revelação.",
 
@@ -2406,6 +2412,7 @@ window.FQ_LOCALES = {
     "play.finalSub.few": "{right} corecte din {total}, contra a {n} jucători.",
     "play.finalSub.other": "{right} corecte din {total}, contra a {n} de jucători.",
     "play.kicked": "Gazda te-a scos din acest joc.",
+    "play.cancelled": "Gazda a anulat jocul înainte să înceapă.",
     "play.lockedIn": "Răspuns trimis",
     "play.holdTight": "Așteaptă dezvăluirea răspunsului.",
 

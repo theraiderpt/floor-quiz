@@ -40,7 +40,10 @@ export const SCORING = {
    immediately; these just mean nobody has to. */
 export const FLOW = {
   revealMs: Number(process.env.REVEAL_MS || 6000),
-  scoresMs: Number(process.env.SCORES_MS || 5000)
+  scoresMs: Number(process.env.SCORES_MS || 5000),
+  /* How long a finished game stays reachable (host reload on the podium,
+     a player's phone reconnecting) before it is dropped from memory. */
+  finishedGraceMs: Number(process.env.FINISHED_GRACE_MS || 2 * 60 * 1000)
 };
 
 /* Fail loudly rather than booting a public server with default secrets.

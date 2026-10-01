@@ -18,11 +18,11 @@
     <p class="eyebrow" data-i18n="take.eyebrow">Self-paced test</p>
     <h1 id="tTitle">—</h1>
     <p class="sub" id="tIntro"></p>
-    <div class="field" style="width:min(340px,88vw)">
+    <div class="field u-w340">
       <label for="tName" data-i18n="common.yourName">Your name</label>
       <input class="inp" id="tName" maxlength="18" placeholder="First name and team" data-i18n-ph="common.namePh" autocomplete="off">
     </div>
-    <div class="field" id="tEmailField" style="width:min(340px,88vw)" hidden>
+    <div class="field u-w340" id="tEmailField" hidden>
       <label for="tEmail" data-i18n="common.workEmail">Work email</label>
       <input class="inp" id="tEmail" type="email" placeholder="you@company.com" data-i18n-ph="common.emailPh" autocomplete="email">
     </div>
@@ -33,11 +33,12 @@
 
 <section class="screen" id="t-question">
   <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k" data-i18n="strip.question">question</span><span class="v" id="tQn">1/1</span></span><span class="spacer"></span><span class="cell"><span class="k" data-i18n="strip.score">score</span><span class="v" id="tScore">0</span></span></div>
-  <div class="stage" style="gap:14px">
-    <p id="tQ" style="text-align:center;font-weight:600;line-height:1.35;font-size:clamp(15px,2.2vh,19px)">…</p>
+  <div class="stage u-gap14">
+    <p class="qprompt" id="tQ">…</p>
     <img id="tImg" class="qimg compact" hidden alt="">
-    <p class="note" id="tHint" style="text-align:center" hidden></p>
+    <p class="note u-tc" id="tHint" hidden></p>
     <div class="pad" id="tPad"></div>
+    <p class="err u-tc" id="tQErr" role="alert"></p>
   </div>
 </section>
 

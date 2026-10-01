@@ -13,22 +13,22 @@
 <body>
 
 <section class="screen on" id="s-join">
-  <div class="strip"><span class="dot idle" id="jDot"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><a href="/host" class="k" style="text-decoration:none" data-i18n="play.hostSignIn">Host sign in</a></span></div>
+  <div class="strip"><span class="dot idle" id="jDot"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><a href="/host" class="k u-nodeco" data-i18n="play.hostSignIn">Host sign in</a></span></div>
   <div class="stage center">
     <p class="eyebrow" data-i18n="play.enterPin">Enter the PIN on the screen</p>
-    <div class="field" style="width:min(340px,88vw)">
+    <div class="field u-w340">
       <label for="jPin" data-i18n="play.pin">Game PIN</label>
       <input class="inp pin" id="jPin" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
     </div>
-    <div class="field" style="width:min(340px,88vw)">
+    <div class="field u-w340">
       <label for="jName" data-i18n="common.yourName">Your name</label>
-      <div class="row" style="flex-wrap:nowrap">
+      <div class="row u-nowrap">
         <input class="inp" id="jName" maxlength="18" placeholder="First name and team" data-i18n-ph="common.namePh" autocomplete="off">
-        <button class="btn ghost" id="jNick" type="button" title="Give me a nickname" data-i18n-title="play.nickname" data-i18n-aria="play.nickname" style="padding:14px 16px;flex:none">🎲</button>
+        <button class="btn ghost nickbtn" id="jNick" type="button" title="Give me a nickname" data-i18n-title="play.nickname" data-i18n-aria="play.nickname">🎲</button>
       </div>
     </div>
-    <div class="field" style="width:min(340px,88vw)">
-      <label for="jEmail"><span data-i18n="common.email">Email</span> <span style="text-transform:none;font-weight:400" data-i18n="play.emailIfAsked">(only if your host asked for it)</span></label>
+    <div class="field u-w340">
+      <label for="jEmail"><span data-i18n="common.email">Email</span> <span class="u-plain" data-i18n="play.emailIfAsked">(only if your host asked for it)</span></label>
       <input class="inp" id="jEmail" type="email" placeholder="you@company.com" data-i18n-ph="common.emailPh" autocomplete="email">
     </div>
     <p class="err" id="jErr"></p>
@@ -47,8 +47,8 @@
 
 <section class="screen" id="s-answer">
   <div class="strip"><span class="dot"></span><span class="cell"><span class="k" data-i18n="strip.q">q</span><span class="v" id="aQn">1/1</span></span><span class="spacer"></span><span class="cell"><span class="k" data-i18n="strip.time">time</span><span class="v" id="aClock">—</span></span><span class="cell"><span class="k" data-i18n="strip.score">score</span><span class="v" id="aScore">0</span></span></div>
-  <div class="stage" style="gap:14px">
-    <p id="aQ" style="text-align:center;font-weight:600;line-height:1.35;font-size:clamp(15px,2.2vh,19px)">…</p>
+  <div class="stage u-gap14">
+    <p class="qprompt" id="aQ">…</p>
     <img id="aImg" class="qimg compact" hidden alt="">
     <div class="track"><div class="fill" id="aFill"></div></div>
     <div class="pad" id="aPad"></div>

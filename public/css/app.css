@@ -294,3 +294,31 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+/* Layout helpers. The CSP (helmet, style-src 'self') blocks inline style=""
+   attributes, so every one-off layout tweak in the HTML lives here as a
+   class instead. */
+[hidden]{display:none!important}
+.u-caps{text-transform:uppercase;letter-spacing:.09em}
+.u-w340{width:min(340px,88vw)}
+.u-center{justify-content:center}
+.u-mw260{max-width:260px}
+.u-mw300{max-width:300px}
+.u-mw360{max-width:360px}
+.u-mw640{max-width:640px}
+.u-tc{text-align:center}
+.u-gap14{gap:14px}
+.u-stackc{display:flex;flex-direction:column;gap:14px;align-items:center}
+.u-plain{text-transform:none;font-weight:400}
+.u-nodeco{text-decoration:none}
+.u-nowrap{flex-wrap:nowrap}
+.u-mt10{margin-top:10px}
+.qprompt{text-align:center;font-weight:600;line-height:1.35;font-size:clamp(15px,2.2vh,19px)}
+.nickbtn{padding:14px 16px;flex:none}
+.checkbox{width:17px;height:17px;accent-color:var(--live)}
+.field label.checklabel,.checklabel{display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:normal;
+  font-family:var(--body);font-size:15px;color:var(--chalk)}
+/* The answer-screen countdown bar sits directly in a column .stage, where
+   .track's flex:1 (meant for the host's horizontal timer row) stretched it
+   into a tall empty block. */
+.stage > .track{flex:none}

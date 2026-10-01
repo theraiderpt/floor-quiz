@@ -19,8 +19,10 @@ process.env.PUBLIC_URL = "http://127.0.0.1";
    existing variable, can't pull the real key in from .env: the Giphy check
    below is about the "not configured" path, not a live API call. */
 process.env.GIPHY_API_KEY = "";
+/* Short, so the finished-game cleanup can be observed without a 2 minute wait. */
+process.env.FINISHED_GRACE_MS = "1500";
 
-const { server, attempts } = await import("../server/index.js");
+const { server, attempts, rooms, io: serverIo } = await import("../server/index.js");
 const { store } = await import("../server/db.js");
 const { hashPassword } = await import("../server/auth.js");
 const { FLOW } = await import("../server/config.js");
@@ -798,6 +800,97 @@ check("shuffled multi-select still scores against the canonical correct set",
   JSON.stringify(smResult));
 smPlayer.disconnect();
 hostSocket4.disconnect();
+
+/* ---- host resume, kicks, rejoin lock-in, finished-game cleanup, CSV
+   formula guard ---- */
+const joinAs = async (pin, name, playerId) => {
+  const sock = ioc(base, { transports: ["websocket"] });
+  await new Promise(r => sock.on("connect", r));
+  const res = await new Promise(r => sock.emit("player:join", { pin, name, playerId }, r));
+  return { sock, res };
+};
+const rHost = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
+await new Promise(r => rHost.on("connect", r));
+const rQuiz = { title: "Resume Test", questions: [
+  { q: "R1", t: 30, opts: ["a", "b"], correct: 0 },
+  { q: "R2", t: 30, opts: ["a", "b"], correct: 1 }
+] };
+const rGame = await new Promise(r => rHost.emit("host:create", { quiz: rQuiz }, r));
+const formula = await joinAs(rGame.pin, "=SUM(A1:A9)");
+const waiter = await joinAs(rGame.pin, "Waiter");
+const doomed = await joinAs(rGame.pin, "Doomed");
+
+await new Promise(r => rHost.emit("host:kick", { playerId: doomed.res.playerId }, r));
+const roomIds = (await serverIo.in("g:" + rGame.pin).fetchSockets()).map(x => x.id);
+check("a kicked player's socket leaves the game room", !roomIds.includes(doomed.sock.id) && roomIds.includes(waiter.sock.id), JSON.stringify(roomIds));
+const kickedAnswer = await new Promise(r => doomed.sock.emit("player:answer", { answer: 0 }, r));
+check("a kicked socket can no longer act as a player", kickedAnswer.code === "not_in_game", JSON.stringify(kickedAnswer));
+
+const rQ1 = waitFor(formula.sock, "state", st => st.phase === "question");
+rHost.emit("host:start");
+await rQ1;
+await new Promise(r => formula.sock.emit("player:answer", { answer: 0 }, r));
+/* Same player, new socket (a reload): told it already answered, and a
+   resubmission is refused with a code the phone treats as locked in. */
+formula.sock.disconnect();
+const rejoined = await joinAs(rGame.pin, "=SUM(A1:A9)", formula.res.playerId);
+check("a player rejoining after answering is told so", rejoined.res.state.youAnswered === true, JSON.stringify(rejoined.res.state));
+const reAnswer = await new Promise(r => rejoined.sock.emit("player:answer", { answer: 1 }, r));
+check("a resubmission after rejoining is refused as already_answered", reAnswer.code === "already_answered", JSON.stringify(reAnswer));
+
+/* The host's socket drops: a fresh socket resumes control of the game. */
+rHost.disconnect();
+const rHost2 = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
+await new Promise(r => rHost2.on("connect", r));
+const resumed = await new Promise(r => rHost2.emit("host:resume", { pin: rGame.pin }, r));
+check("host resume lands on the live question", resumed.state?.phase === "question" && resumed.state.qIndex === 0 && resumed.total === 2, JSON.stringify(resumed).slice(0, 200));
+check("host resume reports answers so far", resumed.answered?.answered === 1, JSON.stringify(resumed.answered));
+const otherHost = ioc(base, { extraHeaders: { Cookie: cookieB }, transports: ["websocket"] });
+await new Promise(r => otherHost.on("connect", r));
+const stolen = await new Promise(r => otherHost.emit("host:resume", { pin: rGame.pin }, r));
+check("another host cannot resume someone else's game", stolen.code === "no_game", JSON.stringify(stolen));
+otherHost.disconnect();
+const anon = ioc(base, { transports: ["websocket"] });
+await new Promise(r => anon.on("connect", r));
+const anonResume = await new Promise(r => anon.emit("host:resume", { pin: rGame.pin }, r));
+check("a signed-out socket cannot resume a game", anonResume.code === "auth", JSON.stringify(anonResume));
+anon.disconnect();
+
+const rReveal = waitFor(rHost2, "reveal", () => true);
+const skipRes = await new Promise(r => rHost2.emit("host:skip", null, r));
+check("a resumed host socket can drive the game", skipRes.ok === true, JSON.stringify(skipRes));
+await rReveal;
+const resumedReveal = await new Promise(r => rHost2.emit("host:resume", { pin: rGame.pin }, r));
+check("resuming during the reveal replays the reveal", resumedReveal.state.phase === "reveal" && Array.isArray(resumedReveal.reveal?.counts), JSON.stringify(resumedReveal.reveal));
+
+const rFinal = waitFor(rHost2, "final", () => true);
+rHost2.emit("host:end");
+const rFinalPayload = await rFinal;
+check("a finished game stays reachable during the grace period", Boolean(rooms.get(rGame.pin)));
+const resumedFinal = await new Promise(r => rHost2.emit("host:resume", { pin: rGame.pin }, r));
+check("resuming after the end replays the final board", resumedFinal.final?.sessionId === rFinalPayload.sessionId, JSON.stringify(resumedFinal.final));
+await sleep(Number(process.env.FINISHED_GRACE_MS) + 500);
+check("a finished game is dropped from memory after the grace period", !rooms.get(rGame.pin));
+
+const rCsv = await (await fetch(base + "/api/sessions/" + rFinalPayload.sessionId + "/csv", { headers: { Cookie: cookie } })).text();
+check("CSV neutralises a formula-looking player name", rCsv.includes(`"'=SUM(A1:A9)"`) && !rCsv.includes(`"=SUM(A1:A9)"`), rCsv);
+check("CSV leaves numeric cells (rank, score) alone", rCsv.includes(`"1","'=SUM(A1:A9)"`), rCsv);
+[rejoined, waiter, doomed].forEach(p => p.sock.disconnect());
+
+/* A lobby cancelled before the first question is not a game: players are
+   told, nothing lands in history, and the room is freed at once. */
+const cGame = await new Promise(r => rHost2.emit("host:create", { quiz: rQuiz }, r));
+const cSessionId = rooms.get(cGame.pin).sessionId;
+const cPlayer = await joinAs(cGame.pin, "Early");
+const cancelledEvent = waitFor(cPlayer.sock, "cancelled", () => true, 3000).then(() => true, () => false);
+await new Promise(r => rHost2.emit("host:end", null, r));
+check("players in a cancelled lobby are told it was cancelled", await cancelledEvent);
+check("a cancelled lobby is dropped from memory immediately", !rooms.get(cGame.pin));
+check("a cancelled lobby leaves no session row behind", !store.sessions.get(cSessionId));
+const historyAfterCancel = await (await fetch(base + "/api/sessions", { headers: { Cookie: cookie } })).json();
+check("a cancelled lobby never shows up in history", !historyAfterCancel.some(x => x.id === cSessionId));
+cPlayer.sock.disconnect();
+rHost2.disconnect();
 
 /* ---- sanitiser ---- */
 const { sanitiseQuiz, cleanName } = await import("../server/game.js");

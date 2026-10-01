@@ -17,11 +17,11 @@
   <div class="strip"><span class="dot idle"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><span data-i18n="strip.adminConsole" class="k">admin console</span></span></div>
   <div class="stage center">
     <h1 data-i18n="admin.signInHeading">Admin sign in</h1>
-    <div class="field" style="width:min(340px,88vw)">
+    <div class="field u-w340">
       <label data-i18n="common.email" for="aEmail">Email</label>
       <input class="inp" id="aEmail" type="email" autocomplete="username">
     </div>
-    <div class="field" style="width:min(340px,88vw)">
+    <div class="field u-w340">
       <label data-i18n="common.password" for="aPw">Password</label>
       <input class="inp" id="aPw" type="password" autocomplete="current-password">
     </div>
@@ -36,11 +36,11 @@
     <span class="dot idle"></span>
     <span class="cell"><span data-i18n="admin.brand" class="v">CX Quiz admin</span></span>
     <span class="spacer"></span>
-    <span class="cell"><button data-i18n="admin.overview" class="k tab" data-tab="overview" style="text-transform:uppercase;letter-spacing:.09em">Overview</button></span>
-    <span class="cell"><button data-i18n="admin.hosts" class="k tab" data-tab="hosts" style="text-transform:uppercase;letter-spacing:.09em">Hosts</button></span>
-    <span class="cell"><button data-i18n="admin.categories" class="k tab" data-tab="categories" style="text-transform:uppercase;letter-spacing:.09em">Categories</button></span>
-    <span class="cell"><button data-i18n="admin.bank" class="k tab" data-tab="bank" style="text-transform:uppercase;letter-spacing:.09em">Question bank</button></span>
-    <span class="cell"><button data-i18n="common.signOut" class="k" id="logout" style="text-transform:uppercase;letter-spacing:.09em">Sign out</button></span>
+    <span class="cell"><button data-i18n="admin.overview" class="k tab u-caps" data-tab="overview">Overview</button></span>
+    <span class="cell"><button data-i18n="admin.hosts" class="k tab u-caps" data-tab="hosts">Hosts</button></span>
+    <span class="cell"><button data-i18n="admin.categories" class="k tab u-caps" data-tab="categories">Categories</button></span>
+    <span class="cell"><button data-i18n="admin.bank" class="k tab u-caps" data-tab="bank">Question bank</button></span>
+    <span class="cell"><button data-i18n="common.signOut" class="k u-caps" id="logout">Sign out</button></span>
   </div>
 
   <!-- overview -->
@@ -78,7 +78,7 @@
   <div class="stage tabpage" id="tab-categories">
     <div><p data-i18n="admin.categories" class="eyebrow">Categories</p><h2 data-i18n="admin.categoriesHeading">Organize the quiz library</h2></div>
     <div class="row">
-      <input class="inp" id="cName" placeholder="Category name" data-i18n-ph="admin.categoryName" style="max-width:260px">
+      <input class="inp u-mw260" id="cName" placeholder="Category name" data-i18n-ph="admin.categoryName">
       <button data-i18n="admin.addCategory" class="btn" id="cCreate">+ Add category</button>
     </div>
     <div class="qlist" id="categoriesList"></div>
@@ -88,7 +88,7 @@
   <div class="stage tabpage" id="tab-bank">
     <div class="row between">
       <div><p data-i18n="admin.bank" class="eyebrow">Question bank</p><h2 data-i18n="admin.bankHeading">Pre-written questions hosts can pull in</h2></div>
-      <select class="inp" id="bFilter" style="max-width:260px"></select>
+      <select class="inp u-mw260" id="bFilter"></select>
     </div>
     <div class="panel">
       <div class="field">
@@ -116,7 +116,7 @@
   </div>
 </section>
 
-<div class="offline" id="offline" style="display:none"></div>
+<div class="offline" id="offline" hidden></div>
 
 <button class="themetoggle" id="themeToggle" type="button" aria-label="Switch color theme" title="Switch color theme" data-i18n-aria="ui.theme" data-i18n-title="ui.theme">
   <svg class="ic-sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>

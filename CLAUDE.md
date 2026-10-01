@@ -73,6 +73,11 @@ sudo tail -30 /var/log/nginx/floor-quiz.error.log
   `CHANGELOG` array (newest first, add an item to today's entry if one already exists for the
   date). That feeds the "What's new" panel on the host sign-in screen. Keep entries short,
   host-facing, and free of file names or implementation detail.
+- **No inline `style=""` attributes in HTML.** The CSP (`style-src 'self'`) silently drops them,
+  which is how a whole set of layout tweaks went unapplied in production unnoticed. Add a class
+  to `public/css/app.css` instead. Setting `el.style.x` from JS is fine (CSSOM isn't blocked).
+  Toggle visibility with the `hidden` attribute; a global `[hidden]{display:none!important}`
+  makes it win over any class that sets `display`.
 - **Every user-facing string is translated.** Seven languages (en, fr, de, es, el, pt, ro) live in
   `public/js/locales.js`; never hard-code English text in a page or script. Static HTML uses
   `data-i18n` / `data-i18n-ph` / `data-i18n-title` / `data-i18n-aria`, JS uses `t("key", vars)`

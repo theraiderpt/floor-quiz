@@ -96,6 +96,7 @@ async function login() {
 }
 
 $("logout").addEventListener("click", async () => {
+  forgetLive();
   await api("/logout", { method: "POST" }).catch(() => { });
   show("s-login");
 });
@@ -161,7 +162,10 @@ $("fileIn").addEventListener("change", e => {
   r.onload = () => {
     const parsed = parseImport(f.name, String(r.result));
     if (!parsed) return alert(t("host.importFailed"));
-    S.quiz = { id: null, title: parsed.title, questions: parsed.questions };
+    S.quiz = {
+      id: null, title: parsed.title, questions: parsed.questions, categoryId: null,
+      joinMode: parsed.joinMode || "name", gapSeconds: parsed.gapSeconds || 5, deliveryMode: parsed.deliveryMode || "live", shareToken: null
+    };
     openSetup();
   };
   r.readAsText(f);
@@ -590,25 +594,88 @@ function createGame() {
   socket.emit("host:create", { quiz: { title: S.quiz.title, questions: S.quiz.questions, joinMode: S.quiz.joinMode, gapSeconds: S.quiz.gapSeconds }, quizId: S.quiz.id }, res => {
     if (!res || res.error) return alert(I18N.errorText(res, "host.lobbyFailed"));
     S.pin = res.pin;
+    S.total = res.state.total;
+    S.qIndex = -1;
     S.players = [];
-    $("lobbyPin").textContent = res.pin;
-    $("lobbyUrl").textContent = (res.joinUrl || "").replace(/^https?:\/\//, "") || "set PUBLIC_URL in .env";
-    $("lobbyQr").alt = t("host.qrAlt");
+    rememberLive();
+    fillLobby(res);
     $("lobbyHint").textContent = t("host.waitingPlayers");
-    $("lobbyQuiz").textContent = S.quiz.title;
-    $("lobbyQs").textContent = S.quiz.questions.length;
     $("roster").innerHTML = "";
-    if (res.qr) { $("lobbyQr").src = res.qr; $("lobbyQr").hidden = false; } else { $("lobbyQr").hidden = true; }
     show("s-lobby");
   });
 }
 
-$("cancelGame").addEventListener("click", () => { socket.emit("host:end"); openLibrary(); });
+function fillLobby(res) {
+  $("lobbyPin").textContent = res.pin;
+  $("lobbyUrl").textContent = (res.joinUrl || "").replace(/^https?:\/\//, "") || "set PUBLIC_URL in .env";
+  $("lobbyQr").alt = t("host.qrAlt");
+  $("lobbyQuiz").textContent = S.quiz.title;
+  $("lobbyQs").textContent = S.total;
+  if (res.qr) { $("lobbyQr").src = res.qr; $("lobbyQr").hidden = false; } else { $("lobbyQr").hidden = true; }
+}
+
+/* ---- surviving a reconnect or a reload mid-game ----
+   A reconnecting socket is a new socket the server has never seen, so it
+   is outside the game's rooms until it asks back in with host:resume. The
+   PIN (and the quiz, for titles) is kept per tab in sessionStorage, so a
+   reload of the projector page resumes the same game too. */
+const LIVE_KEY = "fq-host-live";
+function rememberLive() {
+  try { sessionStorage.setItem(LIVE_KEY, JSON.stringify({ pin: S.pin, quiz: S.quiz })); } catch { /* resume just won't survive a reload */ }
+}
+function forgetLive() {
+  S.pin = null;
+  try { sessionStorage.removeItem(LIVE_KEY); } catch { /* ignore */ }
+}
+function savedLive() {
+  try { return JSON.parse(sessionStorage.getItem(LIVE_KEY) || "null"); } catch { return null; }
+}
+
+/* `onLoad` is the page-reload case, where there is no screen to keep, so
+   a failed resume falls through to the library. */
+function resumeLive(onLoad) {
+  const saved = savedLive();
+  const pin = S.pin || saved?.pin;
+  if (!pin) return false;
+  if (!S.quiz && saved?.quiz) S.quiz = saved.quiz;
+  socket.emit("host:resume", { pin }, res => {
+    if (!res || res.error) {
+      forgetLive();
+      /* Leave a podium on screen (the game may just have been cleaned up),
+         but never strand the host on a lobby or question that is gone. */
+      const on = document.querySelector(".screen.on")?.id;
+      if (onLoad || ["s-lobby", "s-play", "s-scores"].includes(on)) openLibrary().catch(() => { });
+      return;
+    }
+    S.pin = res.pin;
+    S.total = res.total;
+    if (!S.quiz) S.quiz = { title: res.title, questions: [] };
+    fillLobby(res);
+    const replay = (event, data) => { if (data) socket.listeners(event).forEach(fn => fn(data)); };
+    const st = res.state;
+    if (res.final) return replay("final", res.final);
+    if (st.phase === "lobby") return show("s-lobby");
+    S.qIndex = st.qIndex;
+    renderQuestion(st);
+    if (st.phase === "question") {
+      replay("state", st);
+      replay("answered", res.answered);
+    } else if (st.phase === "reveal") {
+      show("s-play");
+      replay("reveal", res.reveal);
+    } else if (st.phase === "scores") {
+      replay("scores", res.scores);
+    }
+  });
+  return true;
+}
+
+$("cancelGame").addEventListener("click", () => { socket.emit("host:end"); forgetLive(); openLibrary(); });
 $("startQuiz").addEventListener("click", () => socket.emit("host:start"));
 $("pSkip").addEventListener("click", () => socket.emit("host:skip"));
 $("pNext").addEventListener("click", () => socket.emit("host:next"));
 $("sNext").addEventListener("click", () => socket.emit("host:next"));
-$("fDone").addEventListener("click", openLibrary);
+$("fDone").addEventListener("click", () => { forgetLive(); openLibrary(); });
 
 socket.on("lobby", d => {
   S.players = d.players;
@@ -626,6 +693,7 @@ socket.on("lobby", d => {
 });
 
 socket.on("state", s => {
+  S.total = s.total;
   $("pPlayers").textContent = s.connected;
   $("sPlayers").textContent = s.players;
 
@@ -735,7 +803,7 @@ socket.on("reveal", d => {
   }
 
   $("pNext").hidden = false;
-  $("pNext").textContent = S.qIndex + 1 < S.quiz.questions.length ? t("host.showStandings") : t("host.showFinal");
+  $("pNext").textContent = S.qIndex + 1 < S.total ? t("host.showStandings") : t("host.showFinal");
 });
 
 socket.on("scores", d => {
@@ -750,7 +818,7 @@ socket.on("scores", d => {
     board.appendChild(row);
   });
   if (!d.board.length) board.appendChild(el("p", "note", t("host.noScores")));
-  $("sNext").textContent = S.qIndex + 1 < S.quiz.questions.length ? t("common.nextQuestion") : t("host.finalResult");
+  $("sNext").textContent = S.qIndex + 1 < S.total ? t("common.nextQuestion") : t("host.finalResult");
   show("s-scores");
 });
 
@@ -1050,14 +1118,38 @@ function parseImport(name, text) {
     if (/\.json$/i.test(name) || /^[\[{]/.test(text.trim())) {
       const data = JSON.parse(text);
       const arr = Array.isArray(data) ? data : data.questions;
-      const questions = arr.map(o => ({
-        q: String(o.q || o.question || "").trim(),
-        t: parseInt(o.t || o.time || 20, 10) || 20,
-        opts: (o.opts || o.options || []).map(String).slice(0, 4),
-        correct: parseInt(o.correct ?? 0, 10) || 0
-      })).filter(q => q.q && q.opts.length >= 2);
+      /* Mirrors the editor's own question shapes, so a quiz exported with
+         "Export JSON" comes back with every type, picture and shuffle flag
+         intact instead of silently losing anything that isn't single choice. */
+      const questions = arr.map(o => {
+        const type = ["single", "multi", "text", "numeric"].includes(o.type) ? o.type : "single";
+        const q = { type, q: String(o.q || o.question || "").trim(), t: parseInt(o.t || o.time || 20, 10) || 20 };
+        if (typeof o.img === "string" && o.img) q.img = o.img;
+        if (type === "numeric") {
+          q.target = Number(o.target);
+          q.tolerance = Math.max(0, Number(o.tolerance) || 0);
+        } else if (type !== "text") {
+          q.opts = (o.opts || o.options || []).map(String).slice(0, 4);
+          q.correct = type === "multi"
+            ? (Array.isArray(o.correct) ? o.correct : [o.correct]).map(Number).filter(i => Number.isInteger(i) && i >= 0 && i < q.opts.length)
+            : parseInt(o.correct ?? 0, 10) || 0;
+          q.shuffle = Boolean(o.shuffle);
+        }
+        return q;
+      }).filter(q => q.q && (
+        q.type === "text" ||
+        (q.type === "numeric" && Number.isFinite(q.target)) ||
+        (q.opts && q.opts.length >= 2 && (q.type !== "multi" || q.correct.length))
+      ));
       if (!questions.length) return null;
-      return { title: (data && data.title) || name.replace(/\.\w+$/, ""), questions };
+      const settings = data && !Array.isArray(data) ? data : {};
+      return {
+        title: settings.title || name.replace(/\.\w+$/, ""),
+        questions,
+        joinMode: settings.joinMode,
+        gapSeconds: settings.gapSeconds,
+        deliveryMode: settings.deliveryMode
+      };
     }
     const rows = parseCSV(text);
     const start = rows.length && /question/i.test(rows[0][0] || "") ? 1 : 0;
@@ -1086,7 +1178,11 @@ function download(filename, text, type) {
 /* -------------------------------------------------------- connectivity -- */
 
 const banner = $("offline");
-socket.on("connect", () => { banner.classList.remove("on"); document.querySelectorAll(".dot").forEach(d => d.classList.remove("down")); });
+socket.on("connect", () => {
+  banner.classList.remove("on");
+  document.querySelectorAll(".dot").forEach(d => d.classList.remove("down"));
+  if (S.pin) resumeLive(false);
+});
 socket.on("disconnect", () => { banner.classList.add("on"); document.querySelectorAll(".dot").forEach(d => d.classList.add("down")); });
 
 /* Switching language re-renders the screens that are cheap to rebuild;
@@ -1103,4 +1199,4 @@ document.addEventListener("langchange", () => {
 });
 
 /* Resume straight into the library if the cookie is still good. */
-api("/me").then(r => { if (r.host) openLibrary(); }).catch(() => { });
+api("/me").then(r => { if (r.host && !resumeLive(true)) openLibrary(); }).catch(() => { });

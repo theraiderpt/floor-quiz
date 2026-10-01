@@ -48,6 +48,69 @@ const CHANGELOG = [
         el: "Διορθώθηκε πρόβλημα όπου ένα λανθασμένο μήνυμα από μία συσκευή μπορούσε να τερματίσει όλα τα παιχνίδια σε εξέλιξη.",
         pt: "Corrigido um problema em que uma mensagem malformada de um dispositivo podia terminar todos os jogos a decorrer.",
         ro: "Am rezolvat o problemă prin care un mesaj greșit de pe un dispozitiv putea opri toate jocurile în desfășurare."
+      },
+      {
+        en: "If the host screen loses its connection or is reloaded mid-game, it picks up exactly where the room is, instead of freezing.",
+        fr: "Si l'écran de l'animateur perd la connexion ou est rechargé en pleine partie, il reprend exactement là où en est la salle, au lieu de se figer.",
+        de: "Verliert der Moderationsbildschirm mitten im Spiel die Verbindung oder wird neu geladen, macht er genau dort weiter, wo der Raum gerade ist, statt einzufrieren.",
+        es: "Si la pantalla del presentador pierde la conexión o se recarga en mitad de la partida, continúa justo donde está la sala, en lugar de quedarse congelada.",
+        el: "Αν η οθόνη του παρουσιαστή χάσει τη σύνδεση ή ανανεωθεί στη μέση του παιχνιδιού, συνεχίζει ακριβώς από εκεί που βρίσκεται η αίθουσα, αντί να παγώνει.",
+        pt: "Se o ecrã do anfitrião perder a ligação ou for recarregado a meio do jogo, retoma exatamente onde a sala está, em vez de ficar parado.",
+        ro: "Dacă ecranul gazdei pierde conexiunea sau este reîncărcat în timpul jocului, continuă exact de unde a rămas sala, în loc să înghețe."
+      },
+      {
+        en: "Cancelling a lobby no longer counts as a played game in your history and dashboard, and players are told the game was cancelled.",
+        fr: "Annuler une salle ne compte plus comme une partie jouée dans l'historique et le tableau de bord, et les joueurs sont prévenus de l'annulation.",
+        de: "Eine abgebrochene Lobby zählt nicht mehr als gespieltes Spiel in Verlauf und Dashboard, und die Spieler erfahren, dass abgebrochen wurde.",
+        es: "Cancelar una sala ya no cuenta como partida jugada en el historial ni en el panel, y los jugadores reciben aviso de la cancelación.",
+        el: "Η ακύρωση αίθουσας δεν μετράει πλέον ως παιχνίδι στο ιστορικό και στον πίνακα, και οι παίκτες ενημερώνονται για την ακύρωση.",
+        pt: "Cancelar uma sala já não conta como jogo realizado no histórico e no painel, e os jogadores são avisados do cancelamento.",
+        ro: "Anularea unei săli nu mai apare ca joc jucat în istoric și în panou, iar jucătorii află că jocul a fost anulat."
+      },
+      {
+        en: "Players who reload their phone after answering see their answer locked in, instead of being asked again.",
+        fr: "Les joueurs qui rechargent leur téléphone après avoir répondu voient leur réponse validée, au lieu d'être interrogés à nouveau.",
+        de: "Spieler, die ihr Handy nach dem Antworten neu laden, sehen ihre Antwort als gespeichert, statt erneut gefragt zu werden.",
+        es: "Los jugadores que recargan el móvil después de responder ven su respuesta registrada, en lugar de volver a preguntarles.",
+        el: "Οι παίκτες που ανανεώνουν το κινητό τους αφού απαντήσουν βλέπουν την απάντησή τους καταγεγραμμένη, αντί να ερωτηθούν ξανά.",
+        pt: "Os jogadores que recarregam o telemóvel depois de responder veem a resposta registada, em vez de voltarem a ser questionados.",
+        ro: "Jucătorii care își reîncarcă telefonul după ce au răspuns își văd răspunsul înregistrat, în loc să fie întrebați din nou."
+      },
+      {
+        en: "In self-paced tests, an answer that fails to send can simply be tried again.",
+        fr: "Dans les tests en autonomie, une réponse qui n'a pas pu être envoyée peut simplement être renvoyée.",
+        de: "In Tests im eigenen Tempo lässt sich eine Antwort, die nicht gesendet werden konnte, einfach erneut abschicken.",
+        es: "En los tests a tu ritmo, una respuesta que no se pudo enviar se puede volver a intentar sin más.",
+        el: "Στα τεστ με δικό σου ρυθμό, μια απάντηση που δεν στάλθηκε μπορεί απλώς να ξανασταλεί.",
+        pt: "Nos testes ao seu ritmo, uma resposta que não foi enviada pode simplesmente ser reenviada.",
+        ro: "În testele în ritmul tău, un răspuns care nu a putut fi trimis poate fi pur și simplu retrimis."
+      },
+      {
+        en: "Importing a quiz you exported keeps every question type, picture and setting.",
+        fr: "Importer un quiz que vous avez exporté conserve tous les types de questions, les images et les réglages.",
+        de: "Beim Import eines exportierten Quiz bleiben alle Fragetypen, Bilder und Einstellungen erhalten.",
+        es: "Al importar un quiz que exportaste se conservan todos los tipos de pregunta, imágenes y ajustes.",
+        el: "Η εισαγωγή ενός κουίζ που εξήγαγες διατηρεί όλους τους τύπους ερωτήσεων, τις εικόνες και τις ρυθμίσεις.",
+        pt: "Importar um quiz que exportou mantém todos os tipos de pergunta, imagens e definições.",
+        ro: "Importarea unui quiz exportat păstrează toate tipurile de întrebări, imaginile și setările."
+      },
+      {
+        en: "Downloaded results are safe to open in Excel, even when a player's name starts with = or +.",
+        fr: "Les résultats téléchargés s'ouvrent sans risque dans Excel, même si le nom d'un joueur commence par = ou +.",
+        de: "Heruntergeladene Ergebnisse lassen sich gefahrlos in Excel öffnen, auch wenn ein Spielername mit = oder + beginnt.",
+        es: "Los resultados descargados se abren sin riesgo en Excel, aunque el nombre de un jugador empiece por = o +.",
+        el: "Τα αποτελέσματα που κατεβάζεις ανοίγουν με ασφάλεια στο Excel, ακόμα κι αν το όνομα ενός παίκτη ξεκινά με = ή +.",
+        pt: "Os resultados transferidos abrem em segurança no Excel, mesmo que o nome de um jogador comece por = ou +.",
+        ro: "Rezultatele descărcate se deschid în siguranță în Excel, chiar dacă numele unui jucător începe cu = sau +."
+      },
+      {
+        en: "Layout fixes: buttons are centred where they should be, and the countdown on phones is a slim bar again.",
+        fr: "Corrections de mise en page : les boutons sont centrés comme prévu et le compte à rebours sur téléphone redevient une barre fine.",
+        de: "Layout-Korrekturen: Schaltflächen sind wieder zentriert, und der Countdown auf dem Handy ist wieder ein schmaler Balken.",
+        es: "Arreglos de diseño: los botones vuelven a estar centrados y la cuenta atrás en el móvil vuelve a ser una barra fina.",
+        el: "Διορθώσεις διάταξης: τα κουμπιά είναι κεντραρισμένα όπου πρέπει και η αντίστροφη μέτρηση στο κινητό είναι ξανά μια λεπτή μπάρα.",
+        pt: "Correções de layout: os botões voltam a estar centrados e a contagem decrescente no telemóvel volta a ser uma barra fina.",
+        ro: "Corecturi de aspect: butoanele sunt centrate unde trebuie, iar numărătoarea inversă de pe telefon este din nou o bară subțire."
       }
     ]
   },
