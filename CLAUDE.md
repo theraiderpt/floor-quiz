@@ -50,6 +50,13 @@ Production domain: **cxquiz.tech**. Runs on a Hostinger KVM 2 VPS, Ubuntu 24.04.
   until the question closes. Do not move scoring or answer keys client side.
 - Socket event handlers must tolerate a missing payload and a missing ack.
 
+## Repository
+
+GitHub: `git@github.com:theraiderpt/floor-quiz.git` (private, remote `origin`, branch `master`).
+The box authenticates with `~/.ssh/id_ed25519_github` (see `~/.ssh/config`); there is no `gh`
+CLI. After a deploy, commit and `git push origin master` so GitHub matches what is live.
+`.env`, the database and `.claude/settings.local.json` are ignored and must stay out of history.
+
 ## Commands
 
 ```bash
