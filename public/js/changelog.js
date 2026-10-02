@@ -11,6 +11,29 @@
    host's own language and falls back to English for anything missing. */
 const CHANGELOG = [
   {
+    date: "2026-10-02",
+    items: [
+      {
+        en: "Self-paced quizzes now work for a whole class on one office network: trainees no longer get blocked part-way through.",
+        fr: "Les quiz en autonomie fonctionnent désormais pour toute une classe sur le même réseau de bureau : les stagiaires ne sont plus bloqués en cours de route.",
+        de: "Selbstgesteuerte Quizze funktionieren jetzt für eine ganze Gruppe im selben Büronetzwerk: Teilnehmende werden nicht mehr mittendrin gesperrt.",
+        es: "Los cuestionarios a ritmo propio ya funcionan para toda una clase en la misma red de oficina: los alumnos ya no se bloquean a mitad del cuestionario.",
+        el: "Τα κουίζ με δικό σου ρυθμό λειτουργούν πλέον για μια ολόκληρη τάξη στο ίδιο δίκτυο γραφείου: οι εκπαιδευόμενοι δεν μπλοκάρονται πια στη μέση.",
+        pt: "Os questionários ao próprio ritmo já funcionam para uma turma inteira na mesma rede de escritório: os formandos já não ficam bloqueados a meio.",
+        ro: "Chestionarele în ritm propriu funcționează acum pentru o clasă întreagă din aceeași rețea de birou: cursanții nu mai sunt blocați pe parcurs."
+      },
+      {
+        en: "Security tightening: repeated wrong game PINs are now throttled, a disabled host can no longer be re-enabled through an old invite link, and unused uploaded pictures are cleaned up automatically.",
+        fr: "Sécurité renforcée : les PIN erronés répétés sont limités, un hôte désactivé ne peut plus être réactivé via une ancienne invitation, et les images téléversées inutilisées sont nettoyées automatiquement.",
+        de: "Mehr Sicherheit: Wiederholte falsche Spiel-PINs werden gebremst, ein deaktivierter Host lässt sich nicht mehr über einen alten Einladungslink reaktivieren, und ungenutzte hochgeladene Bilder werden automatisch entfernt.",
+        es: "Más seguridad: los PIN erróneos repetidos se limitan, un anfitrión desactivado ya no puede reactivarse con una invitación antigua y las imágenes subidas sin usar se eliminan automáticamente.",
+        el: "Πιο ασφαλές: τα επαναλαμβανόμενα λάθος PIN περιορίζονται, ένας απενεργοποιημένος διοργανωτής δεν μπορεί πια να ενεργοποιηθεί ξανά με παλιά πρόσκληση και οι αχρησιμοποίητες εικόνες καθαρίζονται αυτόματα.",
+        pt: "Mais segurança: PINs errados repetidos são limitados, um anfitrião desativado já não pode ser reativado por um convite antigo e as imagens carregadas sem uso são removidas automaticamente.",
+        ro: "Securitate sporită: PIN-urile greșite repetate sunt limitate, o gazdă dezactivată nu mai poate fi reactivată printr-o invitație veche, iar imaginile încărcate și nefolosite sunt șterse automat."
+      }
+    ]
+  },
+  {
     date: "2026-10-01",
     items: [
       {

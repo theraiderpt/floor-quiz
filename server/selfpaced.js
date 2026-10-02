@@ -151,6 +151,8 @@ export class Attempts {
       return { error: "This quiz needs your email to start.", code: "email_required" };
     }
 
+    if (!quiz.questions.length) return { error: "That quiz has no usable questions.", code: "quiz_empty" };
+
     const attempt = new Attempt({
       quiz,
       quizId: quiz.id,
@@ -160,7 +162,6 @@ export class Attempts {
     });
     this.attempts.set(attempt.id, attempt);
     const question = attempt.advance();
-    if (!question) return { error: "That quiz has no usable questions.", code: "quiz_empty" };
     return { attemptId: attempt.id, total: attempt.total, question };
   }
 

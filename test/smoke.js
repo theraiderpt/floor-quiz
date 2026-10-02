@@ -913,14 +913,14 @@ check("control characters stripped from names", cleanName("Ru\u0000i\nSilva") ==
 const withImages = sanitiseQuiz({
   title: "Pictures",
   questions: [
-    { q: "own upload", opts: ["a", "b"], correct: 0, img: "/uploads/abc123.png" },
+    { q: "own upload", opts: ["a", "b"], correct: 0, img: "/uploads/123e4567-e89b-42d3-a456-426614174000.png" },
     { q: "giphy pick", opts: ["a", "b"], correct: 0, img: "https://media3.giphy.com/media/xyz/giphy.gif" },
     { q: "raw data-URI no longer accepted", opts: ["a", "b"], correct: 0, img: TINY_PNG },
     { q: "arbitrary https host rejected", opts: ["a", "b"], correct: 0, img: "https://evil.example.com/tracker.gif" },
     { q: "overlong string dropped", opts: ["a", "b"], correct: 0, img: "/uploads/" + "a".repeat(700) + ".png" }
   ]
 });
-check("an own-server upload URL is kept", withImages.questions[0].img === "/uploads/abc123.png");
+check("an own-server upload URL is kept", withImages.questions[0].img === "/uploads/123e4567-e89b-42d3-a456-426614174000.png");
 check("a Giphy CDN URL is kept", withImages.questions[1].img === "https://media3.giphy.com/media/xyz/giphy.gif");
 check("a raw base64 data-URI is dropped (pictures live on disk now, not on the question)",
   withImages.questions[2].img === null, String(withImages.questions[2].img));
@@ -956,6 +956,63 @@ const shuffleOff = sanitiseQuiz({ questions: [{ q: "no shuffle field", t: 10, op
 check("shuffle defaults to false when not given", shuffleOff.questions[0].shuffle === false);
 const shuffleOn = sanitiseQuiz({ questions: [{ q: "shuffled", t: 10, opts: ["a", "b"], correct: 0, shuffle: true }] });
 check("shuffle is kept when explicitly set", shuffleOn.questions[0].shuffle === true);
+
+/* ---- review hardening: invites, uploads, rate limits ---- */
+const jsonHdr = { "Content-Type": "application/json" };
+
+const createdC = await (await fetch(base + "/api/admin/hosts", {
+  method: "POST", headers: { ...jsonHdr, Cookie: adminCookie }, body: JSON.stringify({ email: "hostc@smoke.test" })
+})).json();
+await fetch(base + "/api/admin/hosts/" + createdC.host.id, {
+  method: "PATCH", headers: { ...jsonHdr, Cookie: adminCookie }, body: JSON.stringify({ status: "disabled" })
+});
+await fetch(base + "/api/invite/" + createdC.inviteLink.split("/invite/")[1] + "/complete", {
+  method: "POST", headers: jsonHdr, body: JSON.stringify({ password: "hostc-pass-123" })
+});
+check("completing an old invite does not re-enable a disabled host", store.hosts.get(createdC.host.id).status === "disabled", store.hosts.get(createdC.host.id).status);
+
+const fakePng = await fetch(base + "/api/uploads/image", {
+  method: "POST", headers: { ...jsonHdr, Cookie: cookie },
+  body: JSON.stringify({ dataUrl: "data:image/png;base64," + Buffer.from("this is not a png").toString("base64") })
+});
+check("an upload whose bytes aren't the claimed image type is rejected", fakePng.status === 400, "got " + fakePng.status);
+
+const { sweepOrphanUploads } = await import("../server/media.js");
+const { config: cfg } = await import("../server/config.js");
+const longAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+const orphanName = "11111111-1111-4111-8111-111111111111.png";
+const keptName = "22222222-2222-4222-8222-222222222222.png";
+fs.writeFileSync(path.join(cfg.uploadsDir, orphanName), "x");
+fs.writeFileSync(path.join(cfg.uploadsDir, keptName), "x");
+for (const n of [orphanName, keptName]) fs.utimesSync(path.join(cfg.uploadsDir, n), longAgo, longAgo);
+await fetch(base + "/api/quizzes", {
+  method: "POST", headers: { ...jsonHdr, Cookie: cookie },
+  body: JSON.stringify({ title: "uses a picture", questions: [{ q: "pic", opts: ["a", "b"], correct: 0, img: "/uploads/" + keptName }] })
+});
+await sweepOrphanUploads();
+check("an old unreferenced upload is swept", !fs.existsSync(path.join(cfg.uploadsDir, orphanName)));
+check("an old upload still used by a quiz is kept", fs.existsSync(path.join(cfg.uploadsDir, keptName)));
+check("a fresh upload is kept even if unreferenced", fs.existsSync(path.join(cfg.uploadsDir, gifUpload.url.split("/").pop())));
+
+/* A whole classroom behind one IP must be able to start self-paced attempts. */
+let startStatuses = [];
+for (let i = 0; i < 80; i++) {
+  const r = await fetch(base + "/api/selfpaced/" + spQuiz.shareToken + "/start", {
+    method: "POST", headers: jsonHdr, body: JSON.stringify({ name: "Trainee " + i })
+  });
+  startStatuses.push(r.status);
+}
+check("80 self-paced starts from one IP are not rate limited", startStatuses.every(c => c === 201), [...new Set(startStatuses)].join(","));
+
+/* Wrong-PIN guessing is throttled; run last since it locks this IP out for a minute. */
+const guesser = ioc(base, { transports: ["websocket"] });
+await new Promise(r => guesser.on("connect", r));
+const guessCodes = [];
+for (let i = 0; i < 12; i++) {
+  guessCodes.push((await new Promise(r => guesser.emit("player:join", { pin: "00" + String(i).padStart(2, "0"), name: "x" }, r))).code);
+}
+check("repeated wrong PINs get throttled", guessCodes[0] === "no_pin" && guessCodes[11] === "rate_pin", guessCodes.join(","));
+guesser.disconnect();
 
 /* ---- done ---- */
 players.forEach(p => p.socket.disconnect());

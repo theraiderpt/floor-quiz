@@ -12,7 +12,7 @@ import { store } from "./db.js";
 import { Rooms, sanitiseQuiz, cleanName } from "./game.js";
 import { Attempts } from "./selfpaced.js";
 import { hashPassword, verifyPassword, randomToken } from "./auth.js";
-import { saveImageUpload, searchGiphy } from "./media.js";
+import { saveImageUpload, searchGiphy, sweepOrphanUploads } from "./media.js";
 import { csvLabels, csvOutcome } from "./csv-labels.js";
 
 const app = express();
@@ -137,6 +137,9 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+/* Verified against when the account is unknown, to equalise response time. */
+const DUMMY_HASH = hashPassword(randomToken());
+
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 12,
@@ -163,7 +166,9 @@ app.post("/api/login", loginLimiter, (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   const given = String(req.body?.password || "");
   const host = store.hosts.getByEmail(email);
-  if (!host || host.status !== "active" || !host.password_hash || !verifyPassword(given, host.password_hash)) {
+  const hash = host?.password_hash || DUMMY_HASH;
+  const passwordOk = verifyPassword(given, hash); // always runs, so timing doesn't reveal which emails exist
+  if (!host || host.status !== "active" || !host.password_hash || !passwordOk) {
     return res.status(401).json({ error: "That email or password is not right.", code: "bad_login" });
   }
   setAuthCookie(req, res, { role: "host", id: host.id });
@@ -182,7 +187,8 @@ app.post("/api/admin/login", adminLoginLimiter, (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   const given = String(req.body?.password || "");
   const admin = store.admins.getByEmail(email);
-  if (!admin || !verifyPassword(given, admin.password_hash)) {
+  const passwordOk = verifyPassword(given, admin?.password_hash || DUMMY_HASH);
+  if (!admin || !passwordOk) {
     return res.status(401).json({ error: "That email or password is not right.", code: "bad_login" });
   }
   setAuthCookie(req, res, { role: "admin", id: admin.id });
@@ -451,9 +457,21 @@ app.get("/api/health", (req, res) => res.json({ ok: true, ...rooms.stats(), upti
    same pattern as the invite-link flow above. No socket, no lobby - see
    server/selfpaced.js for why this is a separate engine from Rooms/Game. */
 
+/* A training room usually sits behind one office NAT, so every trainee shares
+   one IP. Only the cheap-to-abuse calls are limited per IP (looking up a
+   link, and starting an attempt, which opens a DB row); answers are limited
+   per attempt instead, since an attempt id is an unguessable UUID. */
 const selfpacedLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
+  limit: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many attempts. Wait a bit and try again.", code: "rate_selfpaced" }
+});
+const selfpacedAnswerLimiter = rateLimit({
+  windowMs: 60 * 1000,
   limit: 60,
+  keyGenerator: req => req.params.attemptId,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many attempts. Wait a bit and try again.", code: "rate_selfpaced" }
@@ -473,7 +491,7 @@ app.post("/api/selfpaced/:token/start", selfpacedLimiter, (req, res) => {
   res.status(201).json(result);
 });
 
-app.post("/api/selfpaced/attempts/:attemptId/answer", selfpacedLimiter, (req, res) => {
+app.post("/api/selfpaced/attempts/:attemptId/answer", selfpacedAnswerLimiter, (req, res) => {
   const attempt = attempts.get(req.params.attemptId);
   if (!attempt) return res.status(404).json({ error: "That attempt has expired. Start again.", code: "attempt_expired" });
   const result = attempt.answer(req.body?.answer, req.body?.qIndex);
@@ -517,6 +535,34 @@ async function joinInfo(pin) {
     } catch { /* a missing QR is cosmetic, never fatal */ }
   }
   return { joinUrl, qr };
+}
+
+/* Live-game PINs are only four digits, so an outsider could walk the whole
+   space. Failed lookups are counted per client IP (the last X-Forwarded-For
+   hop is the one nginx appended); successful joins are not, so a classroom
+   behind one NAT can all join at once. */
+const PIN_MISS_LIMIT = 10;
+const PIN_MISS_WINDOW_MS = 60 * 1000;
+const pinMisses = new Map(); // ip -> { count, resetAt }
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, m] of pinMisses) if (m.resetAt <= now) pinMisses.delete(ip);
+}, PIN_MISS_WINDOW_MS).unref();
+
+function clientIp(socket) {
+  const fwd = socket.handshake.headers["x-forwarded-for"];
+  return (typeof fwd === "string" && fwd.split(",").pop().trim()) || socket.handshake.address;
+}
+
+function pinLockedOut(ip) {
+  const m = pinMisses.get(ip);
+  return Boolean(m && m.resetAt > Date.now() && m.count >= PIN_MISS_LIMIT);
+}
+
+function recordPinMiss(ip) {
+  const m = pinMisses.get(ip);
+  if (m && m.resetAt > Date.now()) m.count++;
+  else pinMisses.set(ip, { count: 1, resetAt: Date.now() + PIN_MISS_WINDOW_MS });
 }
 
 io.on("connection", socket => {
@@ -659,8 +705,13 @@ io.on("connection", socket => {
   on("player:join", (payload, ack) => {
     const { pin, name, playerId, email } = payload ?? {};
     const pinText = String(pin ?? "").trim().slice(0, 8);
+    const ip = clientIp(socket);
+    if (pinLockedOut(ip)) return ack?.({ error: "Too many wrong PINs. Wait a minute.", code: "rate_pin" });
     const game = rooms.get(pinText);
-    if (!game) return ack?.({ error: `No game running on PIN ${pinText}.`, code: "no_pin", pin: pinText });
+    if (!game) {
+      recordPinMiss(ip);
+      return ack?.({ error: `No game running on PIN ${pinText}.`, code: "no_pin", pin: pinText });
+    }
 
     const res = game.addPlayer(socket, cleanName(name), playerId, email);
     if (res.error) return ack?.({ error: res.error });
@@ -711,6 +762,10 @@ server.listen(config.port, config.host, () => {
   console.log(`CX Quiz listening on http://${config.host}:${config.port} (${config.env})`);
   if (config.publicUrl) console.log(`Players join at ${config.publicUrl}`);
 });
+
+const uploadSweep = () => sweepOrphanUploads().catch(err => console.error("upload sweep failed:", err.message));
+setTimeout(uploadSweep, 60 * 1000).unref();
+setInterval(uploadSweep, 24 * 60 * 60 * 1000).unref();
 
 function shutdown(signal) {
   console.log(`${signal} received, closing.`);

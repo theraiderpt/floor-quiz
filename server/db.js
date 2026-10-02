@@ -251,11 +251,12 @@ const stmt = {
             (SELECT COUNT(*) FROM sessions WHERE sessions.host_id = hosts.id) AS game_count
      FROM hosts ORDER BY hosts.created_at DESC`
   ),
+  allQuizQuestionsJson: db.prepare("SELECT questions FROM quizzes"),
   getHost: db.prepare("SELECT * FROM hosts WHERE id = ?"),
   getHostByEmail: db.prepare("SELECT * FROM hosts WHERE email = ?"),
   insertHost: db.prepare("INSERT INTO hosts (email, max_players) VALUES (?, ?)"),
   setHostPassword: db.prepare(
-    "UPDATE hosts SET password_hash = ?, status = 'active' WHERE id = ?"
+    "UPDATE hosts SET password_hash = ?, status = CASE WHEN status = 'invited' THEN 'active' ELSE status END WHERE id = ?"
   ),
   updateHostQuota: db.prepare("UPDATE hosts SET max_players = ? WHERE id = ?"),
   setHostStatus: db.prepare("UPDATE hosts SET status = ? WHERE id = ?"),
@@ -314,6 +315,9 @@ const parseBank = row =>
 
 export const store = {
   quizzes: {
+    /* Every saved quiz's questions as one JSON string, for finding which
+       uploaded pictures are still referenced (see sweepOrphanUploads). */
+    allQuestionsJson: () => stmt.allQuizQuestionsJson.all().map(r => r.questions).join("\n"),
     list: hostId => stmt.listQuizzes.all(hostId).map(parseQuiz),
     /* Scoped by host so one host can never see or touch another's quiz; a
        mismatch reads exactly like "doesn't exist" to the caller. */

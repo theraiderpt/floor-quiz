@@ -14,7 +14,7 @@ export const isValidEmail = s => typeof s === "string" && /^[^\s@]+@[^\s@]+\.[^\
    on Giphy's media CDN. A generous length cap just guards against garbage,
    not against a real picture's worth of bytes. */
 const MAX_IMG_URL_CHARS = 600;
-const isOwnUpload = s => s.startsWith("/uploads/");
+const isOwnUpload = s => /^\/uploads\/[0-9a-f-]{36}\.(?:jpg|png|webp|gif)$/.test(s);
 const isGiphyUrl = s => /^https:\/\/[a-z0-9-]+\.giphy\.com\//.test(s);
 
 /* Scoring lives server side and nowhere else. The client is never told the
