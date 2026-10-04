@@ -36,8 +36,10 @@ class Attempt {
     this.finished = false;
     this.createdAt = Date.now();
     this.touchedAt = Date.now();
-    const pin = "SP" + String(Math.floor(1000 + Math.random() * 9000));
-    this.sessionId = store.sessions.open(pin, quizId, quiz.title, hostId, "selfpaced");
+    /* The sessions row is only opened when the attempt finishes (see
+       finish()), so an unauthenticated start that never answers costs
+       memory for a few minutes at most and never a row in the database. */
+    this.sessionId = null;
   }
 
   get total() { return this.quiz.questions.length; }
@@ -109,6 +111,8 @@ class Attempt {
     this.finished = true;
     const standing = { name: this.name, email: this.email, score: this.score, correctCount: this.correctCount, answered: this.answered, log: this.log };
     try {
+      const pin = "SP" + String(Math.floor(1000 + Math.random() * 9000));
+      this.sessionId = store.sessions.open(pin, this.quizId, this.quiz.title, this.hostId, "selfpaced");
       store.sessions.close(this.sessionId, [standing], this.quiz.questions.map(q => q.q));
     } catch (err) {
       console.error("Could not save results for self-paced attempt", this.id, err.message);
@@ -134,9 +138,22 @@ function feedbackFor(question, evaluated, points) {
   return { correct: evaluated.correct, points, correctText: optionText(question, question.correct) };
 }
 
+/* Ceilings on unfinished attempts. A share link is handed to a whole class,
+   so the per-quiz cap is generous, but without one a script holding a link
+   could pile up attempts until the process hit PM2's memory limit and
+   restarted, ending every live game on the box. */
+const MAX_ACTIVE_PER_QUIZ = 1500;
+const MAX_ACTIVE_TOTAL = 5000;
+const FINISHED_KEEP_MS = 15 * 60 * 1000;
+const ABANDONED_AFTER_MS = 3 * 60 * 60 * 1000;
+
 export class Attempts {
   constructor() {
     this.attempts = new Map();
+    /* quizId -> { stamp, quiz }. Every attempt on a quiz shares one parsed
+       copy instead of each holding its own. */
+    this.quizCache = new Map();
+    this.active = new Map(); // quizId -> unfinished attempt count
     this.sweeper = setInterval(() => this.sweep(), 10 * 60 * 1000);
     this.sweeper.unref?.();
   }
@@ -153,19 +170,47 @@ export class Attempts {
 
     if (!quiz.questions.length) return { error: "That quiz has no usable questions.", code: "quiz_empty" };
 
+    if (this.activeTotal() >= MAX_ACTIVE_TOTAL || (this.active.get(quiz.id) || 0) >= MAX_ACTIVE_PER_QUIZ) {
+      return { error: "This quiz is very busy right now. Try again in a few minutes.", code: "selfpaced_busy" };
+    }
+
     const attempt = new Attempt({
-      quiz,
+      quiz: this.shared(quiz),
       quizId: quiz.id,
       hostId: quiz.host_id,
       name,
       email: isValidEmail(email) ? email : null
     });
     this.attempts.set(attempt.id, attempt);
+    this.active.set(quiz.id, (this.active.get(quiz.id) || 0) + 1);
     const question = attempt.advance();
     return { attemptId: attempt.id, total: attempt.total, question };
   }
 
   get(id) { return this.attempts.get(id); }
+
+  activeTotal() {
+    let n = 0;
+    for (const c of this.active.values()) n += c;
+    return n;
+  }
+
+  shared(quiz) {
+    const stamp = `${quiz.updated_at}|${quiz.questions.length}|${quiz.title}`;
+    const hit = this.quizCache.get(quiz.id);
+    if (hit && hit.stamp === stamp) return hit.quiz;
+    this.quizCache.set(quiz.id, { stamp, quiz });
+    return quiz;
+  }
+
+  /* Called by the answer route once an attempt completes, so a finished
+     attempt stops counting against the caps straight away. */
+  release(attempt) {
+    if (attempt.released) return;
+    attempt.released = true;
+    const n = (this.active.get(attempt.quizId) || 1) - 1;
+    if (n > 0) this.active.set(attempt.quizId, n); else this.active.delete(attempt.quizId);
+  }
 
   /* Mirrors the live game's own rule (see the comment on store.sessions.close
      in server/db.js): a session that's abandoned without the player ever
@@ -175,12 +220,15 @@ export class Attempts {
      dropped, so the open session row it started never picks up an
      ended_at and is excluded from every stats query automatically. */
   sweep() {
-    const cutoff = Date.now() - 3 * 60 * 60 * 1000;
+    const now = Date.now();
     for (const [id, a] of this.attempts) {
+      const cutoff = now - (a.finished ? FINISHED_KEEP_MS : ABANDONED_AFTER_MS);
       if (a.touchedAt < cutoff) {
         if (!a.finished && a.answered > 0) a.finish();
+        this.release(a);
         this.attempts.delete(id);
       }
     }
+    for (const id of this.quizCache.keys()) if (!this.active.has(id)) this.quizCache.delete(id);
   }
 }

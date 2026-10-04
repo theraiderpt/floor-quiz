@@ -763,9 +763,8 @@ halfAttempt.touchedAt = Date.now() - 4 * 60 * 60 * 1000;
 
 attempts.sweep();
 
-const ghostSession = store.sessions.get(ghostAttempt.sessionId, hostA.id);
-check("a zero-engagement abandoned attempt is swept without being persisted (ended_at stays null)",
-  ghostSession.ended_at === null, JSON.stringify(ghostSession));
+check("a zero-engagement abandoned attempt never opens a session row at all",
+  ghostAttempt.sessionId === null && !attempts.get(ghostStart.attemptId), String(ghostAttempt.sessionId));
 const halfSession = store.sessions.get(halfAttempt.sessionId, hostA.id);
 check("an abandoned attempt that answered at least one question is persisted by the sweep",
   halfSession.ended_at !== null && halfSession.results[0]?.answered === 1, JSON.stringify(halfSession));
@@ -1003,6 +1002,75 @@ for (let i = 0; i < 80; i++) {
   startStatuses.push(r.status);
 }
 check("80 self-paced starts from one IP are not rate limited", startStatuses.every(c => c === 201), [...new Set(startStatuses)].join(","));
+
+/* ---- hardening: shared attempt state, caps, revocation, socket abuse ---- */
+const spCopies = new Set([...attempts.attempts.values()].filter(a => a.quizId === spQuiz.id).map(a => a.quiz));
+check("attempts on one quiz share a single parsed copy", spCopies.size === 1, String(spCopies.size));
+
+attempts.active.set(spQuiz.id, 1500);
+const busy = await fetch(base + "/api/selfpaced/" + spQuiz.shareToken + "/start", {
+  method: "POST", headers: jsonHdr, body: JSON.stringify({ name: "Late" })
+});
+const busyBody = await busy.json();
+check("a quiz at its concurrent-attempt cap answers 429 selfpaced_busy", busy.status === 429 && busyBody.code === "selfpaced_busy", JSON.stringify(busyBody));
+attempts.active.set(spQuiz.id, 0);
+
+const hostD = store.hosts.create("hostd@smoke.test", 50);
+store.hosts.setPassword(hostD.id, hashPassword("hostd-pass-123"));
+const spD = store.quizzes.create("D quiz", [{ type: "single", q: "q", t: 10, opts: ["a", "b"], correct: 0 }], hostD.id, null, "name", 5, "selfpaced");
+const dOk = await fetch(base + "/api/selfpaced/" + spD.shareToken);
+store.hosts.setStatus(hostD.id, "disabled");
+const dOff = await fetch(base + "/api/selfpaced/" + spD.shareToken);
+check("a disabled host's self-paced link stops working", dOk.status === 200 && dOff.status === 404, dOk.status + "/" + dOff.status);
+
+const hostE = store.hosts.create("hoste@smoke.test", 50);
+store.hosts.setPassword(hostE.id, hashPassword("hoste-pass-123"));
+const eLogin = await fetch(base + "/api/login", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hoste@smoke.test", password: "hoste-pass-123" }) });
+const eCookie = cookieOf(eLogin);
+const meBefore = await (await fetch(base + "/api/me", { headers: { Cookie: eCookie } })).json();
+store.hosts.setPassword(hostE.id, hashPassword("hoste-new-pass-1"));
+const meAfter = await (await fetch(base + "/api/me", { headers: { Cookie: eCookie } })).json();
+check("a password reset invalidates cookies minted before it", meBefore.host === true && meAfter.host === false, JSON.stringify([meBefore, meAfter]));
+
+let loginOk = [];
+for (let i = 0; i < 15; i++) {
+  const r = await fetch(base + "/api/login", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hosta@smoke.test", password: "hosta-pass-123" }) });
+  loginOk.push(r.status);
+}
+check("successful logins from one IP never count against the login limiter", loginOk.every(c => c === 200), loginOk.join(","));
+
+const healthNow = await (await fetch(base + "/api/health")).json();
+check("the public health endpoint reports no player count", healthNow.players === undefined && typeof healthNow.games === "number", JSON.stringify(healthNow));
+
+const evil = ioc(base, { transports: ["websocket"], extraHeaders: { Origin: "https://evil.example", Cookie: cookie }, reconnection: false });
+const evilOutcome = await new Promise(r => { evil.on("connect", () => r("connected")); evil.on("connect_error", () => r("refused")); });
+check("a socket from a foreign Origin is refused", evilOutcome === "refused", evilOutcome);
+evil.disconnect();
+
+const big = ioc(base, { transports: ["websocket"], reconnection: false });
+await new Promise(r => big.on("connect", r));
+const bigDropped = new Promise(r => { big.on("disconnect", () => r(true)); setTimeout(() => r(false), 3000); });
+big.emit("player:join", { pin: "1234", name: "x".repeat(400_000) });
+check("an oversized socket message drops the connection", await bigDropped);
+
+const flood = ioc(base, { transports: ["websocket"], reconnection: false });
+await new Promise(r => flood.on("connect", r));
+const floodCodes = await Promise.all(Array.from({ length: 60 }, () => new Promise(r => flood.emit("host:start", null, res => r(res?.code)))));
+check("a socket flooding events gets throttled", floodCodes.includes("rate_socket") && floodCodes.includes("no_game"), [...new Set(floodCodes)].join(","));
+flood.disconnect();
+
+const second = await new Promise(r => players[0].socket.emit("player:join", { pin: PIN, name: "Second Identity" }, r));
+check("one socket cannot join a lobby as a second player", second?.code === "already_joined", JSON.stringify(second));
+
+const hostF = store.hosts.create("hostf@smoke.test", 50);
+store.hosts.setPassword(hostF.id, hashPassword("hostf-pass-123"));
+const fCodes = [];
+for (let i = 0; i < 11; i++) {
+  const r = await fetch(base + "/api/login", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hostf@smoke.test", password: "wrong-" + i }) });
+  fCodes.push(r.status);
+}
+const fRight = await fetch(base + "/api/login", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hostf@smoke.test", password: "hostf-pass-123" }) });
+check("repeated failures lock the account even for the right password", fCodes[0] === 401 && fRight.status === 429, fCodes.join(",") + " then " + fRight.status);
 
 /* Wrong-PIN guessing is throttled; run last since it locks this IP out for a minute. */
 const guesser = ioc(base, { transports: ["websocket"] });
