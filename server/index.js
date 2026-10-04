@@ -20,10 +20,11 @@ const server = http.createServer(app);
 const io = new IOServer(server, {
   pingInterval: 20000,
   pingTimeout: 25000,
-  /* Raised from the 100KB default. Questions carry only a short image URL
-     now (server/media.js), not the picture itself, but a large question
-     bank in one host:create payload still benefits from the headroom. */
-  maxHttpBufferSize: 8e6
+  /* Applies to every socket, anonymous players included, so keep it small.
+     Questions carry only a short image URL (server/media.js), and a saved
+     quiz is loaded by id on the server; 256KB still fits an inline
+     100-question quiz for the ad-hoc case. */
+  maxHttpBufferSize: 256 * 1024
 });
 const rooms = new Rooms(io);
 const attempts = new Attempts();
@@ -49,7 +50,10 @@ app.use(
            the search itself, but the picked GIF's own pixels load straight
            from Giphy, not through us). */
         imgSrc: ["'self'", "data:", "https://*.giphy.com"],
-        connectSrc: ["'self'", "ws:", "wss:"],
+        /* 'self' alone doesn't cover the websocket on older Safari, so name
+           the public origin's ws/wss form explicitly rather than allowing
+           every host. */
+        connectSrc: ["'self'", ...(config.publicUrl ? [config.publicUrl.replace(/^http/, "ws")] : ["ws:", "wss:"])],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"]
       }
@@ -103,6 +107,22 @@ function currentAuth(req) {
   return verify(readCookie(req.headers.cookie, COOKIE));
 }
 
+/* A short fingerprint of the stored password hash, carried in the cookie.
+   Resetting a password (invite re-issue, create-admin.mjs) changes it, which
+   kills every cookie minted before the reset instead of leaving a stolen one
+   valid for the rest of its 12 hours. */
+const credTag = account => crypto.createHash("sha256").update(String(account.password_hash || "")).digest("hex").slice(0, 16);
+
+function hostFromPayload(payload) {
+  const host = payload?.role === "host" ? store.hosts.get(payload.id) : null;
+  return host && host.status === "active" && payload.tag === credTag(host) ? host : null;
+}
+
+function adminFromPayload(payload) {
+  const admin = payload?.role === "admin" ? store.admins.get(payload.id) : null;
+  return admin && payload.tag === credTag(admin) ? admin : null;
+}
+
 /* Keyed off the real request scheme, not NODE_ENV. Hard-coding Secure in
    production would make login fail silently in the window between the site
    coming up on port 80 and certbot issuing the certificate, because the
@@ -122,27 +142,51 @@ function clearAuthCookie(res) {
 }
 
 function requireHost(req, res, next) {
-  const payload = currentAuth(req);
-  const host = payload?.role === "host" ? store.hosts.get(payload.id) : null;
-  if (!host || host.status !== "active") return res.status(401).json({ error: "Sign in first.", code: "auth" });
+  const host = hostFromPayload(currentAuth(req));
+  if (!host) return res.status(401).json({ error: "Sign in first.", code: "auth" });
   req.hostAccount = { id: host.id, email: host.email, maxPlayers: host.max_players };
   next();
 }
 
 function requireAdmin(req, res, next) {
-  const payload = currentAuth(req);
-  const admin = payload?.role === "admin" ? store.admins.get(payload.id) : null;
+  const admin = adminFromPayload(currentAuth(req));
   if (!admin) return res.status(401).json({ error: "Sign in first.", code: "auth" });
   req.admin = { id: admin.id, email: admin.email };
   next();
 }
 
+/* Per-account failure throttle on top of the per-IP one, so a guesser
+   rotating IPs still can't hammer one mailbox. Failures only; a success
+   clears the count. */
+const ACCOUNT_FAIL_LIMIT = 10;
+const ACCOUNT_FAIL_WINDOW_MS = 15 * 60 * 1000;
+const accountFails = new Map(); // "role:email" -> { count, resetAt }
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of accountFails) if (v.resetAt <= now) accountFails.delete(k);
+}, ACCOUNT_FAIL_WINDOW_MS).unref();
+
+const accountLocked = key => {
+  const f = accountFails.get(key);
+  return Boolean(f && f.resetAt > Date.now() && f.count >= ACCOUNT_FAIL_LIMIT);
+};
+function noteLogin(key, ok) {
+  if (ok) return accountFails.delete(key);
+  const f = accountFails.get(key);
+  if (f && f.resetAt > Date.now()) f.count++;
+  else accountFails.set(key, { count: 1, resetAt: Date.now() + ACCOUNT_FAIL_WINDOW_MS });
+}
+const lockedReply = res => res.status(429).json({ error: "Too many attempts. Wait fifteen minutes.", code: "rate_login" });
+
 /* Verified against when the account is unknown, to equalise response time. */
 const DUMMY_HASH = hashPassword(randomToken());
 
+/* skipSuccessfulRequests: a whole floor of hosts signing in from one office
+   NAT must not lock each other out; only failures count against the IP. */
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 12,
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many attempts. Wait fifteen minutes.", code: "rate_login" }
@@ -150,6 +194,7 @@ const loginLimiter = rateLimit({
 const adminLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 12,
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many attempts. Wait fifteen minutes.", code: "rate_login" }
@@ -165,41 +210,45 @@ const inviteLimiter = rateLimit({
 app.post("/api/login", loginLimiter, (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   const given = String(req.body?.password || "");
+  if (accountLocked("host:" + email)) return lockedReply(res);
   const host = store.hosts.getByEmail(email);
   const hash = host?.password_hash || DUMMY_HASH;
   const passwordOk = verifyPassword(given, hash); // always runs, so timing doesn't reveal which emails exist
   if (!host || host.status !== "active" || !host.password_hash || !passwordOk) {
+    noteLogin("host:" + email, false);
     return res.status(401).json({ error: "That email or password is not right.", code: "bad_login" });
   }
-  setAuthCookie(req, res, { role: "host", id: host.id });
+  noteLogin("host:" + email, true);
+  setAuthCookie(req, res, { role: "host", id: host.id, tag: credTag(host) });
   res.json({ ok: true });
 });
 
 app.post("/api/logout", (req, res) => { clearAuthCookie(res); res.json({ ok: true }); });
 
 app.get("/api/me", (req, res) => {
-  const payload = currentAuth(req);
-  const host = payload?.role === "host" ? store.hosts.get(payload.id) : null;
-  res.json(host && host.status === "active" ? { host: true, email: host.email } : { host: false });
+  const host = hostFromPayload(currentAuth(req));
+  res.json(host ? { host: true, email: host.email } : { host: false });
 });
 
 app.post("/api/admin/login", adminLoginLimiter, (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   const given = String(req.body?.password || "");
+  if (accountLocked("admin:" + email)) return lockedReply(res);
   const admin = store.admins.getByEmail(email);
   const passwordOk = verifyPassword(given, admin?.password_hash || DUMMY_HASH);
   if (!admin || !passwordOk) {
+    noteLogin("admin:" + email, false);
     return res.status(401).json({ error: "That email or password is not right.", code: "bad_login" });
   }
-  setAuthCookie(req, res, { role: "admin", id: admin.id });
+  noteLogin("admin:" + email, true);
+  setAuthCookie(req, res, { role: "admin", id: admin.id, tag: credTag(admin) });
   res.json({ ok: true });
 });
 
 app.post("/api/admin/logout", (req, res) => { clearAuthCookie(res); res.json({ ok: true }); });
 
 app.get("/api/admin/me", (req, res) => {
-  const payload = currentAuth(req);
-  const admin = payload?.role === "admin" ? store.admins.get(payload.id) : null;
+  const admin = adminFromPayload(currentAuth(req));
   res.json(admin ? { admin: true, email: admin.email } : { admin: false });
 });
 
@@ -255,7 +304,13 @@ app.patch("/api/admin/hosts/:id", requireAdmin, (req, res) => {
   const id = Number(req.params.id);
   if (!store.hosts.get(id)) return res.status(404).json({ error: "No such host.", code: "no_host" });
   if (req.body?.maxPlayers != null) store.hosts.updateQuota(id, clamp(Number(req.body.maxPlayers) || 400, 1, 2000));
-  if (["active", "disabled"].includes(req.body?.status)) store.hosts.setStatus(id, req.body.status);
+  if (["active", "disabled"].includes(req.body?.status)) {
+    store.hosts.setStatus(id, req.body.status);
+    /* Cut a disabled host's live connections now rather than at their next click. */
+    if (req.body.status === "disabled") {
+      for (const s of io.sockets.sockets.values()) if (s.data.hostId === id) { s.data.isHost = false; s.disconnect(true); }
+    }
+  }
   res.json(store.hosts.get(id));
 });
 
@@ -336,9 +391,26 @@ const mediaLimiter = rateLimit({
   message: { error: "Too many requests. Wait a moment.", code: "rate_media" }
 });
 
+/* Disk is the shared resource here, so each host gets a daily byte budget on
+   top of the per-minute rate limit. In memory: a restart resets it, which is
+   fine for a guard against a runaway client or a compromised account. */
+const UPLOAD_DAILY_BYTES = 60e6;
+const uploadUsage = new Map(); // hostId -> { bytes, resetAt }
+
 app.post("/api/uploads/image", requireHost, mediaLimiter, async (req, res) => {
+  const now = Date.now();
+  let usage = uploadUsage.get(req.hostAccount.id);
+  if (!usage || usage.resetAt <= now) {
+    usage = { bytes: 0, resetAt: now + 24 * 60 * 60 * 1000 };
+    uploadUsage.set(req.hostAccount.id, usage);
+  }
+  const claimed = typeof req.body?.dataUrl === "string" ? req.body.dataUrl.length * 0.75 : 0;
+  if (usage.bytes + claimed > UPLOAD_DAILY_BYTES) {
+    return res.status(429).json({ error: "Daily upload limit reached. Try again tomorrow.", code: "upload_quota" });
+  }
   try {
     const url = await saveImageUpload(req.body?.dataUrl);
+    usage.bytes += claimed;
     res.status(201).json({ url });
   } catch (err) {
     res.status(400).json({ error: err.message, code: err.code, ...err.vars });
@@ -450,7 +522,7 @@ app.get("/api/stats/quizzes/:groupKey/questions", requireHost, (req, res) => {
   res.json(store.stats.questionBreakdown(req.hostAccount.id, parsed.quizId, parsed.title));
 });
 
-app.get("/api/health", (req, res) => res.json({ ok: true, ...rooms.stats(), uptime: Math.round(process.uptime()) }));
+app.get("/api/health", (req, res) => res.json({ ok: true, games: rooms.stats().games, uptime: Math.round(process.uptime()) }));
 
 /* -------------------------------------------------------- self-paced --- */
 /* Public, unauthenticated: the share token itself is the access control,
@@ -477,17 +549,25 @@ const selfpacedAnswerLimiter = rateLimit({
   message: { error: "Too many attempts. Wait a bit and try again.", code: "rate_selfpaced" }
 });
 
+/* A share link dies with its owner: a disabled or deleted host's quizzes
+   stop being playable, not just stop being editable. */
+function sharedQuiz(token) {
+  const quiz = store.quizzes.getByShareToken(token);
+  const owner = quiz?.host_id != null ? store.hosts.get(quiz.host_id) : null;
+  return owner && owner.status === "active" ? quiz : null;
+}
+
 app.get("/api/selfpaced/:token", selfpacedLimiter, (req, res) => {
-  const quiz = store.quizzes.getByShareToken(req.params.token);
+  const quiz = sharedQuiz(req.params.token);
   if (!quiz) return res.status(404).json({ error: "That link isn't valid.", code: "link_invalid" });
   res.json({ title: quiz.title, total: quiz.questions.length, joinMode: quiz.joinMode });
 });
 
 app.post("/api/selfpaced/:token/start", selfpacedLimiter, (req, res) => {
-  const quiz = store.quizzes.getByShareToken(req.params.token);
+  const quiz = sharedQuiz(req.params.token);
   if (!quiz) return res.status(404).json({ error: "That link isn't valid.", code: "link_invalid" });
   const result = attempts.start(quiz, req.body?.name, req.body?.email);
-  if (result.error) return res.status(400).json(result);
+  if (result.error) return res.status(result.code === "selfpaced_busy" ? 429 : 400).json(result);
   res.status(201).json(result);
 });
 
@@ -496,6 +576,7 @@ app.post("/api/selfpaced/attempts/:attemptId/answer", selfpacedAnswerLimiter, (r
   if (!attempt) return res.status(404).json({ error: "That attempt has expired. Start again.", code: "attempt_expired" });
   const result = attempt.answer(req.body?.answer, req.body?.qIndex);
   if (result.error) return res.status(400).json(result);
+  if (result.done) attempts.release(attempt);
   res.json(result);
 });
 
@@ -514,10 +595,23 @@ app.use((req, res) => res.status(404).sendFile("index.html", { root: PUBLIC_DIR 
 
 /* ----------------------------------------------------------- realtime --- */
 
+/* WebSocket upgrades aren't covered by CORS, so a page on another origin
+   could otherwise open a socket that rides the visitor's cookie. Browsers
+   always send Origin on a websocket handshake; non-browser clients (the
+   smoke tests) send none and pass. */
 io.use((socket, next) => {
-  const payload = verify(readCookie(socket.handshake.headers.cookie, COOKIE));
-  const host = payload?.role === "host" ? store.hosts.get(payload.id) : null;
-  if (host && host.status === "active") {
+  const origin = socket.handshake.headers.origin;
+  if (origin) {
+    let ok = false;
+    try { ok = new URL(origin).host === socket.handshake.headers.host; } catch { /* malformed Origin */ }
+    if (!ok) return next(new Error("origin"));
+  }
+  next();
+});
+
+io.use((socket, next) => {
+  const host = hostFromPayload(verify(readCookie(socket.handshake.headers.cookie, COOKIE)));
+  if (host) {
     socket.data.isHost = true;
     socket.data.hostId = host.id;
     socket.data.hostMaxPlayers = host.max_players;
@@ -571,8 +665,26 @@ io.on("connection", socket => {
      and a handler that throws answers with an error instead of escaping
      socket.io as an uncaught exception, which would restart the process and
      end every live game on the box. */
+  /* Token bucket per socket: a phone has no reason to emit more than a few
+     events a second, and without a ceiling one connection can spin the
+     event loop that every live game shares. */
+  let tokens = 20, refilled = Date.now();
   const on = (event, handler) => socket.on(event, async (payload, ack) => {
     const reply = typeof ack === "function" ? ack : undefined;
+    const now = Date.now();
+    tokens = Math.min(20, tokens + (now - refilled) / 250);
+    refilled = now;
+    if (tokens < 1) return reply?.({ error: "Slow down.", code: "rate_socket" });
+    tokens--;
+    /* Host rights are decided at connect, so a host disabled mid-session
+       would keep working until they reload. Re-check on every host event. */
+    if (event.startsWith("host:") && socket.data.isHost) {
+      const h = store.hosts.get(socket.data.hostId);
+      if (!h || h.status !== "active") {
+        socket.data.isHost = false;
+        return reply?.({ error: "Sign in first.", code: "auth" });
+      }
+    }
     try {
       await handler(payload, reply);
     } catch (err) {
@@ -585,10 +697,12 @@ io.on("connection", socket => {
 
   on("host:create", async (payload, ack) => {
     if (!socket.data.isHost) return ack?.({ error: "Sign in first.", code: "auth" });
-    const quiz = sanitiseQuiz(payload?.quiz);
-    if (!quiz.questions.length) return ack?.({ error: "That quiz has no usable questions.", code: "quiz_empty" });
     /* Only stamp the session with a quizId this host actually owns. */
     const ownedQuiz = payload?.quizId ? store.quizzes.get(payload.quizId, socket.data.hostId) : null;
+    /* A saved quiz is run from the database copy, so the payload stays tiny;
+       an inline quiz is only for the ad-hoc, never-saved case. */
+    const quiz = sanitiseQuiz(ownedQuiz || payload?.quiz);
+    if (!quiz.questions.length) return ack?.({ error: "That quiz has no usable questions.", code: "quiz_empty" });
     if (ownedQuiz?.deliveryMode === "selfpaced") {
       return ack?.({ error: "This quiz is set to self-paced. Share its link instead of opening a live lobby.", code: "quiz_is_selfpaced" });
     }
@@ -707,6 +821,12 @@ io.on("connection", socket => {
     const pinText = String(pin ?? "").trim().slice(0, 8);
     const ip = clientIp(socket);
     if (pinLockedOut(ip)) return ack?.({ error: "Too many wrong PINs. Wait a minute.", code: "rate_pin" });
+    /* One identity per connection: otherwise a single socket can loop
+       player:join and fill a lobby with fakes. A reconnect that presents
+       the same playerId is still fine. */
+    if (socket.data.playerId && playerId !== socket.data.playerId) {
+      return ack?.({ error: "Already in a game.", code: "already_joined" });
+    }
     const game = rooms.get(pinText);
     if (!game) {
       recordPinMiss(ip);
