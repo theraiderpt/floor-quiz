@@ -11,6 +11,29 @@
    host's own language and falls back to English for anything missing. */
 const CHANGELOG = [
   {
+    date: "2026-10-04",
+    items: [
+      {
+        en: "Signing in from a shared office network no longer locks colleagues out: only wrong passwords count against the limit.",
+        fr: "Se connecter depuis un réseau de bureau partagé ne bloque plus les collègues : seuls les mots de passe erronés comptent dans la limite.",
+        de: "Die Anmeldung aus einem gemeinsamen Büronetzwerk sperrt Kolleginnen und Kollegen nicht mehr aus: nur falsche Passwörter zählen zum Limit.",
+        es: "Iniciar sesión desde una red de oficina compartida ya no bloquea a los compañeros: solo las contraseñas incorrectas cuentan para el límite.",
+        el: "Η σύνδεση από κοινό δίκτυο γραφείου δεν κλειδώνει πια τους συναδέλφους: μόνο οι λανθασμένοι κωδικοί προσμετρούν στο όριο.",
+        pt: "Iniciar sessão numa rede de escritório partilhada já não bloqueia os colegas: só as palavras-passe erradas contam para o limite.",
+        ro: "Autentificarea dintr-o rețea de birou comună nu mai blochează colegii: doar parolele greșite contează pentru limită."
+      },
+      {
+        en: "Security tightening: a password reset now signs out older sessions, a disabled host's self-paced links stop working, and very busy self-paced quizzes ask people to retry instead of slowing everything down.",
+        fr: "Sécurité renforcée : une réinitialisation de mot de passe déconnecte les anciennes sessions, les liens en autonomie d'un hôte désactivé cessent de fonctionner, et les quiz en autonomie très sollicités demandent de réessayer au lieu de tout ralentir.",
+        de: "Mehr Sicherheit: Ein Passwort-Reset beendet ältere Sitzungen, selbstgesteuerte Links eines deaktivierten Hosts funktionieren nicht mehr, und stark ausgelastete selbstgesteuerte Quizze bitten um einen neuen Versuch, statt alles zu verlangsamen.",
+        es: "Más seguridad: restablecer la contraseña cierra las sesiones anteriores, los enlaces a ritmo propio de un anfitrión desactivado dejan de funcionar y los cuestionarios a ritmo propio muy concurridos piden reintentar en lugar de ralentizarlo todo.",
+        el: "Πιο ασφαλές: η επαναφορά κωδικού αποσυνδέει παλαιότερες συνεδρίες, οι σύνδεσμοι με δικό σου ρυθμό ενός απενεργοποιημένου διοργανωτή παύουν να λειτουργούν και τα πολυσύχναστα κουίζ ζητούν νέα προσπάθεια αντί να επιβραδύνουν τα πάντα.",
+        pt: "Mais segurança: repor a palavra-passe termina as sessões anteriores, as ligações ao próprio ritmo de um anfitrião desativado deixam de funcionar e os questionários ao próprio ritmo muito concorridos pedem nova tentativa em vez de abrandar tudo.",
+        ro: "Securitate sporită: resetarea parolei închide sesiunile mai vechi, linkurile în ritm propriu ale unui gazdă dezactivat nu mai funcționează, iar chestionarele foarte aglomerate cer o nouă încercare în loc să încetinească totul."
+      }
+    ]
+  },
+  {
     date: "2026-10-02",
     items: [
       {
