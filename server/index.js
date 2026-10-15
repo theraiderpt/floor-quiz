@@ -635,7 +635,7 @@ async function joinInfo(pin) {
    space. Failed lookups are counted per client IP (the last X-Forwarded-For
    hop is the one nginx appended); successful joins are not, so a classroom
    behind one NAT can all join at once. */
-const PIN_MISS_LIMIT = 10;
+const PIN_MISS_LIMIT = 60;
 const PIN_MISS_WINDOW_MS = 60 * 1000;
 const pinMisses = new Map(); // ip -> { count, resetAt }
 setInterval(() => {
