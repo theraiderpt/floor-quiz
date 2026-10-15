@@ -1073,14 +1073,20 @@ const fRight = await fetch(base + "/api/login", { method: "POST", headers: jsonH
 check("repeated failures lock the account even for the right password", fCodes[0] === 401 && fRight.status === 429, fCodes.join(",") + " then " + fRight.status);
 
 /* Wrong-PIN guessing is throttled; run last since it locks this IP out for a minute. */
-const guesser = ioc(base, { transports: ["websocket"] });
-await new Promise(r => guesser.on("connect", r));
+/* Five sockets x 14 guesses: each stays under the per-socket event rate limit, so
+   what's being measured is the per-IP wrong-PIN throttle. */
 const guessCodes = [];
-for (let i = 0; i < 12; i++) {
-  guessCodes.push((await new Promise(r => guesser.emit("player:join", { pin: "00" + String(i).padStart(2, "0"), name: "x" }, r))).code);
+for (let n = 0; n < 5; n++) {
+  const guesser = ioc(base, { transports: ["websocket"] });
+  await new Promise(r => guesser.on("connect", r));
+  for (let i = 0; i < 14; i++) {
+    const pin = String(n * 14 + i).padStart(4, "0");
+    guessCodes.push((await new Promise(r => guesser.emit("player:join", { pin, name: "x" }, r))).code);
+  }
+  guesser.disconnect();
 }
-check("repeated wrong PINs get throttled", guessCodes[0] === "no_pin" && guessCodes[11] === "rate_pin", guessCodes.join(","));
-guesser.disconnect();
+check("a handful of typos is fine, sustained PIN guessing is throttled",
+  guessCodes[9] === "no_pin" && guessCodes[69] === "rate_pin", guessCodes.join(","));
 
 /* ---- done ---- */
 players.forEach(p => p.socket.disconnect());
