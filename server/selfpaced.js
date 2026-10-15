@@ -196,7 +196,7 @@ export class Attempts {
   }
 
   shared(quiz) {
-    const stamp = `${quiz.updated_at}|${quiz.questions.length}|${quiz.title}`;
+    const stamp = `${quiz.updated_at}|${quiz.questions.length}|${quiz.title}|${quiz.joinMode}|${quiz.gapSeconds}`;
     const hit = this.quizCache.get(quiz.id);
     if (hit && hit.stamp === stamp) return hit.quiz;
     this.quizCache.set(quiz.id, { stamp, quiz });

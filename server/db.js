@@ -121,7 +121,7 @@ const stmt = {
      FROM quizzes WHERE id = ?`
   ),
   getQuizByShareToken: db.prepare(
-    `SELECT id, title, questions, host_id, category_id, join_mode, gap_seconds, delivery_mode, share_token
+    `SELECT id, title, questions, host_id, category_id, join_mode, gap_seconds, delivery_mode, share_token, updated_at
      FROM quizzes WHERE share_token = ? AND delivery_mode = 'selfpaced'`
   ),
   insertQuiz: db.prepare(
