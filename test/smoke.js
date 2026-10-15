@@ -1088,6 +1088,19 @@ for (let n = 0; n < 5; n++) {
 check("a handful of typos is fine, sustained PIN guessing is throttled",
   guessCodes[9] === "no_pin" && guessCodes[69] === "rate_pin", guessCodes.join(","));
 
+/* Editing a shared self-paced quiz (same title, same question count) must reach
+   new attempts even while another attempt keeps the cached copy alive. */
+const cacheQuizBody = q => JSON.stringify({ title: "cache check", deliveryMode: "selfpaced", questions: [{ q, opts: ["a", "b"], correct: 0, t: 10 }] });
+const cacheQuiz = await (await fetch(base + "/api/quizzes", { method: "POST", headers: { ...jsonHdr, Cookie: cookie }, body: cacheQuizBody("before edit") })).json();
+const startCache = () => fetch(base + "/api/selfpaced/" + cacheQuiz.shareToken + "/start", { method: "POST", headers: jsonHdr, body: JSON.stringify({ name: "Cache" }) }).then(r => r.json());
+const firstCache = await startCache();
+await sleep(1100); // updated_at has one-second resolution
+await fetch(base + "/api/quizzes/" + cacheQuiz.id, { method: "PUT", headers: { ...jsonHdr, Cookie: cookie }, body: cacheQuizBody("after edit") });
+const secondCache = await startCache();
+check("an edited self-paced quiz reaches new attempts while an old attempt is still open",
+  firstCache.question?.q === "before edit" && secondCache.question?.q === "after edit",
+  firstCache.question?.q + " / " + secondCache.question?.q);
+
 /* ---- done ---- */
 players.forEach(p => p.socket.disconnect());
 hostSocket.disconnect();
