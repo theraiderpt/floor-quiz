@@ -6,15 +6,22 @@ set -euo pipefail
 key="${1:?usage: set-env.sh KEY}"
 [[ "$key" =~ ^[A-Z0-9_]+$ ]] || { echo "bad key name" >&2; exit 1; }
 env_file="$(dirname "$0")/../.env"
-read -r -s -p "$key: " value; echo
+IFS= read -r -s -p "$key: " value; echo
 [ -n "$value" ] || { echo "empty value, nothing changed" >&2; exit 1; }
 KEY="$key" VALUE="$value" ENV_FILE="$env_file" python3 - <<'PY'
 import os
 k, v, p = os.environ["KEY"], os.environ["VALUE"], os.environ["ENV_FILE"]
 lines = open(p).read().split("\n")
-# dotenv treats an unquoted " #" as a comment, so quote values that need it
-if any(c in v for c in "# \t") and '"' not in v:
-    v = f'"{v}"'
+# Quote only when needed, with a quote char the value doesn't contain: dotenv
+# has no escaping inside quotes, and single quotes avoid its \n expansion.
+import re, sys
+if "\n" in v or "\r" in v:
+    sys.exit("value contains a newline, not supported")
+if not re.fullmatch(r"[A-Za-z0-9_@%+=:,./!&$^*()\[\]{}<>?~|;-]+", v):
+    q = next((c for c in "'\"`" if c not in v), None)
+    if q is None:
+        sys.exit("value contains all of ' \" ` and cannot be stored in .env")
+    v = q + v + q
 new = f"{k}={v}"
 hits = [i for i, l in enumerate(lines) if l.startswith(k + "=")]
 if hits:
