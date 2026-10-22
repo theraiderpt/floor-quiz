@@ -11,6 +11,20 @@
    host's own language and falls back to English for anything missing. */
 const CHANGELOG = [
   {
+    date: "2026-10-22",
+    items: [
+      {
+        en: "Forgot your password, or did your invite link expire? Use \"Ask for a new link\" on the sign-in screen and an admin will send you a fresh one.",
+        fr: "Mot de passe oublié ou lien d'invitation expiré ? Utilisez « Demander un nouveau lien » sur l'écran de connexion et un administrateur vous en enverra un.",
+        de: "Passwort vergessen oder Einladungslink abgelaufen? Nutze auf dem Anmeldebildschirm \"Neuen Link anfordern\", und ein Admin schickt dir einen neuen.",
+        es: "¿Olvidaste la contraseña o caducó tu enlace de invitación? Usa \"Pide un enlace nuevo\" en la pantalla de acceso y un administrador te enviará uno.",
+        el: "Ξέχασες τον κωδικό ή έληξε ο σύνδεσμος πρόσκλησης; Πάτα \"Ζήτα νέο σύνδεσμο\" στην οθόνη σύνδεσης και ένας διαχειριστής θα σου στείλει νέο.",
+        pt: "Esqueceu a palavra-passe ou o link de convite expirou? Use \"Peça um novo link\" no ecrã de início de sessão e um administrador enviará-lhe um novo.",
+        ro: "Ai uitat parola sau a expirat linkul de invitație? Folosește \"Cere un link nou\" pe ecranul de autentificare și un administrator îți va trimite unul."
+      }
+    ]
+  },
+  {
     date: "2026-10-04",
     items: [
       {

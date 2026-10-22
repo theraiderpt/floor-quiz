@@ -299,6 +299,7 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
    attributes, so every one-off layout tweak in the HTML lives here as a
    class instead. */
 [hidden]{display:none!important}
+.u-warn{color:var(--danger)}
 .u-caps{text-transform:uppercase;letter-spacing:.09em}
 .u-w340{width:min(340px,88vw)}
 .u-center{justify-content:center}
