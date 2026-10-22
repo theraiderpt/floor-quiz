@@ -21,6 +21,15 @@ const CHANGELOG = [
         el: "Ξέχασες τον κωδικό ή έληξε ο σύνδεσμος πρόσκλησης; Πάτα \"Ζήτα νέο σύνδεσμο\" στην οθόνη σύνδεσης και ένας διαχειριστής θα σου στείλει νέο.",
         pt: "Esqueceu a palavra-passe ou o link de convite expirou? Use \"Peça um novo link\" no ecrã de início de sessão e um administrador enviará-lhe um novo.",
         ro: "Ai uitat parola sau a expirat linkul de invitație? Folosește \"Cere un link nou\" pe ecranul de autentificare și un administrator îți va trimite unul."
+      },
+      {
+        en: "New invite and password-reset links are now emailed to you automatically.",
+        fr: "Les nouveaux liens d'invitation et de réinitialisation du mot de passe vous sont désormais envoyés automatiquement par e-mail.",
+        de: "Neue Einladungs- und Passwort-Zurücksetzen-Links werden dir jetzt automatisch per E-Mail geschickt.",
+        es: "Los nuevos enlaces de invitación y de restablecimiento de contraseña ahora se envían automáticamente por correo.",
+        el: "Οι νέοι σύνδεσμοι πρόσκλησης και επαναφοράς κωδικού σού στέλνονται πλέον αυτόματα με email.",
+        pt: "Os novos links de convite e de redefinição da palavra-passe passam a ser enviados automaticamente por email.",
+        ro: "Noile linkuri de invitație și de resetare a parolei îți sunt acum trimise automat prin email."
       }
     ]
   },
