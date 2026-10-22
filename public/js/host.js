@@ -95,6 +95,19 @@ async function login() {
   }
 }
 
+$("requestLink").addEventListener("click", async () => {
+  $("loginErr").textContent = "";
+  $("loginNote").textContent = "";
+  const email = $("email").value.trim();
+  if (!email) { $("loginErr").textContent = t("host.requestNeedEmail"); return; }
+  try {
+    await api("/request-reset", { method: "POST", body: { email } });
+    $("loginNote").textContent = t("host.requestSent");
+  } catch (e) {
+    $("loginErr").textContent = e.message;
+  }
+});
+
 $("logout").addEventListener("click", async () => {
   forgetLive();
   await api("/logout", { method: "POST" }).catch(() => { });

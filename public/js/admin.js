@@ -137,6 +137,7 @@ async function loadHosts() {
       el("span", null, t("host.nGames", { n: h.game_count })),
       el("span", null, t("admin.limitX", { n: h.max_players }))
     );
+    if (h.reset_requested_at) meta.appendChild(el("span", "u-warn", "⚑ " + t("admin.resetRequested")));
     body.appendChild(meta);
 
     const quotaRow = el("div", "row");
@@ -164,6 +165,7 @@ async function loadHosts() {
     invite.addEventListener("click", async () => {
       const res = await api("/admin/hosts/" + h.id + "/reinvite", { method: "POST" });
       $("hInviteNote").textContent = t("admin.inviteLink", { email: h.email, link: res.inviteLink });
+      await loadHosts();
     });
     const del = el("button", "iconbtn", "✕"); del.title = t("admin.deleteHost");
     del.addEventListener("click", async () => {

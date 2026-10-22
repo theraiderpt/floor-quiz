@@ -108,6 +108,9 @@ ensureColumn("results", "answers_json", "TEXT");
    share_token is only ever set for 'selfpaced' quizzes. */
 ensureColumn("quizzes", "delivery_mode", "TEXT NOT NULL DEFAULT 'live'");
 ensureColumn("quizzes", "share_token", "TEXT");
+/* Set when a host asks for a new link (forgot password / expired invite) and
+   cleared once an admin re-issues one, so the admin list can show who is waiting. */
+ensureColumn("hosts", "reset_requested_at", "TEXT");
 ensureColumn("sessions", "mode", "TEXT NOT NULL DEFAULT 'live'");
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_quizzes_share_token ON quizzes(share_token) WHERE share_token IS NOT NULL");
 
@@ -246,7 +249,7 @@ const stmt = {
   deleteCategory: db.prepare("DELETE FROM categories WHERE id = ?"),
 
   listHosts: db.prepare(
-    `SELECT hosts.id, hosts.email, hosts.max_players, hosts.status, hosts.created_at,
+    `SELECT hosts.id, hosts.email, hosts.max_players, hosts.status, hosts.created_at, hosts.reset_requested_at,
             (SELECT COUNT(*) FROM quizzes WHERE quizzes.host_id = hosts.id) AS quiz_count,
             (SELECT COUNT(*) FROM sessions WHERE sessions.host_id = hosts.id) AS game_count
      FROM hosts ORDER BY hosts.created_at DESC`
@@ -256,8 +259,12 @@ const stmt = {
   getHostByEmail: db.prepare("SELECT * FROM hosts WHERE email = ?"),
   insertHost: db.prepare("INSERT INTO hosts (email, max_players) VALUES (?, ?)"),
   setHostPassword: db.prepare(
-    "UPDATE hosts SET password_hash = ?, status = CASE WHEN status = 'invited' THEN 'active' ELSE status END WHERE id = ?"
+    "UPDATE hosts SET password_hash = ?, status = CASE WHEN status = 'invited' THEN 'active' ELSE status END, reset_requested_at = NULL WHERE id = ?"
   ),
+  requestHostReset: db.prepare(
+    "UPDATE hosts SET reset_requested_at = datetime('now') WHERE email = ? AND status IN ('invited', 'active')"
+  ),
+  clearHostReset: db.prepare("UPDATE hosts SET reset_requested_at = NULL WHERE id = ?"),
   updateHostQuota: db.prepare("UPDATE hosts SET max_players = ? WHERE id = ?"),
   setHostStatus: db.prepare("UPDATE hosts SET status = ? WHERE id = ?"),
   deleteHost: db.prepare("DELETE FROM hosts WHERE id = ?"),
@@ -491,6 +498,8 @@ export const store = {
       return store.hosts.get(info.lastInsertRowid);
     },
     setPassword: (id, passwordHash) => stmt.setHostPassword.run(passwordHash, id).changes > 0,
+    requestReset: email => stmt.requestHostReset.run(email).changes > 0,
+    clearReset: id => stmt.clearHostReset.run(id).changes > 0,
     updateQuota: (id, maxPlayers) => stmt.updateHostQuota.run(maxPlayers, id).changes > 0,
     setStatus: (id, status) => stmt.setHostStatus.run(status, id).changes > 0,
     remove: id => stmt.deleteHost.run(id).changes > 0

@@ -223,6 +223,15 @@ app.post("/api/login", loginLimiter, (req, res) => {
   res.json({ ok: true });
 });
 
+/* Always answers ok, so the endpoint can't be used to learn which emails are
+   hosts. There is no mailer: the request just flags the account for an admin,
+   who sends a fresh link by hand from the hosts list. */
+app.post("/api/request-reset", inviteLimiter, (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  if (isEmail(email)) store.hosts.requestReset(email);
+  res.json({ ok: true });
+});
+
 app.post("/api/logout", (req, res) => { clearAuthCookie(res); res.json({ ok: true }); });
 
 app.get("/api/me", (req, res) => {
@@ -297,6 +306,7 @@ app.post("/api/admin/hosts/:id/reinvite", requireAdmin, (req, res) => {
   if (!host) return res.status(404).json({ error: "No such host.", code: "no_host" });
   const token = randomToken();
   store.invites.create(host.id, token, new Date(Date.now() + INVITE_TTL_MS).toISOString());
+  store.hosts.clearReset(host.id);
   res.json({ inviteLink: `${config.publicUrl || ""}/invite/${token}` });
 });
 

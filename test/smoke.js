@@ -970,6 +970,23 @@ await fetch(base + "/api/invite/" + createdC.inviteLink.split("/invite/")[1] + "
 });
 check("completing an old invite does not re-enable a disabled host", store.hosts.get(createdC.host.id).status === "disabled", store.hosts.get(createdC.host.id).status);
 
+/* ---- self-service link request: flags the host, never reveals who exists ---- */
+const reqKnown = await fetch(base + "/api/request-reset", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: " HostB@smoke.test " }) });
+const reqUnknown = await fetch(base + "/api/request-reset", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "nobody@smoke.test" }) });
+check("link request answers identically for known and unknown emails", reqKnown.status === 200 && reqUnknown.status === 200 && (await reqKnown.text()) === (await reqUnknown.text()));
+check("link request flags the host", Boolean(store.hosts.getByEmail("hostb@smoke.test").reset_requested_at));
+const flagged = await (await fetch(base + "/api/admin/hosts", { headers: { Cookie: adminCookie } })).json();
+check("admin list shows the pending request", Boolean(flagged.find(h => h.email === "hostb@smoke.test")?.reset_requested_at));
+await fetch(base + "/api/request-reset", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hostc@smoke.test" }) });
+check("a disabled host cannot be flagged", !store.hosts.getByEmail("hostc@smoke.test").reset_requested_at);
+const reinv = await (await fetch(base + "/api/admin/hosts/" + created.host.id + "/reinvite", { method: "POST", headers: { Cookie: adminCookie } })).json();
+check("reinvite clears the request", !store.hosts.getByEmail("hostb@smoke.test").reset_requested_at);
+await fetch(base + "/api/request-reset", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hostb@smoke.test" }) });
+await fetch(base + "/api/invite/" + reinv.inviteLink.split("/invite/")[1] + "/complete", { method: "POST", headers: jsonHdr, body: JSON.stringify({ password: "hostb-new-pass-1" }) });
+const relog = await fetch(base + "/api/login", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hostb@smoke.test", password: "hostb-new-pass-1" }) });
+check("an active host can reset their password through a re-issued link", relog.status === 200, "got " + relog.status);
+check("completing the link clears a pending request", !store.hosts.getByEmail("hostb@smoke.test").reset_requested_at);
+
 const fakePng = await fetch(base + "/api/uploads/image", {
   method: "POST", headers: { ...jsonHdr, Cookie: cookie },
   body: JSON.stringify({ dataUrl: "data:image/png;base64," + Buffer.from("this is not a png").toString("base64") })
