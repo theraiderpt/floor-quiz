@@ -252,12 +252,7 @@ app.post("/api/login", loginLimiter, (req, res) => {
    caller which emails are hosts. With mail configured the fresh link goes only
    to the host's own mailbox (that is the proof of ownership); otherwise, or if
    sending fails, the account is flagged for an admin to send one by hand. */
-const resetMailedAt = new Map(); // email -> ms; stops one mailbox being flooded
-const RESET_MAIL_COOLDOWN_MS = 10 * 60 * 1000;
-setInterval(() => {
-  const cutoff = Date.now() - RESET_MAIL_COOLDOWN_MS;
-  for (const [k, t] of resetMailedAt) if (t < cutoff) resetMailedAt.delete(k);
-}, RESET_MAIL_COOLDOWN_MS).unref();
+const RESET_MAIL_COOLDOWN_MIN = 10; // per host, kept in the database so a restart can't reset it
 
 app.post("/api/request-reset", resetRequestLimiter, (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
@@ -269,8 +264,8 @@ app.post("/api/request-reset", resetRequestLimiter, (req, res) => {
     const host = store.hosts.getByEmail(email);
     if (!host || !["invited", "active"].includes(host.status)) return;
     if (!mailEnabled) return void store.hosts.requestReset(email);
-    if (Date.now() - (resetMailedAt.get(email) || 0) < RESET_MAIL_COOLDOWN_MS) return;
-    resetMailedAt.set(email, Date.now());
+    if (store.hosts.mailedWithin(host.id, RESET_MAIL_COOLDOWN_MIN)) return;
+    store.hosts.markMailed(host.id);
     emailInvite(email, newInvite(host.id))
       .then(ok => { if (!ok) store.hosts.requestReset(email); })
       .catch(err => console.error("reset mail failed:", err.message));
