@@ -3,13 +3,19 @@ import { config } from "./config.js";
 
 const { smtp } = config;
 
-/* Port 465 is implicit TLS; anything else (587) upgrades with STARTTLS. The
-   timeouts keep a dead mail server from holding a request open. */
+/* Port 465 is implicit TLS; anything else (587) must upgrade with STARTTLS.
+   requireTLS makes a missing or stripped STARTTLS offer a hard failure instead
+   of silently sending the login and reset links in plaintext. Only a relay on
+   this machine is exempt. The timeouts keep a dead mail server from holding a
+   request open. */
+const secure = smtp.port === 465;
+const loopback = ["localhost", "127.0.0.1", "::1"].includes(smtp.host);
 const transport = smtp.host
   ? nodemailer.createTransport({
       host: smtp.host,
       port: smtp.port,
-      secure: smtp.port === 465,
+      secure,
+      requireTLS: !secure && !loopback,
       auth: smtp.user ? { user: smtp.user, pass: smtp.pass } : undefined,
       connectionTimeout: 8000,
       greetingTimeout: 8000,
