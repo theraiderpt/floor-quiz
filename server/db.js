@@ -277,6 +277,7 @@ const stmt = {
      FROM invites JOIN hosts ON hosts.id = invites.host_id
      WHERE token = ?`
   ),
+  deleteOpenInvites: db.prepare("DELETE FROM invites WHERE host_id = ? AND used_at IS NULL"),
   markInviteUsed: db.prepare("UPDATE invites SET used_at = datetime('now') WHERE id = ?"),
 
   listBank: db.prepare(
@@ -511,6 +512,7 @@ export const store = {
       return store.invites.getByToken(token);
     },
     getByToken: token => stmt.getInviteByToken.get(token),
+    revokeOpen: hostId => stmt.deleteOpenInvites.run(hostId).changes,
     markUsed: id => stmt.markInviteUsed.run(id).changes > 0
   },
 

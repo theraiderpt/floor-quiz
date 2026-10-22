@@ -232,6 +232,7 @@ export class Game {
     this.lastFinal = null;
     /* Set by Rooms: called once when the game ends, to drop it from memory. */
     this.onFinish = null;
+    this.onSaved = null; // (sessionId) after results are written; the email hook
   }
 
   get room() { return `g:${this.pin}`; }
@@ -572,6 +573,7 @@ export class Game {
     try {
       const withLogs = board.map(p => ({ ...p, log: this.players.get(p.id)?.log || [] }));
       store.sessions.close(this.sessionId, withLogs, this.quiz.questions.map(q => q.q));
+      this.onSaved?.(this.sessionId);
     } catch (err) {
       console.error("Could not save results for session", this.sessionId, err.message);
     }

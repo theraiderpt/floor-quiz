@@ -198,7 +198,7 @@ window.FQ_LOCALES = {
 
     "host.signInHeading": "Host sign in",
     "host.requestLink": "Forgot your password, or invite expired? Ask for a new link",
-    "host.requestSent": "Request sent. If that email belongs to a host account, an admin will send you a new link.",
+    "host.requestSent": "Request sent. If that email belongs to a host account, a new link will be sent to you.",
     "host.requestNeedEmail": "Enter your email above first.",
     "host.whatsNew": "What's new",
     "host.dashboard": "Dashboard",
@@ -581,7 +581,7 @@ window.FQ_LOCALES = {
 
     "host.signInHeading": "Connexion animateur",
     "host.requestLink": "Mot de passe oublié ou invitation expirée ? Demander un nouveau lien",
-    "host.requestSent": "Demande envoyée. Si cet e-mail correspond à un compte animateur, un administrateur vous enverra un nouveau lien.",
+    "host.requestSent": "Demande envoyée. Si cet e-mail correspond à un compte animateur, un nouveau lien vous sera envoyé.",
     "host.requestNeedEmail": "Saisissez d'abord votre e-mail ci-dessus.",
     "host.whatsNew": "Nouveautés",
     "host.dashboard": "Tableau de bord",
@@ -964,7 +964,7 @@ window.FQ_LOCALES = {
 
     "host.signInHeading": "Anmeldung Moderation",
     "host.requestLink": "Passwort vergessen oder Einladung abgelaufen? Neuen Link anfordern",
-    "host.requestSent": "Anfrage gesendet. Gehört diese E-Mail zu einem Moderationskonto, schickt dir ein Admin einen neuen Link.",
+    "host.requestSent": "Anfrage gesendet. Gehört diese E-Mail zu einem Moderationskonto, wird dir ein neuer Link geschickt.",
     "host.requestNeedEmail": "Gib oben zuerst deine E-Mail ein.",
     "host.whatsNew": "Neuigkeiten",
     "host.dashboard": "Dashboard",
@@ -1347,7 +1347,7 @@ window.FQ_LOCALES = {
 
     "host.signInHeading": "Acceso presentador",
     "host.requestLink": "¿Olvidaste la contraseña o caducó la invitación? Pide un enlace nuevo",
-    "host.requestSent": "Solicitud enviada. Si ese correo pertenece a una cuenta de presentador, un administrador te enviará un enlace nuevo.",
+    "host.requestSent": "Solicitud enviada. Si ese correo pertenece a una cuenta de presentador, se te enviará un enlace nuevo.",
     "host.requestNeedEmail": "Escribe primero tu correo arriba.",
     "host.whatsNew": "Novedades",
     "host.dashboard": "Panel",
@@ -1730,7 +1730,7 @@ window.FQ_LOCALES = {
 
     "host.signInHeading": "Σύνδεση παρουσιαστή",
     "host.requestLink": "Ξέχασες τον κωδικό ή έληξε η πρόσκληση; Ζήτα νέο σύνδεσμο",
-    "host.requestSent": "Το αίτημα στάλθηκε. Αν το email ανήκει σε λογαριασμό παρουσιαστή, ένας διαχειριστής θα σου στείλει νέο σύνδεσμο.",
+    "host.requestSent": "Το αίτημα στάλθηκε. Αν το email ανήκει σε λογαριασμό παρουσιαστή, θα σου σταλεί νέος σύνδεσμος.",
     "host.requestNeedEmail": "Γράψε πρώτα το email σου παραπάνω.",
     "host.whatsNew": "Τι νέο υπάρχει",
     "host.dashboard": "Πίνακας",
@@ -2113,7 +2113,7 @@ window.FQ_LOCALES = {
 
     "host.signInHeading": "Acesso do anfitrião",
     "host.requestLink": "Esqueceu a palavra-passe ou o convite expirou? Peça um novo link",
-    "host.requestSent": "Pedido enviado. Se esse email pertencer a uma conta de anfitrião, um administrador enviará um novo link.",
+    "host.requestSent": "Pedido enviado. Se esse email pertencer a uma conta de anfitrião, ser-lhe-á enviado um novo link.",
     "host.requestNeedEmail": "Introduza primeiro o seu email acima.",
     "host.whatsNew": "Novidades",
     "host.dashboard": "Painel",
@@ -2502,7 +2502,7 @@ window.FQ_LOCALES = {
 
     "host.signInHeading": "Autentificare gazdă",
     "host.requestLink": "Ai uitat parola sau invitația a expirat? Cere un link nou",
-    "host.requestSent": "Cerere trimisă. Dacă emailul aparține unui cont de gazdă, un administrator îți va trimite un link nou.",
+    "host.requestSent": "Cerere trimisă. Dacă emailul aparține unui cont de gazdă, ți se va trimite un link nou.",
     "host.requestNeedEmail": "Introdu mai întâi emailul mai sus.",
     "host.whatsNew": "Noutăți",
     "host.dashboard": "Panou",
