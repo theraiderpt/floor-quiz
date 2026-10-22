@@ -15,7 +15,14 @@ export const config = {
   publicUrl: (process.env.PUBLIC_URL || "").replace(/\/+$/, ""),
   dbPath: process.env.DB_PATH || path.join(ROOT, "data", "floor-quiz.db"),
   maxPlayers: Number(process.env.MAX_PLAYERS || 400),
-  giphyApiKey: process.env.GIPHY_API_KEY || ""
+  giphyApiKey: process.env.GIPHY_API_KEY || "",
+  smtp: {
+    host: process.env.SMTP_HOST || "",
+    port: Number(process.env.SMTP_PORT || 587),
+    user: process.env.SMTP_USER || "",
+    pass: process.env.SMTP_PASS || "",
+    from: process.env.MAIL_FROM || "CX Quiz <noreply@cxquiz.tech>"
+  }
 };
 
 /* Next to the database, outside the app directory, for the same reason:

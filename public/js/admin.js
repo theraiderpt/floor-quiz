@@ -105,6 +105,9 @@ async function loadOverview() {
 
 /* ------------------------------------------------------------- hosts ---- */
 
+const inviteNote = (email, res) =>
+  t("admin.inviteLink", { email, link: res.inviteLink }) + (res.emailed ? " " + t("admin.emailed") : "");
+
 $("hCreate").addEventListener("click", async () => {
   $("hInviteNote").textContent = "";
   try {
@@ -112,7 +115,7 @@ $("hCreate").addEventListener("click", async () => {
     const maxPlayers = parseInt($("hMax").value, 10) || 400;
     const res = await api("/admin/hosts", { method: "POST", body: { email, maxPlayers } });
     $("hEmail").value = "";
-    $("hInviteNote").textContent = t("admin.inviteLink", { email: res.host.email, link: res.inviteLink });
+    $("hInviteNote").textContent = inviteNote(res.host.email, res);
     await loadHosts();
   } catch (e) {
     $("hInviteNote").textContent = e.message;
@@ -164,7 +167,7 @@ async function loadHosts() {
     const invite = el("button", "iconbtn", "↻"); invite.title = t("admin.newInvite");
     invite.addEventListener("click", async () => {
       const res = await api("/admin/hosts/" + h.id + "/reinvite", { method: "POST" });
-      $("hInviteNote").textContent = t("admin.inviteLink", { email: h.email, link: res.inviteLink });
+      $("hInviteNote").textContent = inviteNote(h.email, res);
       await loadHosts();
     });
     const del = el("button", "iconbtn", "✕"); del.title = t("admin.deleteHost");
