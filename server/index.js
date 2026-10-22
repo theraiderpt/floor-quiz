@@ -11,6 +11,7 @@ import { config, PUBLIC_DIR } from "./config.js";
 import { store } from "./db.js";
 import { Rooms, sanitiseQuiz, cleanName } from "./game.js";
 import { Attempts } from "./selfpaced.js";
+import { sendInviteEmail, mailEnabled } from "./mail.js";
 import { hashPassword, verifyPassword, randomToken } from "./auth.js";
 import { saveImageUpload, searchGiphy, sweepOrphanUploads } from "./media.js";
 import { csvLabels, csvOutcome } from "./csv-labels.js";
@@ -72,6 +73,13 @@ const isEmail = s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
 const COOKIE = "fq_auth";
 const INVITE_TTL_MS = 48 * 60 * 60 * 1000;
+
+function newInvite(hostId) {
+  const token = randomToken();
+  store.invites.create(hostId, token, new Date(Date.now() + INVITE_TTL_MS).toISOString());
+  return `${config.publicUrl || ""}/invite/${token}`;
+}
+const emailInvite = (email, link) => sendInviteEmail(email, link, INVITE_TTL_MS / 3600000);
 
 function sign(payload) {
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -223,13 +231,27 @@ app.post("/api/login", loginLimiter, (req, res) => {
   res.json({ ok: true });
 });
 
-/* Always answers ok, so the endpoint can't be used to learn which emails are
-   hosts. There is no mailer: the request just flags the account for an admin,
-   who sends a fresh link by hand from the hosts list. */
+/* Always answers ok straight away, so neither the body nor the timing tells a
+   caller which emails are hosts. With mail configured the fresh link goes only
+   to the host's own mailbox (that is the proof of ownership); otherwise, or if
+   sending fails, the account is flagged for an admin to send one by hand. */
+const resetMailedAt = new Map(); // email -> ms; stops one mailbox being flooded
+const RESET_MAIL_COOLDOWN_MS = 10 * 60 * 1000;
+setInterval(() => {
+  const cutoff = Date.now() - RESET_MAIL_COOLDOWN_MS;
+  for (const [k, t] of resetMailedAt) if (t < cutoff) resetMailedAt.delete(k);
+}, RESET_MAIL_COOLDOWN_MS).unref();
+
 app.post("/api/request-reset", inviteLimiter, (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
-  if (isEmail(email)) store.hosts.requestReset(email);
   res.json({ ok: true });
+  if (!isEmail(email)) return;
+  const host = store.hosts.getByEmail(email);
+  if (!host || !["invited", "active"].includes(host.status)) return;
+  if (!mailEnabled) return void store.hosts.requestReset(email);
+  if (Date.now() - (resetMailedAt.get(email) || 0) < RESET_MAIL_COOLDOWN_MS) return;
+  resetMailedAt.set(email, Date.now());
+  emailInvite(email, newInvite(host.id)).then(ok => { if (!ok) store.hosts.requestReset(email); });
 });
 
 app.post("/api/logout", (req, res) => { clearAuthCookie(res); res.json({ ok: true }); });
@@ -290,24 +312,23 @@ app.post("/api/invite/:token/complete", inviteLimiter, (req, res) => {
 
 app.get("/api/admin/hosts", requireAdmin, (req, res) => res.json(store.hosts.list()));
 
-app.post("/api/admin/hosts", requireAdmin, (req, res) => {
+app.post("/api/admin/hosts", requireAdmin, async (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   if (!isEmail(email)) return res.status(400).json({ error: "Enter a valid email.", code: "email_invalid" });
   if (store.hosts.getByEmail(email)) return res.status(409).json({ error: "A host with that email already exists.", code: "host_exists" });
   const maxPlayers = clamp(Number(req.body?.maxPlayers) || 400, 1, 2000);
   const host = store.hosts.create(email, maxPlayers);
-  const token = randomToken();
-  store.invites.create(host.id, token, new Date(Date.now() + INVITE_TTL_MS).toISOString());
-  res.status(201).json({ host, inviteLink: `${config.publicUrl || ""}/invite/${token}` });
+  const inviteLink = newInvite(host.id);
+  const emailed = await emailInvite(host.email, inviteLink);
+  res.status(201).json({ host, inviteLink, emailed });
 });
 
-app.post("/api/admin/hosts/:id/reinvite", requireAdmin, (req, res) => {
+app.post("/api/admin/hosts/:id/reinvite", requireAdmin, async (req, res) => {
   const host = store.hosts.get(Number(req.params.id));
   if (!host) return res.status(404).json({ error: "No such host.", code: "no_host" });
-  const token = randomToken();
-  store.invites.create(host.id, token, new Date(Date.now() + INVITE_TTL_MS).toISOString());
+  const inviteLink = newInvite(host.id);
   store.hosts.clearReset(host.id);
-  res.json({ inviteLink: `${config.publicUrl || ""}/invite/${token}` });
+  res.json({ inviteLink, emailed: await emailInvite(host.email, inviteLink) });
 });
 
 app.patch("/api/admin/hosts/:id", requireAdmin, (req, res) => {

@@ -19,6 +19,37 @@ process.env.PUBLIC_URL = "http://127.0.0.1";
    existing variable, can't pull the real key in from .env: the Giphy check
    below is about the "not configured" path, not a live API call. */
 process.env.GIPHY_API_KEY = "";
+
+/* A throwaway SMTP sink, so the mail path is exercised end to end and a real
+   SMTP_HOST in .env can never be reached from a test run. */
+const { default: net } = await import("node:net");
+const mailbox = [];
+let sinkFail = false;
+const smtpSink = net.createServer(sock => {
+  let data = "", body = null;
+  sock.write("220 sink\r\n");
+  sock.on("data", chunk => {
+    data += chunk;
+    if (body !== null) {
+      body += chunk;
+      if (body.endsWith("\r\n.\r\n")) { mailbox.push(body); body = null; sock.write("250 ok\r\n"); }
+      return;
+    }
+    for (const line of data.split("\r\n").slice(0, -1)) {
+      const cmd = line.slice(0, 4).toUpperCase();
+      if (cmd === "EHLO" || cmd === "HELO") sock.write("250 sink\r\n");
+      else if (cmd === "MAIL" && sinkFail) sock.write("554 refused\r\n");
+      else if (cmd === "DATA") { body = ""; sock.write("354 go\r\n"); }
+      else if (cmd === "QUIT") sock.end("221 bye\r\n");
+      else sock.write("250 ok\r\n");
+    }
+    data = "";
+  });
+});
+await new Promise(r => smtpSink.listen(0, "127.0.0.1", r));
+process.env.SMTP_HOST = "127.0.0.1";
+process.env.SMTP_PORT = String(smtpSink.address().port);
+process.env.SMTP_USER = "";
 /* Short, so the finished-game cleanup can be observed without a 2 minute wait. */
 process.env.FINISHED_GRACE_MS = "1500";
 
@@ -970,22 +1001,41 @@ await fetch(base + "/api/invite/" + createdC.inviteLink.split("/invite/")[1] + "
 });
 check("completing an old invite does not re-enable a disabled host", store.hosts.get(createdC.host.id).status === "disabled", store.hosts.get(createdC.host.id).status);
 
+/* ---- emailed links: admin-created hosts and self-service requests ---- */
+check("creating a host emails the invite", created.emailed === true && mailbox.some(m => m.includes("hostb@smoke.test") && m.includes(token)), JSON.stringify(created.emailed));
+const sentBefore = mailbox.length;
+const mailReq = await fetch(base + "/api/request-reset", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hostb@smoke.test" }) });
+await new Promise(r => setTimeout(r, 400));
+check("a link request is emailed to the host and not flagged", mailReq.status === 200 && mailbox.length === sentBefore + 1 && !store.hosts.getByEmail("hostb@smoke.test").reset_requested_at, "sent " + (mailbox.length - sentBefore));
+await fetch(base + "/api/request-reset", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hostb@smoke.test" }) });
+await new Promise(r => setTimeout(r, 300));
+check("a repeat request inside the cooldown sends nothing", mailbox.length === sentBefore + 1);
+await fetch(base + "/api/request-reset", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "nobody@smoke.test" }) });
+await new Promise(r => setTimeout(r, 300));
+check("an unknown email sends nothing", mailbox.length === sentBefore + 1);
+
 /* ---- self-service link request: flags the host, never reveals who exists ---- */
-const reqKnown = await fetch(base + "/api/request-reset", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: " HostB@smoke.test " }) });
+sinkFail = true;
+const createdD = await (await fetch(base + "/api/admin/hosts", {
+  method: "POST", headers: { ...jsonHdr, Cookie: adminCookie }, body: JSON.stringify({ email: "hostmail@smoke.test" })
+})).json();
+check("a failed send is reported so the admin can pass the link on", createdD.emailed === false && Boolean(createdD.inviteLink));
+const reqKnown = await fetch(base + "/api/request-reset", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: " HostMail@smoke.test " }) });
 const reqUnknown = await fetch(base + "/api/request-reset", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "nobody@smoke.test" }) });
+await new Promise(r => setTimeout(r, 400));
 check("link request answers identically for known and unknown emails", reqKnown.status === 200 && reqUnknown.status === 200 && (await reqKnown.text()) === (await reqUnknown.text()));
-check("link request flags the host", Boolean(store.hosts.getByEmail("hostb@smoke.test").reset_requested_at));
+check("a link request flags the host when mail fails", Boolean(store.hosts.getByEmail("hostmail@smoke.test").reset_requested_at));
 const flagged = await (await fetch(base + "/api/admin/hosts", { headers: { Cookie: adminCookie } })).json();
-check("admin list shows the pending request", Boolean(flagged.find(h => h.email === "hostb@smoke.test")?.reset_requested_at));
+check("admin list shows the pending request", Boolean(flagged.find(h => h.email === "hostmail@smoke.test")?.reset_requested_at));
 await fetch(base + "/api/request-reset", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hostc@smoke.test" }) });
 check("a disabled host cannot be flagged", !store.hosts.getByEmail("hostc@smoke.test").reset_requested_at);
-const reinv = await (await fetch(base + "/api/admin/hosts/" + created.host.id + "/reinvite", { method: "POST", headers: { Cookie: adminCookie } })).json();
-check("reinvite clears the request", !store.hosts.getByEmail("hostb@smoke.test").reset_requested_at);
-await fetch(base + "/api/request-reset", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hostb@smoke.test" }) });
+const reinv = await (await fetch(base + "/api/admin/hosts/" + createdD.host.id + "/reinvite", { method: "POST", headers: { Cookie: adminCookie } })).json();
+check("reinvite clears the request", !store.hosts.getByEmail("hostmail@smoke.test").reset_requested_at);
+await fetch(base + "/api/request-reset", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hostmail@smoke.test" }) });
 await fetch(base + "/api/invite/" + reinv.inviteLink.split("/invite/")[1] + "/complete", { method: "POST", headers: jsonHdr, body: JSON.stringify({ password: "hostb-new-pass-1" }) });
-const relog = await fetch(base + "/api/login", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hostb@smoke.test", password: "hostb-new-pass-1" }) });
+const relog = await fetch(base + "/api/login", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hostmail@smoke.test", password: "hostb-new-pass-1" }) });
 check("an active host can reset their password through a re-issued link", relog.status === 200, "got " + relog.status);
-check("completing the link clears a pending request", !store.hosts.getByEmail("hostb@smoke.test").reset_requested_at);
+check("completing the link clears a pending request", !store.hosts.getByEmail("hostmail@smoke.test").reset_requested_at);
 
 const fakePng = await fetch(base + "/api/uploads/image", {
   method: "POST", headers: { ...jsonHdr, Cookie: cookie },
@@ -1121,6 +1171,7 @@ check("an edited self-paced quiz reaches new attempts while an old attempt is st
 /* ---- done ---- */
 players.forEach(p => p.socket.disconnect());
 hostSocket.disconnect();
+smtpSink.close();
 server.close();
 fs.rmSync(tmp, { recursive: true, force: true });
 
