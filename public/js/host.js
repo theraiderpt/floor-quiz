@@ -95,14 +95,21 @@ async function login() {
   }
 }
 
+/* The sign-in note is written from JS, so it needs its own refresh on a
+   language switch (data-i18n would be reset by it, per the i18n rule). */
+let noteKey = null;
+document.addEventListener("langchange", () => { if (noteKey) $("loginNote").textContent = t(noteKey); });
+
 $("requestLink").addEventListener("click", async () => {
   $("loginErr").textContent = "";
   $("loginNote").textContent = "";
+  noteKey = null;
   const email = $("email").value.trim();
   if (!email) { $("loginErr").textContent = t("host.requestNeedEmail"); return; }
   try {
     await api("/request-reset", { method: "POST", body: { email } });
-    $("loginNote").textContent = t("host.requestSent");
+    noteKey = "host.requestSent";
+    $("loginNote").textContent = t(noteKey);
   } catch (e) {
     $("loginErr").textContent = e.message;
   }

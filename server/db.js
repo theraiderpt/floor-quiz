@@ -111,6 +111,8 @@ ensureColumn("quizzes", "share_token", "TEXT");
 /* Set when a host asks for a new link (forgot password / expired invite) and
    cleared once an admin re-issues one, so the admin list can show who is waiting. */
 ensureColumn("hosts", "reset_requested_at", "TEXT");
+/* When a reset email last went to this host; survives restarts so the cooldown can't be reset by bouncing the app. */
+ensureColumn("hosts", "reset_mailed_at", "TEXT");
 ensureColumn("sessions", "mode", "TEXT NOT NULL DEFAULT 'live'");
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_quizzes_share_token ON quizzes(share_token) WHERE share_token IS NOT NULL");
 
@@ -264,6 +266,8 @@ const stmt = {
   requestHostReset: db.prepare(
     "UPDATE hosts SET reset_requested_at = datetime('now') WHERE email = ? AND status IN ('invited', 'active')"
   ),
+  markHostMailed: db.prepare("UPDATE hosts SET reset_mailed_at = datetime('now') WHERE id = ?"),
+  hostMailedSince: db.prepare("SELECT 1 FROM hosts WHERE id = ? AND reset_mailed_at > datetime('now', ?)"),
   clearHostReset: db.prepare("UPDATE hosts SET reset_requested_at = NULL WHERE id = ?"),
   updateHostQuota: db.prepare("UPDATE hosts SET max_players = ? WHERE id = ?"),
   setHostStatus: db.prepare("UPDATE hosts SET status = ? WHERE id = ?"),
@@ -500,6 +504,8 @@ export const store = {
     },
     setPassword: (id, passwordHash) => stmt.setHostPassword.run(passwordHash, id).changes > 0,
     requestReset: email => stmt.requestHostReset.run(email).changes > 0,
+    markMailed: id => stmt.markHostMailed.run(id).changes > 0,
+    mailedWithin: (id, minutes) => Boolean(stmt.hostMailedSince.get(id, `-${minutes} minutes`)),
     clearReset: id => stmt.clearHostReset.run(id).changes > 0,
     updateQuota: (id, maxPlayers) => stmt.updateHostQuota.run(maxPlayers, id).changes > 0,
     setStatus: (id, status) => stmt.setHostStatus.run(status, id).changes > 0,
