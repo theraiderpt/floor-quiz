@@ -23,6 +23,15 @@ const CHANGELOG = [
         ro: "Ai uitat parola sau a expirat linkul de invitație? Folosește \"Cere un link nou\" pe ecranul de autentificare și un administrator îți va trimite unul."
       },
       {
+        en: "When a game ends, the results (summary and a CSV file) are emailed to you automatically.",
+        fr: "À la fin d'une partie, les résultats (résumé et fichier CSV) vous sont envoyés automatiquement par e-mail.",
+        de: "Nach Spielende werden die Ergebnisse (Zusammenfassung und CSV-Datei) automatisch per E-Mail an dich gesendet.",
+        es: "Al terminar una partida, los resultados (resumen y archivo CSV) se te envían automáticamente por correo.",
+        el: "Όταν τελειώνει ένα παιχνίδι, τα αποτελέσματα (περίληψη και αρχείο CSV) σου στέλνονται αυτόματα με email.",
+        pt: "Quando um jogo termina, os resultados (resumo e ficheiro CSV) são enviados automaticamente para o seu email.",
+        ro: "La finalul unui joc, rezultatele (rezumat și fișier CSV) îți sunt trimise automat prin email."
+      },
+      {
         en: "New invite and password-reset links are now emailed to you automatically.",
         fr: "Les nouveaux liens d'invitation et de réinitialisation du mot de passe vous sont désormais envoyés automatiquement par e-mail.",
         de: "Neue Einladungs- und Passwort-Zurücksetzen-Links werden dir jetzt automatisch per E-Mail geschickt.",

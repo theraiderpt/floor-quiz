@@ -27,10 +27,10 @@ export const mailEnabled = Boolean(transport);
 
 /* Resolves true when the server accepted the message, false on any failure or
    when mail is off, so callers fall back to showing the link to an admin. */
-export async function sendMail({ to, subject, text }) {
+export async function sendMail({ to, subject, text, attachments }) {
   if (!transport) return false;
   try {
-    await transport.sendMail({ from: smtp.from, to, subject, text });
+    await transport.sendMail({ from: smtp.from, to, subject, text, attachments });
     return true;
   } catch (err) {
     console.error("mail failed:", err.code || err.message);

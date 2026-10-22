@@ -14,7 +14,7 @@ import { Attempts } from "./selfpaced.js";
 import { sendInviteEmail, mailEnabled } from "./mail.js";
 import { hashPassword, verifyPassword, randomToken } from "./auth.js";
 import { saveImageUpload, searchGiphy, sweepOrphanUploads } from "./media.js";
-import { csvLabels, csvOutcome } from "./csv-labels.js";
+import { sessionCsv, csvFilename, emailSessionResults } from "./results.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -64,7 +64,16 @@ app.use(
 );
 
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-const isEmail = s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+/* Express 4 ignores a rejected async handler, which becomes an unhandled
+   rejection and kills the process. Wrap the async routes in this. */
+const safe = fn => (req, res) =>
+  Promise.resolve(fn(req, res)).catch(err => {
+    console.error(req.method, req.path, "failed:", err.message);
+    if (!res.headersSent) res.status(500).json({ error: "Something went wrong.", code: "server" });
+  });
+
+/* Rejects , ; < > " as well: nodemailer reads a comma as a second recipient. */
+const isEmail = s => /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/.test(s);
 
 /* ---------------------------------------------------------------- auth --- */
 /* Two roles, one signed cookie. Admin accounts manage hosts/categories/the
@@ -75,6 +84,7 @@ const COOKIE = "fq_auth";
 const INVITE_TTL_MS = 48 * 60 * 60 * 1000;
 
 function newInvite(hostId) {
+  store.invites.revokeOpen(hostId); // an earlier unused link must not outlive a fresh one
   const token = randomToken();
   store.invites.create(hostId, token, new Date(Date.now() + INVITE_TTL_MS).toISOString());
   return `${config.publicUrl || ""}/invite/${token}`;
@@ -207,6 +217,13 @@ const adminLoginLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many attempts. Wait fifteen minutes.", code: "rate_login" }
 });
+const resetRequestLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many attempts. Wait fifteen minutes.", code: "rate_login" }
+});
 const inviteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 20,
@@ -242,16 +259,24 @@ setInterval(() => {
   for (const [k, t] of resetMailedAt) if (t < cutoff) resetMailedAt.delete(k);
 }, RESET_MAIL_COOLDOWN_MS).unref();
 
-app.post("/api/request-reset", inviteLimiter, (req, res) => {
+app.post("/api/request-reset", resetRequestLimiter, (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   res.json({ ok: true });
   if (!isEmail(email)) return;
-  const host = store.hosts.getByEmail(email);
-  if (!host || !["invited", "active"].includes(host.status)) return;
-  if (!mailEnabled) return void store.hosts.requestReset(email);
-  if (Date.now() - (resetMailedAt.get(email) || 0) < RESET_MAIL_COOLDOWN_MS) return;
-  resetMailedAt.set(email, Date.now());
-  emailInvite(email, newInvite(host.id)).then(ok => { if (!ok) store.hosts.requestReset(email); });
+  /* The reply is already sent, so nothing here may throw: an unhandled
+     rejection would take the whole process (and any live room) down. */
+  try {
+    const host = store.hosts.getByEmail(email);
+    if (!host || !["invited", "active"].includes(host.status)) return;
+    if (!mailEnabled) return void store.hosts.requestReset(email);
+    if (Date.now() - (resetMailedAt.get(email) || 0) < RESET_MAIL_COOLDOWN_MS) return;
+    resetMailedAt.set(email, Date.now());
+    emailInvite(email, newInvite(host.id))
+      .then(ok => { if (!ok) store.hosts.requestReset(email); })
+      .catch(err => console.error("reset mail failed:", err.message));
+  } catch (err) {
+    console.error("request-reset failed:", err.message);
+  }
 });
 
 app.post("/api/logout", (req, res) => { clearAuthCookie(res); res.json({ ok: true }); });
@@ -312,7 +337,7 @@ app.post("/api/invite/:token/complete", inviteLimiter, (req, res) => {
 
 app.get("/api/admin/hosts", requireAdmin, (req, res) => res.json(store.hosts.list()));
 
-app.post("/api/admin/hosts", requireAdmin, async (req, res) => {
+app.post("/api/admin/hosts", requireAdmin, safe(async (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   if (!isEmail(email)) return res.status(400).json({ error: "Enter a valid email.", code: "email_invalid" });
   if (store.hosts.getByEmail(email)) return res.status(409).json({ error: "A host with that email already exists.", code: "host_exists" });
@@ -321,15 +346,15 @@ app.post("/api/admin/hosts", requireAdmin, async (req, res) => {
   const inviteLink = newInvite(host.id);
   const emailed = await emailInvite(host.email, inviteLink);
   res.status(201).json({ host, inviteLink, emailed });
-});
+}));
 
-app.post("/api/admin/hosts/:id/reinvite", requireAdmin, async (req, res) => {
+app.post("/api/admin/hosts/:id/reinvite", requireAdmin, safe(async (req, res) => {
   const host = store.hosts.get(Number(req.params.id));
   if (!host) return res.status(404).json({ error: "No such host.", code: "no_host" });
   const inviteLink = newInvite(host.id);
   store.hosts.clearReset(host.id);
   res.json({ inviteLink, emailed: await emailInvite(host.email, inviteLink) });
-});
+}));
 
 app.patch("/api/admin/hosts/:id", requireAdmin, (req, res) => {
   const id = Number(req.params.id);
@@ -494,30 +519,9 @@ app.get("/api/sessions/:id", requireHost, (req, res) => {
 app.get("/api/sessions/:id/csv", requireHost, (req, res) => {
   const s = store.sessions.get(Number(req.params.id), req.hostAccount.id);
   if (!s) return res.status(404).send("No such session.");
-  /* Player names and free-text answers come from the public. A cell that
-     starts with = + - @ (or a tab/CR) is run as a formula by Excel and
-     Sheets, so prefix those with an apostrophe (OWASP's advice for CSV
-     injection). Numbers, like scores, pass through untouched. */
-  const cell = v => {
-    let text = String(v ?? "");
-    if (typeof v === "string" && /^[=+\-@\t\r]/.test(text)) text = "'" + text;
-    return `"${text.replace(/"/g, '""')}"`;
-  };
-  let questions = [];
-  try { questions = JSON.parse(s.questions_json || "[]"); } catch { questions = []; }
-  const L = csvLabels(req.query.lang);
-  const qHeaders = questions.map((q, i) => `${L.q}${i + 1}: ${q}`);
-  const lines = [[L.rank, L.name, L.email, L.score, L.correct, L.answered, ...qHeaders].map(cell).join(",")];
-  s.results.forEach(r => {
-    let log = [];
-    try { log = JSON.parse(r.answers_json || "[]"); } catch { log = []; }
-    const perQuestion = questions.map((_, i) => csvOutcome(log[i] || "", L));
-    lines.push([r.rank, r.name, r.email, r.score, r.correct_count, r.answered, ...perQuestion].map(cell).join(","));
-  });
-  const slug = s.title.replace(/[^\w]+/g, "_").slice(0, 40);
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
-  res.setHeader("Content-Disposition", `attachment; filename="${slug}_${s.id}.csv"`);
-  res.send("\uFEFF" + lines.join("\r\n"));
+  res.setHeader("Content-Disposition", `attachment; filename="${csvFilename(s)}"`);
+  res.send(sessionCsv(s, req.query.lang));
 });
 
 /* --------------------------------------------------------------- stats --- */
@@ -741,6 +745,7 @@ io.on("connection", socket => {
     let game;
     try {
       game = rooms.create(quiz, ownedQuizId, socket.data.hostId, socket.data.hostMaxPlayers);
+      game.onSaved = sessionId => { emailSessionResults(sessionId, game.hostId); };
     } catch (err) {
       return ack?.({ error: err.message, code: err.code });
     }

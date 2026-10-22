@@ -32,7 +32,7 @@ const smtpSink = net.createServer(sock => {
     data += chunk;
     if (body !== null) {
       body += chunk;
-      if (body.endsWith("\r\n.\r\n")) { mailbox.push(body); body = null; sock.write("250 ok\r\n"); }
+      if (body.endsWith("\r\n.\r\n")) { mailbox.push(body); body = null; data = ""; sock.write("250 ok\r\n"); }
       return;
     }
     for (const line of data.split("\r\n").slice(0, -1)) {
@@ -463,6 +463,10 @@ check("ranks are unique and complete",
 const sessionId = finals[0].sessionId;
 const csv = await fetch(base + "/api/sessions/" + sessionId + "/csv", { headers: { Cookie: cookie } });
 const text = await csv.text();
+await new Promise(r => setTimeout(r, 500));
+const resultsMail = mailbox.find(m => m.includes("Subject: Results:") && m.includes("hosta@smoke.test"));
+check("a finished game emails the host a summary", Boolean(resultsMail), "mailbox " + mailbox.length);
+check("the results email carries the CSV attachment", Boolean(resultsMail) && /filename=.*\.csv/.test(resultsMail) && resultsMail.includes("Content-Type: text/csv"));
 check("CSV export returns 200", csv.status === 200, "got " + csv.status);
 check("CSV has a header and three rows", text.trim().split("\r\n").length === 4, JSON.stringify(text.slice(0, 120)));
 check("CSV names the winner first", text.split("\r\n")[1].includes(board[0].name), text.split("\r\n")[1]);
@@ -1036,6 +1040,13 @@ await fetch(base + "/api/invite/" + reinv.inviteLink.split("/invite/")[1] + "/co
 const relog = await fetch(base + "/api/login", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hostmail@smoke.test", password: "hostb-new-pass-1" }) });
 check("an active host can reset their password through a re-issued link", relog.status === 200, "got " + relog.status);
 check("completing the link clears a pending request", !store.hosts.getByEmail("hostmail@smoke.test").reset_requested_at);
+
+const oldLink = reinv.inviteLink.split("/invite/")[1];
+const newer = await (await fetch(base + "/api/admin/hosts/" + createdD.host.id + "/reinvite", { method: "POST", headers: { Cookie: adminCookie } })).json();
+const oldStatus = await (await fetch(base + "/api/invite/" + oldLink)).json();
+check("issuing a new link revokes the earlier unused one", oldStatus.valid === false && Boolean(newer.inviteLink), JSON.stringify(oldStatus));
+const commaHost = await fetch(base + "/api/admin/hosts", { method: "POST", headers: { ...jsonHdr, Cookie: adminCookie }, body: JSON.stringify({ email: "a,b@evil.test" }) });
+check("an email containing a comma is rejected", commaHost.status === 400, "got " + commaHost.status);
 
 const fakePng = await fetch(base + "/api/uploads/image", {
   method: "POST", headers: { ...jsonHdr, Cookie: cookie },
