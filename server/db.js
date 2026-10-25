@@ -108,6 +108,8 @@ ensureColumn("results", "answers_json", "TEXT");
    share_token is only ever set for 'selfpaced' quizzes. */
 ensureColumn("quizzes", "delivery_mode", "TEXT NOT NULL DEFAULT 'live'");
 ensureColumn("quizzes", "share_token", "TEXT");
+/* Projector look for the live screen: 'light' or 'dark'. */
+ensureColumn("quizzes", "theme", "TEXT NOT NULL DEFAULT 'light'");
 /* Set when a host asks for a new link (forgot password / expired invite) and
    cleared once an admin re-issues one, so the admin list can show who is waiting. */
 ensureColumn("hosts", "reset_requested_at", "TEXT");
@@ -118,24 +120,24 @@ db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_quizzes_share_token ON quizzes(sh
 
 const stmt = {
   listQuizzes: db.prepare(
-    `SELECT id, title, questions, category_id, join_mode, gap_seconds, delivery_mode, share_token, updated_at
+    `SELECT id, title, questions, category_id, join_mode, gap_seconds, delivery_mode, theme, share_token, updated_at
      FROM quizzes WHERE host_id = ? ORDER BY updated_at DESC`
   ),
   getQuiz: db.prepare(
-    `SELECT id, title, questions, host_id, category_id, join_mode, gap_seconds, delivery_mode, share_token
+    `SELECT id, title, questions, host_id, category_id, join_mode, gap_seconds, delivery_mode, theme, share_token
      FROM quizzes WHERE id = ?`
   ),
   getQuizByShareToken: db.prepare(
-    `SELECT id, title, questions, host_id, category_id, join_mode, gap_seconds, delivery_mode, share_token, updated_at
+    `SELECT id, title, questions, host_id, category_id, join_mode, gap_seconds, delivery_mode, theme, share_token, updated_at
      FROM quizzes WHERE share_token = ? AND delivery_mode = 'selfpaced'`
   ),
   insertQuiz: db.prepare(
-    `INSERT INTO quizzes (title, questions, host_id, category_id, join_mode, gap_seconds, delivery_mode, share_token)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO quizzes (title, questions, host_id, category_id, join_mode, gap_seconds, delivery_mode, theme, share_token)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ),
   updateQuiz: db.prepare(
     `UPDATE quizzes SET title = ?, questions = ?, category_id = ?, join_mode = ?, gap_seconds = ?,
-       delivery_mode = ?, share_token = ?, updated_at = datetime('now') WHERE id = ?`
+       delivery_mode = ?, theme = ?, share_token = ?, updated_at = datetime('now') WHERE id = ?`
   ),
   deleteQuiz: db.prepare("DELETE FROM quizzes WHERE id = ?"),
 
@@ -309,6 +311,7 @@ const parseQuiz = row =>
     joinMode: row.join_mode || "name",
     gapSeconds: row.gap_seconds || 5,
     deliveryMode: row.delivery_mode || "live",
+    theme: row.theme === "dark" ? "dark" : "light",
     shareToken: row.share_token || null,
     updated_at: row.updated_at,
     host_id: row.host_id
@@ -337,11 +340,11 @@ export const store = {
       const row = stmt.getQuiz.get(id);
       return row && row.host_id === hostId ? parseQuiz(row) : null;
     },
-    create: (title, questions, hostId, categoryId, joinMode, gapSeconds, deliveryMode) => {
+    create: (title, questions, hostId, categoryId, joinMode, gapSeconds, deliveryMode, theme) => {
       const mode = deliveryMode === "selfpaced" ? "selfpaced" : "live";
       const shareToken = mode === "selfpaced" ? randomToken() : null;
       const info = stmt.insertQuiz.run(
-        title, JSON.stringify(questions), hostId, categoryId || null, joinMode || "name", gapSeconds || 5, mode, shareToken
+        title, JSON.stringify(questions), hostId, categoryId || null, joinMode || "name", gapSeconds || 5, mode, theme === "dark" ? "dark" : "light", shareToken
       );
       return store.quizzes.get(info.lastInsertRowid, hostId);
     },
@@ -350,12 +353,12 @@ export const store = {
        has already handed out never silently breaks when they tweak a
        question. Switching back to 'live' clears it; switching to
        'selfpaced' again later mints a fresh one. */
-    update: (id, title, questions, categoryId, hostId, joinMode, gapSeconds, deliveryMode) => {
+    update: (id, title, questions, categoryId, hostId, joinMode, gapSeconds, deliveryMode, theme) => {
       const mode = deliveryMode === "selfpaced" ? "selfpaced" : "live";
       const existing = stmt.getQuiz.get(id);
       const shareToken = mode === "selfpaced" ? (existing?.share_token || randomToken()) : null;
       stmt.updateQuiz.run(
-        title, JSON.stringify(questions), categoryId || null, joinMode || "name", gapSeconds || 5, mode, shareToken, id
+        title, JSON.stringify(questions), categoryId || null, joinMode || "name", gapSeconds || 5, mode, theme === "dark" ? "dark" : "light", shareToken, id
       );
       return store.quizzes.get(id, hostId);
     },

@@ -711,6 +711,21 @@ const spQuiz = await (await fetch(base + "/api/quizzes", {
 check("a self-paced quiz gets a share token when saved", typeof spQuiz.shareToken === "string" && spQuiz.shareToken.length > 10, JSON.stringify(spQuiz));
 check("delivery mode round-trips as selfpaced", spQuiz.deliveryMode === "selfpaced", JSON.stringify(spQuiz));
 
+/* ---- projector theme: defaults to light, only exactly "dark" sticks ---- */
+const themeReq = (method, path, body) => fetch(base + path, {
+  method, headers: { "Content-Type": "application/json", Cookie: cookie }, body: JSON.stringify(body)
+}).then(r => r.json());
+const themeQs = [{ type: "single", q: "T", t: 20, opts: ["A", "B"], correct: 0 }];
+const themeDefault = await themeReq("POST", "/api/quizzes", { title: "Theme default", questions: themeQs });
+check("a quiz without theme defaults to light", themeDefault.theme === "light", JSON.stringify(themeDefault));
+const themeDark = await themeReq("POST", "/api/quizzes", { title: "Theme dark", theme: "dark", questions: themeQs });
+const themeDarkGot = (await (await fetch(base + "/api/quizzes", { headers: { Cookie: cookie } })).json()).find(x => x.id === themeDark.id);
+check("theme dark round-trips through create and GET", themeDark.theme === "dark" && themeDarkGot.theme === "dark", JSON.stringify(themeDarkGot));
+const themeUpd = await themeReq("PUT", "/api/quizzes/" + themeDefault.id, { title: "Theme default", theme: "dark", questions: themeQs });
+check("theme round-trips through PUT", themeUpd.theme === "dark", JSON.stringify(themeUpd));
+const themeBad = await themeReq("POST", "/api/quizzes", { title: "Theme bad", theme: "purple", questions: themeQs });
+check("an unknown theme is stored as light", themeBad.theme === "light", JSON.stringify(themeBad));
+
 const liveAttempt = await new Promise(r => hostSocket3.emit("host:create", { quiz: spQuiz, quizId: spQuiz.id }, r));
 check("a self-paced quiz refuses to open as a live lobby", Boolean(liveAttempt.error), JSON.stringify(liveAttempt));
 

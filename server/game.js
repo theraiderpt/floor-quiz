@@ -80,7 +80,8 @@ export function sanitiseQuiz(input) {
   const joinMode = input?.joinMode === "name_email" ? "name_email" : "name";
   const gapSeconds = clamp(Number(input?.gapSeconds) || FLOW.scoresMs / 1000, 2, 30);
   const deliveryMode = input?.deliveryMode === "selfpaced" ? "selfpaced" : "live";
-  return { title, questions, joinMode, gapSeconds, deliveryMode };
+  const theme = input?.theme === "dark" ? "dark" : "light";
+  return { title, questions, joinMode, gapSeconds, deliveryMode, theme };
 }
 
 /* Checks a raw player answer against one question and reports whether it's

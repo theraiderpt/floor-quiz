@@ -157,7 +157,7 @@ async function openLibrary() {
   show("s-library");
 }
 
-$("libNew").addEventListener("click", () => { S.quiz = { id: null, title: t("host.newQuizTitle"), questions: [], categoryId: null, joinMode: "name", gapSeconds: 5, deliveryMode: "live", shareToken: null }; openSetup(); });
+$("libNew").addEventListener("click", () => { S.quiz = { id: null, title: t("host.newQuizTitle"), questions: [], categoryId: null, joinMode: "name", gapSeconds: 5, deliveryMode: "live", theme: "light", shareToken: null }; openSetup(); });
 $("libSample").addEventListener("click", async () => {
   const saved = await api("/quizzes", { method: "POST", body: SAMPLE });
   S.quiz = saved;
@@ -184,7 +184,7 @@ $("fileIn").addEventListener("change", e => {
     if (!parsed) return alert(t("host.importFailed"));
     S.quiz = {
       id: null, title: parsed.title, questions: parsed.questions, categoryId: null,
-      joinMode: parsed.joinMode || "name", gapSeconds: parsed.gapSeconds || 5, deliveryMode: parsed.deliveryMode || "live", shareToken: null
+      joinMode: parsed.joinMode || "name", gapSeconds: parsed.gapSeconds || 5, deliveryMode: parsed.deliveryMode || "live", theme: parsed.theme || "light", shareToken: null
     };
     openSetup();
   };
@@ -219,6 +219,7 @@ async function openSetup() {
   $("quizJoinMode").value = S.quiz.joinMode || "name";
   $("quizGap").value = S.quiz.gapSeconds || 5;
   $("quizDelivery").value = S.quiz.deliveryMode || "live";
+  $("quizTheme").value = S.quiz.theme || "light";
   updateDeliveryVisibility();
   renderSetup();
   show("s-setup");
@@ -288,6 +289,7 @@ $("quizTitle").addEventListener("input", e => { S.quiz.title = e.target.value; $
 $("quizCategory").addEventListener("change", e => { S.quiz.categoryId = e.target.value ? Number(e.target.value) : null; });
 $("quizJoinMode").addEventListener("change", e => { S.quiz.joinMode = e.target.value; });
 $("quizGap").addEventListener("change", e => { S.quiz.gapSeconds = Number(e.target.value) || 5; });
+$("quizTheme").addEventListener("change", e => { S.quiz.theme = e.target.value; });
 $("quizDelivery").addEventListener("change", e => { S.quiz.deliveryMode = e.target.value; updateDeliveryVisibility(); });
 $("copyShareLink").addEventListener("click", async () => {
   try {
@@ -324,7 +326,8 @@ async function persistQuiz() {
     categoryId: S.quiz.categoryId || null,
     joinMode: S.quiz.joinMode || "name",
     gapSeconds: S.quiz.gapSeconds || 5,
-    deliveryMode: S.quiz.deliveryMode || "live"
+    deliveryMode: S.quiz.deliveryMode || "live",
+    theme: S.quiz.theme || "light"
   };
   S.quiz = S.quiz.id
     ? await api("/quizzes/" + S.quiz.id, { method: "PUT", body })
@@ -1168,7 +1171,8 @@ function parseImport(name, text) {
         questions,
         joinMode: settings.joinMode,
         gapSeconds: settings.gapSeconds,
-        deliveryMode: settings.deliveryMode
+        deliveryMode: settings.deliveryMode,
+        theme: settings.theme
       };
     }
     const rows = parseCSV(text);

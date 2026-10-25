@@ -482,19 +482,19 @@ app.get("/api/giphy/search", requireHost, mediaLimiter, async (req, res) => {
 app.get("/api/quizzes", requireHost, (req, res) => res.json(store.quizzes.list(req.hostAccount.id)));
 
 app.post("/api/quizzes", requireHost, (req, res) => {
-  const { title, questions, joinMode, gapSeconds, deliveryMode } = sanitiseQuiz(req.body);
+  const { title, questions, joinMode, gapSeconds, deliveryMode, theme } = sanitiseQuiz(req.body);
   if (!questions.length) return res.status(400).json({ error: "Add at least one usable question.", code: "quiz_empty" });
   const categoryId = req.body?.categoryId ? Number(req.body.categoryId) : null;
-  res.status(201).json(store.quizzes.create(title, questions, req.hostAccount.id, categoryId, joinMode, gapSeconds, deliveryMode));
+  res.status(201).json(store.quizzes.create(title, questions, req.hostAccount.id, categoryId, joinMode, gapSeconds, deliveryMode, theme));
 });
 
 app.put("/api/quizzes/:id", requireHost, (req, res) => {
   const id = Number(req.params.id);
   if (!store.quizzes.get(id, req.hostAccount.id)) return res.status(404).json({ error: "No such quiz.", code: "no_quiz" });
-  const { title, questions, joinMode, gapSeconds, deliveryMode } = sanitiseQuiz(req.body);
+  const { title, questions, joinMode, gapSeconds, deliveryMode, theme } = sanitiseQuiz(req.body);
   if (!questions.length) return res.status(400).json({ error: "Add at least one usable question.", code: "quiz_empty" });
   const categoryId = req.body?.categoryId ? Number(req.body.categoryId) : null;
-  res.json(store.quizzes.update(id, title, questions, categoryId, req.hostAccount.id, joinMode, gapSeconds, deliveryMode));
+  res.json(store.quizzes.update(id, title, questions, categoryId, req.hostAccount.id, joinMode, gapSeconds, deliveryMode, theme));
 });
 
 app.delete("/api/quizzes/:id", requireHost, (req, res) => {
