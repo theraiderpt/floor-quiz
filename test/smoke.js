@@ -459,6 +459,22 @@ check("ranks are unique and complete",
   new Set(players.map(p => p.over.rank)).size === 3,
   JSON.stringify(players.map(p => p.over.rank)));
 
+/* ---- rank movement and podium (additive result/gameover fields) ---- */
+check("question one results have no previous rank", players.every(p => p.results[0].prevRank === null),
+  JSON.stringify(players.map(p => p.results[0].prevRank)));
+check("question two prevRank is the rank from question one",
+  players.every(p => p.results[1].prevRank === p.results[0].rank),
+  JSON.stringify(players.map(p => [p.results[0].rank, p.results[1].prevRank])));
+const q2ByRank = players.map(p => p.results[1]).sort((x, y) => x.rank - y.rank);
+check("the leader has no gap to close", q2ByRank[0].gapToNext === null, String(q2ByRank[0].gapToNext));
+check("gapToNext is the score of the player above minus your own, never negative",
+  q2ByRank.every((r, i) => i === 0 || (r.gapToNext === q2ByRank[i - 1].score - r.score && r.gapToNext >= 0)),
+  JSON.stringify(q2ByRank.map(r => [r.rank, r.score, r.gapToNext])));
+const top3 = players[0].over.top3;
+check("gameover carries the top three in board order",
+  top3?.length === 3 && top3.every((t, i) => t.name === board[i].name && t.score === board[i].score),
+  JSON.stringify(top3));
+
 /* ---- results persisted ---- */
 const sessionId = finals[0].sessionId;
 const csv = await fetch(base + "/api/sessions/" + sessionId + "/csv", { headers: { Cookie: cookie } });
@@ -848,6 +864,26 @@ check("shuffled multi-select still scores against the canonical correct set",
   smResult.correct === true && JSON.stringify(smResult.yourTexts.slice().sort()) === '["2","4"]',
   JSON.stringify(smResult));
 smPlayer.disconnect();
+
+/* ---- a one-player game has a one-entry podium ---- */
+const hostSolo = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
+await new Promise(r => hostSolo.on("connect", r));
+const soloGame = await new Promise(r => hostSolo.emit("host:create", {
+  quiz: { title: "Solo Podium", questions: [{ q: "One", t: 6, opts: ["a", "b"], correct: 0 }] }
+}, r));
+const soloP = ioc(base, { transports: ["websocket"] });
+await new Promise(r => soloP.on("connect", r));
+const soloQ = waitFor(soloP, "state", s => s.phase === "question");
+const soloOver = waitFor(soloP, "gameover", () => true, 15000);
+await new Promise(r => soloP.emit("player:join", { pin: soloGame.pin, name: "Solo" }, r));
+hostSolo.emit("host:start");
+await soloQ;
+await new Promise(r => soloP.emit("player:answer", { answer: 0 }, r));
+const soloEnd = await soloOver;
+check("a one-player game sends a one-entry top3", soloEnd.top3?.length === 1 && soloEnd.top3[0].name === "Solo",
+  JSON.stringify(soloEnd.top3));
+soloP.disconnect();
+hostSolo.disconnect();
 hostSocket4.disconnect();
 
 /* ---- host resume, kicks, rejoin lock-in, finished-game cleanup, CSV

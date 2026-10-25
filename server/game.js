@@ -153,8 +153,11 @@ export function publicQuestion(question, optOrder) {
    Single-choice keeps both the index (`choice`/`correctIndex`, for the
    existing positional highlight when the question wasn't shuffled) and the
    option text (works regardless of shuffle). */
-function resultFor(question, answer, player, rank, of) {
-  const base = { answered: Boolean(answer), score: player.score, streak: player.streak, rank, of, type: question.type };
+function resultFor(question, answer, player, rank, of, movement = {}) {
+  const base = {
+    answered: Boolean(answer), score: player.score, streak: player.streak, rank, of, type: question.type,
+    prevRank: movement.prevRank ?? null, gapToNext: movement.gapToNext ?? null
+  };
 
   if (question.type === "text") {
     return { ...base, yourText: answer ? answer.answer : null, correct: null, points: 0 };
@@ -281,6 +284,7 @@ export class Game {
       streak: 0,
       correctCount: 0,
       answered: 0,
+      lastRank: null,  // rank at the previous reveal, for the "moved up/down" cue
       optOrder: null,  // this question's per-player shuffled option order, or null
       log: []          // one entry per question, in order: "Right" | "Wrong" | "No answer" | literal text
     };
@@ -524,7 +528,12 @@ export class Game {
     for (const p of this.players.values()) {
       if (!p.socketId) continue;
       const a = this.answers.get(p.id);
-      this.io.to(p.socketId).emit("result", resultFor(q, a, p, rankById.get(p.id) || null, board.length));
+      const rank = rankById.get(p.id) || null;
+      /* Level on points still gets rank by position, so a gap of 0 is how the
+         client knows it is tied with the player above. */
+      const gapToNext = rank && rank > 1 ? board[rank - 2].score - p.score : null;
+      this.io.to(p.socketId).emit("result", resultFor(q, a, p, rank, board.length, { prevRank: p.lastRank ?? null, gapToNext }));
+      p.lastRank = rank;
     }
 
     /* Auto-advance by default so the host never has to touch the console
@@ -582,9 +591,11 @@ export class Game {
     this.lastFinal = { board, sessionId: this.sessionId };
     this.io.to(this.hostRoom).emit("final", this.lastFinal);
     const rankById = new Map(board.map((p, i) => [p.id, i + 1]));
+    const top3 = board.slice(0, 3).map(p => ({ name: p.name, score: p.score }));
     for (const p of this.players.values()) {
       if (!p.socketId) continue;
       this.io.to(p.socketId).emit("gameover", {
+        top3,
         rank: rankById.get(p.id) || null,
         of: board.length,
         score: p.score,
