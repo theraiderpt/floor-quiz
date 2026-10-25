@@ -41,7 +41,7 @@ const Session = {
 
 const socket = io({ transports: ["websocket", "polling"], reconnectionDelayMax: 4000 });
 
-const me = { pin: null, playerId: null, name: "", score: 0 };
+const me = { pin: null, playerId: null, name: "", score: 0, streak: 0 };
 let currentQ = -1;
 let answered = false;
 let endsAt = 0;
@@ -137,27 +137,73 @@ function applyState(s) {
 
 socket.on("state", applyState);
 
+const ICONS = {
+  good: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  bad: '<svg viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>',
+  none: '<svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg>'
+};
+
+/* The result screen floods with one colour so a player can tell how they
+   did from across the room before reading a word. */
+function setFlood(kind) {
+  $("s-result").className = "screen flood " + kind;
+  $("rIcon").innerHTML = ICONS[kind === "info" ? "good" : kind];
+}
+
+/* One line of movement since the last question. Every field is optional:
+   a page served by an older server, or the first question (no prevRank),
+   simply shows nothing rather than a wrong claim. */
+function movementLine(r) {
+  const num = x => typeof x === "number" && Number.isFinite(x);
+  if (!num(r.prevRank) || !num(r.rank)) return null;
+  if (r.rank > 1 && !num(r.gapToNext)) return null;
+  const diff = r.prevRank - r.rank;
+  const standing = r.rank === 1 ? t("play.inTheLead")
+    : r.gapToNext === 0 ? t("play.tied")
+    : t("play.pointsBehind", { n: r.gapToNext });
+  const parts = [];
+  if (diff > 0) parts.push(["up", t("play.rankUp", { n: diff })]);
+  else if (diff < 0) parts.push(["down", t("play.rankDown", { n: -diff })]);
+  /* A leader who stays a leader needs no "same place" next to "in the lead". */
+  else if (r.rank !== 1) parts.push(["same", t("play.rankSame")]);
+  parts.push(["standing", standing]);
+  return parts;
+}
+
+function renderMovement(r) {
+  const box = $("rMove");
+  box.innerHTML = "";
+  const parts = movementLine(r);
+  box.hidden = !parts;
+  if (parts) parts.forEach(([kind, text]) => box.appendChild(el("span", "mv " + kind, text)));
+}
+
 socket.on("result", r => {
+  if (!r) return;
   stopClock();
   me.score = r.score;
+  me.streak = r.streak || 0;
   updateScore();
   const v = $("rVerdict");
   $("rStreak").innerHTML = "";
+  $("rMove").hidden = true;
 
   /* Unscored text questions have no right/wrong verdict - they're a
      discussion prompt, not something to grade. */
   if (r.type === "text") {
     v.textContent = r.answered ? t("common.answerRecorded") : t("common.noAnswer");
     v.className = "verdict";
+    setFlood(r.answered ? "info" : "none");
     $("rPts").textContent = "";
     $("rRank").textContent = "—";
     $("rSub").textContent = t("common.totalPoints", { n: r.score });
     return show("s-result");
   }
 
-  if (!r.answered) { v.textContent = t("common.noAnswer"); v.className = "verdict"; }
-  else if (r.correct) { v.textContent = t("common.correct"); v.className = "verdict good"; }
-  else { v.textContent = t("common.notThisTime"); v.className = "verdict bad"; }
+  if (!r.answered) { v.textContent = t("common.noAnswer"); v.className = "verdict"; setFlood("none"); }
+  else if (r.correct) { v.textContent = t("common.correct"); v.className = "verdict good"; setFlood("good"); }
+  else { v.textContent = t("common.notThisTime"); v.className = "verdict bad"; setFlood("bad"); }
+  renderMovement(r);
 
   $("rPts").textContent = r.points ? "+" + r.points : "+0";
   $("rRank").textContent = r.rank ? "#" + r.rank : "—";
@@ -180,8 +226,11 @@ socket.on("result", r => {
 });
 
 socket.on("gameover", g => {
+  if (!g) return;
   stopClock();
   Session.clear();
+  me.streak = 0;
+  renderPodium(g);
   $("fRank").textContent = g.rank ? t("play.finishedRank", { rank: g.rank }) : t("play.thanks");
   $("fScore").textContent = t("common.pts", { n: g.score });
   $("fSub").textContent = g.of
@@ -205,10 +254,44 @@ socket.on("kicked", () => {
   show("s-join");
 });
 
+/* Top three from `gameover.top3`, laid out 2-1-3 like a real podium, plus
+   the player's own row underneath when they finished outside it. An older
+   server sends no top3, so the screen falls back to the plain rank and score. */
+function renderPodium(g) {
+  const pod = $("fPodium"), mine = $("fMe");
+  const top3 = Array.isArray(g.top3) ? g.top3.slice(0, 3) : [];
+  pod.innerHTML = "";
+  mine.innerHTML = "";
+  pod.hidden = !top3.length;
+  mine.hidden = true;
+  $("fScore").hidden = top3.length > 0;
+  if (!top3.length) return;
+  /* Missing places (one or two players) are skipped, not drawn empty:
+     each block has a fixed column, so first place stays in the middle. */
+  [1, 0, 2].forEach(r => {
+    const p = top3[r];
+    if (!p) return;
+    const box = el("div", "pod r" + (r + 1));
+    box.append(el("span", "medal", String(r + 1)), el("span", "pn", p.name), el("span", "ps", t("common.pts", { n: p.score })));
+    if (g.rank === r + 1) { box.classList.add("you"); box.prepend(el("span", "youtag", t("play.podiumYou"))); }
+    pod.appendChild(box);
+  });
+  if (g.rank > 3) {
+    mine.append(el("span", "rank", "#" + g.rank), el("span", "nm", me.name), el("span", "youtag", t("play.podiumYou")), el("span", "pts", t("common.pts", { n: g.score })));
+    mine.hidden = false;
+  }
+}
+
 /* ------------------------------------------------------------ answering --- */
 
 function renderPad(s) {
   $("aQn").textContent = (s.qIndex + 1) + "/" + s.total;
+  /* The streak going into this question, so a player can see what a right
+     answer now would extend. */
+  const streak = $("aStreak");
+  streak.innerHTML = "";
+  streak.hidden = !(me.streak > 1);
+  if (me.streak > 1) streak.appendChild(streakBadge(me.streak, true));
   $("aQ").textContent = s.question.q;
   $("aImg").hidden = !s.question.img;
   $("aImg").src = s.question.img || "";
@@ -343,10 +426,18 @@ function stopClock() { if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
    row - surfaces the streak bonus that already exists in scoring but
    otherwise never shows up anywhere in the UI. */
 const FLAME_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 3-3 4-3 8a3 3 0 106 0c0-1-1-2-1-3 2 1 4 4 4 7a6 6 0 11-12 0c0-6 4-9 6-12z"/></svg>';
-function streakBadge(n) {
-  const b = el("span", "streakbadge");
+/* `compact` is the top-bar version: flame and number only, the full
+   "{n} in a row" kept as its accessible name and tooltip. */
+function streakBadge(n, compact) {
+  const b = el("span", "streakbadge" + (compact ? " sm" : ""));
   b.innerHTML = FLAME_ICON;
-  b.appendChild(el("span", null, t("common.inARow", { n })));
+  const label = t("common.inARow", { n });
+  if (compact) {
+    b.appendChild(el("span", null, String(n)));
+    b.setAttribute("role", "img");
+    b.setAttribute("aria-label", label);
+    b.title = label;
+  } else b.appendChild(el("span", null, label));
   return b;
 }
 

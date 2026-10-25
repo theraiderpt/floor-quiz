@@ -10,11 +10,12 @@
 <script src="/js/locales.js"></script>
 <script src="/js/i18n.js"></script>
 </head>
-<body>
+<body class="phone">
 
 <section class="screen on" id="s-join">
-  <div class="strip"><span class="dot idle" id="jDot"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><a href="/host" class="k u-nodeco" data-i18n="play.hostSignIn">Host sign in</a></span></div>
+  <div class="strip"><span class="dot idle" id="jDot"></span><span class="spacer"></span><span class="cell"><a href="/host" class="k u-nodeco" data-i18n="play.hostSignIn">Host sign in</a></span></div>
   <div class="stage center">
+    <h1 class="logo">CX <span>Quiz</span></h1>
     <p class="eyebrow" data-i18n="play.enterPin">Enter the PIN on the screen</p>
     <div class="field u-w340">
       <label for="jPin" data-i18n="play.pin">Game PIN</label>
@@ -46,7 +47,7 @@
 </section>
 
 <section class="screen" id="s-answer">
-  <div class="strip"><span class="dot"></span><span class="cell"><span class="k" data-i18n="strip.q">q</span><span class="v" id="aQn">1/1</span></span><span class="spacer"></span><span class="cell"><span class="k" data-i18n="strip.time">time</span><span class="v" id="aClock">—</span></span><span class="cell"><span class="k" data-i18n="strip.score">score</span><span class="v" id="aScore">0</span></span></div>
+  <div class="strip"><span class="dot"></span><span class="cell"><span class="k" data-i18n="strip.q">q</span><span class="v" id="aQn">1/1</span></span><span class="spacer"></span><span class="cell"><span class="k" data-i18n="strip.time">time</span><span class="v" id="aClock">—</span></span><span class="cell"><span class="k" data-i18n="strip.score">score</span><span class="v" id="aScore">0</span></span><span class="cell" id="aStreak" hidden></span></div>
   <div class="stage u-gap14">
     <p class="qprompt" id="aQ">…</p>
     <img id="aImg" class="qimg compact" hidden alt="">
@@ -58,8 +59,10 @@
 <section class="screen" id="s-result">
   <div class="strip"><span class="dot"></span><span class="cell"><span class="k" data-i18n="strip.you">you</span><span class="v" id="rName">—</span></span><span class="spacer"></span><span class="cell"><span class="k" data-i18n="strip.rank">rank</span><span class="v" id="rRank">—</span></span></div>
   <div class="stage center">
+    <div class="popicon" id="rIcon" aria-hidden="true"></div>
     <p class="verdict" id="rVerdict">—</p>
     <p class="bigpts" id="rPts">+0</p>
+    <p class="move" id="rMove" hidden></p>
     <div id="rStreak"></div>
     <p class="sub" id="rSub"></p>
   </div>
@@ -71,6 +74,8 @@
     <p class="eyebrow" data-i18n="common.thatsTheLot">That's the lot</p>
     <h1 id="fRank">—</h1>
     <p class="bigpts" id="fScore">0</p>
+    <div class="podium" id="fPodium" hidden></div>
+    <div class="lrow me" id="fMe" hidden></div>
     <p class="sub" id="fSub"></p>
     <button class="btn ghost" id="fAgain" data-i18n="play.joinAnother">Join another game</button>
   </div>
