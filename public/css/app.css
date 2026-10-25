@@ -187,9 +187,10 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .lrow .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lrow .pts{font-family:var(--disp);font-weight:600;font-variant-numeric:tabular-nums}
 .lrow.p1{background:var(--t3);color:var(--tfg)}
-.lrow.p1 .rank,.lrow.p1 .acc{color:var(--tfg)}
+.lrow.p1 .rank{color:var(--tfg)}
 .lrow.detail{grid-template-columns:2.4em 1fr auto auto}
 .lrow.detail .acc{font-family:var(--mono);font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;justify-self:end}
+.lrow.detail.p1 .acc{color:var(--tfg)}
 .lrow.head{background:transparent;border:none;box-shadow:none;padding:4px 18px;animation:none}
 .lrow.head span{font-family:var(--body);font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 
