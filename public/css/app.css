@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans:wght@400;600;700;800&display=swap");
 
 /* "Sunny Sticker": flat colour fills, thick ink outlines and a solid bottom
    edge, so everything reads like a sticker. Light is the default (easiest
@@ -7,10 +7,10 @@
    The tile colours and their dark text (--tfg) never change with the theme:
    they always carry dark text, so their contrast doesn't depend on the page. */
 :root{
-  /* Neither Fredoka nor Nunito ships Greek glyphs, so Greek drops per glyph
-     to the system sans in the stack rather than to a serif. */
-  --disp:"Fredoka","Nunito",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --body:"Nunito",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  /* Neither Fredoka nor Nunito ships Greek glyphs; Noto Sans picks those up
+     per glyph so Greek gets a real webfont instead of whatever the OS has. */
+  --disp:"Fredoka","Nunito","Noto Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --body:"Nunito","Noto Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   /* Kept only for the big projector PIN and numeric readouts, where
      fixed-width digits stop the layout jittering as values change. */
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
@@ -26,6 +26,7 @@
   --bg:#dff1ff; --card:#ffffff; --ink:#10223f; --line:#10223f;
   --muted:#3d5578; --live:#0b7a4b; --live-rgb:11,122,75; --danger:#c0262d;
   --ink-3:#eef7ff;
+  --ctl:var(--line);
 }
 [data-theme="dark"]{
   color-scheme:dark;
@@ -34,6 +35,10 @@
   --bg:#10223f; --card:#1b3461; --ink:#f4f8ff; --line:#050d1d;
   --muted:#b7c6e0; --live:#3ddc97; --live-rgb:61,220,151; --danger:#ff8a8a;
   --ink-3:#24427a;
+  /* The dark rim is fine on filled tiles, but form controls and unfilled
+     buttons need a boundary of 3:1 or more (WCAG 1.4.11) against both the
+     ground and the card they sit on. */
+  --ctl:var(--muted);
 }
 :root{
   --shadow-edge:0 4px 0 var(--line);
@@ -85,8 +90,8 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
   transition:transform .12s ease,box-shadow .12s ease,opacity .12s ease}
 .btn:hover{transform:translateY(-1px);box-shadow:0 5px 0 var(--line)}
 .btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--line)}
-.btn.ghost{background:var(--card);color:var(--ink)}
-.btn.danger{background:var(--card);color:var(--danger)}
+.btn.ghost{background:var(--card);color:var(--ink);border-color:var(--ctl)}
+.btn.danger{background:var(--card);color:var(--danger);border-color:var(--ctl)}
 .btn.big{padding:15px 32px;font-size:clamp(18px,1.6vw,21px);border-radius:20px}
 .btn[disabled]{opacity:.45;cursor:not-allowed;transform:none;box-shadow:var(--shadow-edge)}
 .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
@@ -95,7 +100,7 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 /* fields */
 .field{display:flex;flex-direction:column;gap:7px;text-align:left}
 .field label{font-family:var(--body);font-weight:800;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.inp{background:var(--card);border:var(--bw) solid var(--line);border-radius:14px;padding:11px 14px;width:100%;
+.inp{background:var(--card);border:var(--bw) solid var(--ctl);border-radius:14px;padding:11px 14px;width:100%;
   font-weight:600;box-shadow:0 3px 0 var(--line)}
 .inp::placeholder{color:var(--muted);opacity:1}
 .inp:focus{outline:3px solid var(--t2);outline-offset:2px}
@@ -182,7 +187,7 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .lrow .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lrow .pts{font-family:var(--disp);font-weight:600;font-variant-numeric:tabular-nums}
 .lrow.p1{background:var(--t3);color:var(--tfg)}
-.lrow.p1 .rank{color:var(--tfg)}
+.lrow.p1 .rank,.lrow.p1 .acc{color:var(--tfg)}
 .lrow.detail{grid-template-columns:2.4em 1fr auto auto}
 .lrow.detail .acc{font-family:var(--mono);font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;justify-self:end}
 .lrow.head{background:transparent;border:none;box-shadow:none;padding:4px 18px;animation:none}
@@ -232,7 +237,7 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .qitem .qt{font-weight:600;margin-bottom:6px;line-height:1.35}
 .qitem .meta{font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.05em;display:flex;gap:14px;flex-wrap:wrap}
 .qitem .acts{display:flex;gap:6px;flex:none}
-.iconbtn{border:1px solid var(--line);border-radius:9px;width:32px;height:32px;display:grid;place-items:center;color:var(--muted);font-size:15px}
+.iconbtn{border:1px solid var(--ctl);border-radius:9px;width:32px;height:32px;display:grid;place-items:center;color:var(--muted);font-size:15px}
 .iconbtn:hover{color:var(--chalk);border-color:var(--muted)}
 .editgrid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
 .optrow{display:flex;gap:10px;align-items:center}
@@ -266,13 +271,13 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
    which .screen is on, so it's always reachable. Bottom-right is the one
    corner no screen already puts content in. */
 .themetoggle{position:fixed;right:16px;bottom:16px;z-index:55;width:38px;height:38px;border-radius:50%;
-  border:1px solid var(--line);background:var(--ink-2);color:var(--chalk);display:grid;place-items:center;
+  border:1px solid var(--ctl);background:var(--ink-2);color:var(--chalk);display:grid;place-items:center;
   cursor:pointer;transition:border-color .15s ease}
 .themetoggle:hover{border-color:var(--muted)}
 .themetoggle svg{width:18px;height:18px}
 
 .soundtoggle{position:fixed;right:64px;bottom:16px;z-index:55;width:38px;height:38px;border-radius:50%;
-  border:1px solid var(--line);background:var(--ink-2);color:var(--chalk);display:grid;place-items:center;
+  border:1px solid var(--ctl);background:var(--ink-2);color:var(--chalk);display:grid;place-items:center;
   cursor:pointer;transition:border-color .15s ease;font-size:16px}
 .soundtoggle:hover{border-color:var(--muted)}
 
@@ -280,7 +285,7 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
    native <select> stretched invisibly over it so the phone's own picker
    opens on tap. Bottom-left, clear of the theme and sound toggles. */
 .langpick{position:fixed;left:16px;bottom:16px;z-index:55;height:38px;min-width:48px;padding:0 12px;
-  border-radius:19px;border:1px solid var(--line);background:var(--ink-2);color:var(--chalk);
+  border-radius:19px;border:1px solid var(--ctl);background:var(--ink-2);color:var(--chalk);
   display:grid;place-items:center;font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.08em;
   cursor:pointer;transition:border-color .15s ease}
 .langpick:hover,.langpick:focus-within{border-color:var(--muted)}
