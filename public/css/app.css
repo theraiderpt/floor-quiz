@@ -1,61 +1,68 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap");
 
-/* Foundever brand palette, pulled from the official theme.json color presets
-   published on foundever.com (--wp--preset--color--brandpurple etc.), not a
-   guess. Dark is the default "wallboard" look (built for a projector in a
-   lit room), light is the alternative for players/hosts who'd rather not
-   stare at a dark screen - see js/theme.js and the fixed toggle button near
-   the end of <body> in every page. Tile/accent colors (--a1..--a4) don't
-   need to change between themes: they're independent bright backgrounds
-   with dark text on top, not dependent on the page's own ink/chalk. */
+/* "Sunny Sticker": flat colour fills, thick ink outlines and a solid bottom
+   edge, so everything reads like a sticker. Light is the default (easiest
+   to read on a projector in a lit room); dark keeps the same stickers on a
+   navy ground. See js/theme.js for how the theme is chosen.
+   The tile colours and their dark text (--tfg) never change with the theme:
+   they always carry dark text, so their contrast doesn't depend on the page. */
 :root{
-  /* Space Grotesk has no Greek glyphs; Noto Sans (already loaded for body
-     text) picks those up so Greek headings don't drop to a system font. */
-  --disp:"Space Grotesk","Noto Sans","Trebuchet MS",sans-serif;
-  --body:"Noto Sans",system-ui,-apple-system,sans-serif;
+  /* Neither Fredoka nor Nunito ships Greek glyphs, so Greek drops per glyph
+     to the system sans in the stack rather than to a serif. */
+  --disp:"Fredoka","Nunito",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --body:"Nunito",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  /* Kept only for the big projector PIN and numeric readouts, where
+     fixed-width digits stop the layout jittering as values change. */
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --pad:clamp(16px,3vw,34px);
+  --t1:#ff6b6b; --t2:#4dabff; --t3:#ffd23f; --t4:#3ddc97; --tfg:#10223f;
+  /* Old position-colour names: answer 1 to 4 (triangle, diamond, circle,
+     square) plus the editor swatches and confetti in the JS use these. */
+  --a1:var(--t1); --a2:var(--t2); --a3:var(--t3); --a4:var(--t4);
+  --bw:3px;
 }
-:root,[data-theme="dark"]{
-  --ink:#09092d; --ink-2:#16144a; --ink-3:#241f66; --line:#3a3480;
-  --chalk:#f3f3f7; --muted:#b0b0cd; --live:#8bf0bb; --live-rgb:139,240,187;
-  --a1:#f9ef77; --a2:#8bf0bb; --a3:#ff8d96; --a4:#4a4af9;
-  /* Coral (--a3) is light text on a dark page, plenty of contrast - but the
-     same coral as text on the light theme's near-white page would read at
-     roughly 2:1, well under WCAG AA. --danger is the theme-aware version
-     for text/border contexts (error text, danger buttons, "wrong" verdict);
-     --a3 itself stays put for tile backgrounds, which don't have this
-     problem since they always carry dark text regardless of theme. */
-  --danger:#ff8d96;
+:root,[data-theme="light"]{
+  color-scheme:light;
+  --bg:#dff1ff; --card:#ffffff; --ink:#10223f; --line:#10223f;
+  --muted:#3d5578; --live:#0b7a4b; --live-rgb:11,122,75; --danger:#c0262d;
+  --ink-3:#eef7ff;
 }
-[data-theme="light"]{
-  --ink:#f3f3f7; --ink-2:#ffffff; --ink-3:#e9e9f2; --line:#c4c4d8;
-  --chalk:#09092d; --muted:#5b5b78; --live:#00813e; --live-rgb:0,129,62;
-  --a1:#f9ef77; --a2:#8bf0bb; --a3:#ff8d96; --a4:#4a4af9;
-  --danger:#b3324a;
+[data-theme="dark"]{
+  color-scheme:dark;
+  /* Outlines go darker than the ground (not lighter) so cards and tiles
+     still sit on top of the page like stickers instead of glowing. */
+  --bg:#10223f; --card:#1b3461; --ink:#f4f8ff; --line:#050d1d;
+  --muted:#b7c6e0; --live:#3ddc97; --live-rgb:61,220,151; --danger:#ff8a8a;
+  --ink-3:#24427a;
+}
+:root{
+  --shadow-edge:0 4px 0 var(--line);
+  /* Aliases from the old palette, so rules not yet restyled keep working:
+     --chalk was the text colour and --ink-2 the raised surface. */
+  --chalk:var(--ink); --ink-2:var(--card);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
-body{background:var(--ink);color:var(--chalk);font-family:var(--body);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);-webkit-font-smoothing:antialiased;overflow-x:hidden}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 input,textarea,select{font:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--live);outline-offset:3px}
+:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
 a{color:var(--chalk)}
 
 /* wallboard strip */
 .strip{display:flex;align-items:center;gap:clamp(12px,2.4vw,30px);padding:12px var(--pad);
-  border-bottom:1px solid var(--line);background:var(--ink-2);font-family:var(--mono);
-  font-size:clamp(11px,1.15vw,14px);letter-spacing:.09em;text-transform:uppercase;
+  border-bottom:var(--bw) solid var(--line);background:var(--card);font-family:var(--body);font-weight:800;
+  font-size:clamp(12px,1.2vw,15px);letter-spacing:.04em;text-transform:uppercase;
   flex-wrap:wrap;position:sticky;top:0;z-index:20}
 .strip .cell{display:flex;align-items:baseline;gap:8px;white-space:nowrap}
 .strip .k{color:var(--muted)}
-.strip .v{font-weight:600;font-variant-numeric:tabular-nums}
+.strip .v{font-family:var(--disp);font-weight:600;letter-spacing:0;text-transform:none;font-variant-numeric:tabular-nums}
 .strip .spacer{flex:1}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--live);flex:none;
   box-shadow:0 0 0 0 rgba(var(--live-rgb),.6);animation:ping 2s ease-out infinite}
 @keyframes ping{70%{box-shadow:0 0 0 9px rgba(var(--live-rgb),0)}100%{box-shadow:0 0 0 0 rgba(var(--live-rgb),0)}}
 .dot.idle{background:var(--muted);animation:none}
-.dot.down{background:var(--a3);animation:none}
+.dot.down{background:var(--danger);animation:none}
 
 /* layout */
 .screen{display:none;min-height:100vh;min-height:100dvh;flex-direction:column}
@@ -64,34 +71,39 @@ a{color:var(--chalk)}
 .stage.center{justify-content:center;align-items:center;text-align:center}
 h1{font-family:var(--disp);font-weight:700;font-size:clamp(28px,5vw,54px);line-height:1.04;letter-spacing:-.02em}
 h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);letter-spacing:-.01em}
-.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.eyebrow{font-family:var(--body);font-weight:800;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .sub{color:var(--muted);max-width:56ch;line-height:1.55}
 .note{font-size:13px;color:var(--muted);line-height:1.55}
 .err{color:var(--danger);font-size:13.5px;min-height:1.3em}
 
 /* buttons */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:14px 24px;
-  border-radius:16px;background:var(--chalk);color:var(--ink);font-weight:600;
-  transition:transform .12s ease,opacity .12s ease}
-.btn:hover{transform:translateY(-1px)}
-.btn.ghost{background:transparent;color:var(--chalk);border:1px solid var(--line)}
-.btn.ghost:hover{border-color:var(--muted)}
-.btn.danger{background:transparent;color:var(--danger);border:1px solid var(--danger)}
-.btn.big{padding:18px 34px;font-size:clamp(16px,1.5vw,19px);border-radius:20px}
-.btn[disabled]{opacity:.4;cursor:not-allowed;transform:none}
+/* The solid bottom edge is a box-shadow, so pressing can sink the button
+   onto it without changing layout. */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:12px 22px;
+  border-radius:16px;background:var(--t1);color:var(--tfg);font-family:var(--disp);font-weight:600;font-size:16px;
+  border:var(--bw) solid var(--line);box-shadow:var(--shadow-edge);
+  transition:transform .12s ease,box-shadow .12s ease,opacity .12s ease}
+.btn:hover{transform:translateY(-1px);box-shadow:0 5px 0 var(--line)}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--line)}
+.btn.ghost{background:var(--card);color:var(--ink)}
+.btn.danger{background:var(--card);color:var(--danger)}
+.btn.big{padding:15px 32px;font-size:clamp(18px,1.6vw,21px);border-radius:20px}
+.btn[disabled]{opacity:.45;cursor:not-allowed;transform:none;box-shadow:var(--shadow-edge)}
 .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 .between{justify-content:space-between}
 
 /* fields */
 .field{display:flex;flex-direction:column;gap:7px;text-align:left}
-.field label{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
-.inp{background:var(--ink-2);border:1px solid var(--line);border-radius:12px;padding:13px 15px;width:100%}
-.inp:focus{border-color:var(--muted);outline:none}
-.inp.pin{font-family:var(--mono);font-size:clamp(28px,7vw,44px);letter-spacing:.34em;text-align:center;font-weight:600;padding:18px 10px}
-.panel{border:1px solid var(--line);border-radius:18px;background:var(--ink-2);padding:clamp(16px,2.4vw,24px);display:flex;flex-direction:column;gap:16px}
+.field label{font-family:var(--body);font-weight:800;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.inp{background:var(--card);border:var(--bw) solid var(--line);border-radius:14px;padding:11px 14px;width:100%;
+  font-weight:600;box-shadow:0 3px 0 var(--line)}
+.inp::placeholder{color:var(--muted);opacity:1}
+.inp:focus{outline:3px solid var(--t2);outline-offset:2px}
+.inp.pin{font-family:var(--disp);font-size:clamp(30px,7vw,44px);letter-spacing:.3em;text-indent:.3em;text-align:center;font-weight:600;padding:14px 10px;font-variant-numeric:tabular-nums}
+.panel{border:var(--bw) solid var(--line);border-radius:20px;background:var(--card);box-shadow:var(--shadow-edge);padding:clamp(16px,2.4vw,24px);display:flex;flex-direction:column;gap:16px}
 .divider{height:1px;background:var(--line);border:none}
-.card{border:1px solid var(--line);border-radius:18px;background:var(--ink-2);padding:26px 24px;text-align:left;transition:border-color .15s ease,background .15s ease}
-.card:hover{border-color:var(--muted);background:var(--ink-3)}
+.card{border:var(--bw) solid var(--line);border-radius:20px;background:var(--card);box-shadow:var(--shadow-edge);padding:26px 24px;text-align:left;transition:transform .12s ease,background .15s ease}
+.card:hover{transform:translateY(-2px);background:var(--ink-3)}
 .card h3{font-family:var(--disp);font-size:22px;font-weight:700;margin-bottom:6px}
 .card p{color:var(--muted);font-size:14px;line-height:1.5}
 .picker{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));width:100%;max-width:720px}
@@ -110,7 +122,8 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .pinbox .url{font-family:var(--mono);font-size:clamp(12px,1.4vw,16px);color:var(--muted);margin-top:10px;word-break:break-all}
 .qr{border-radius:14px;width:clamp(150px,17vw,230px);height:auto;display:block;background:var(--chalk);padding:8px}
 .roster{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;max-width:1000px}
-.chip{border:1px solid var(--line);border-radius:999px;padding:8px 16px;background:var(--ink-2);font-size:14px;font-weight:500;animation:pop .28s cubic-bezier(.2,.9,.3,1.3)}
+.chip{border:var(--bw) solid var(--line);border-radius:999px;padding:7px 16px;background:var(--card);box-shadow:0 3px 0 var(--line);
+  font-family:var(--disp);font-size:16px;font-weight:600;animation:pop .28s cubic-bezier(.2,.9,.3,1.3)}
 .chip.off{opacity:.42}
 @keyframes pop{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
 
@@ -124,7 +137,7 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 
 .gifsearch{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--ink-2)}
 .gifgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
-.gifgrid button{padding:0;border:2px solid transparent;border-radius:10px;overflow:hidden;background:var(--ink);cursor:pointer;aspect-ratio:1;transition:border-color .15s ease}
+.gifgrid button{padding:0;border:2px solid transparent;border-radius:10px;overflow:hidden;background:var(--bg);cursor:pointer;aspect-ratio:1;transition:border-color .15s ease}
 .gifgrid button:hover,.gifgrid button:focus-visible{border-color:var(--a2)}
 .gifgrid img{width:100%;height:100%;object-fit:cover;display:block}
 
@@ -134,14 +147,14 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .track{flex:1;height:12px;border-radius:99px;background:var(--ink-3);overflow:hidden}
 .track.sm{height:8px}
 .fill{height:100%;width:100%;background:var(--live);border-radius:99px}
-.fill.warn{background:var(--a1)}
-.fill.crit{background:var(--a3)}
+.fill.warn{background:var(--t3)}
+.fill.crit{background:var(--t1)}
 .clock{font-family:var(--mono);font-weight:600;font-size:clamp(22px,3vw,34px);font-variant-numeric:tabular-nums;min-width:2.2ch;text-align:right;display:inline-block}
 .clock.crit{color:var(--danger);animation:clockpulse .5s ease-in-out infinite}
 @keyframes clockpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
 .answers{display:grid;grid-template-columns:1fr 1fr;gap:clamp(10px,1.6vw,16px);width:100%;max-width:960px;margin:0 auto}
 .ans{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:clamp(16px,2.4vw,26px);
-  border-radius:18px;color:#09092d;font-weight:600;text-align:left;font-size:clamp(15px,1.85vw,23px);
+  border-radius:18px;color:var(--tfg);font-weight:600;text-align:left;font-size:clamp(15px,1.85vw,23px);
   line-height:1.25;min-height:clamp(72px,11vh,124px);transition:opacity .25s ease,filter .25s ease}
 /* One shape per position (triangle/diamond/circle/square), the same
    position-to-shape pairing the whole live-quiz genre uses (Kahoot etc) so
@@ -157,22 +170,23 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .ans.hit{box-shadow:0 0 0 3px var(--chalk);animation:tilepop .5s ease}
 @keyframes tilepop{0%{transform:scale(1)}45%{transform:scale(1.07)}100%{transform:scale(1)}}
 .counter{font-family:var(--mono);font-size:clamp(12px,1.3vw,15px);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
-.counter.fastest{color:var(--a2);font-weight:700;animation:pop .3s cubic-bezier(.2,.9,.3,1.3)}
+.counter.fastest{color:var(--live);font-weight:700;animation:pop .3s cubic-bezier(.2,.9,.3,1.3)}
 
 /* leaderboard */
 .board{width:100%;max-width:660px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
-.lrow{display:grid;grid-template-columns:2.4em 1fr auto;align-items:center;gap:14px;padding:14px 18px;
-  border-radius:14px;background:var(--ink-2);border:1px solid var(--line);
+.lrow{display:grid;grid-template-columns:2.4em 1fr auto;align-items:center;gap:14px;padding:12px 18px;
+  border-radius:16px;background:var(--card);border:var(--bw) solid var(--line);box-shadow:0 3px 0 var(--line);
   animation:slidein .35s cubic-bezier(.2,.9,.3,1) backwards}
 @keyframes slidein{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
-.lrow .rank{font-family:var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
-.lrow .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lrow .pts{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
-.lrow.p1{background:linear-gradient(90deg,rgba(249,239,119,.2),var(--ink-2))}
+.lrow .rank{font-family:var(--disp);font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.lrow .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .pts{font-family:var(--disp);font-weight:600;font-variant-numeric:tabular-nums}
+.lrow.p1{background:var(--t3);color:var(--tfg)}
+.lrow.p1 .rank{color:var(--tfg)}
 .lrow.detail{grid-template-columns:2.4em 1fr auto auto}
 .lrow.detail .acc{font-family:var(--mono);font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;justify-self:end}
-.lrow.head{background:transparent;border:none;padding:4px 18px;animation:none}
-.lrow.head span{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.lrow.head{background:transparent;border:none;box-shadow:none;padding:4px 18px;animation:none}
+.lrow.head span{font-family:var(--body);font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 
 /* text/numeric question and reveal (no tile grid to show) */
 .resplist{display:flex;flex-direction:column;gap:10px;width:100%;max-width:760px;margin:0 auto}
@@ -199,14 +213,16 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .qbar .qb-head .qtxt{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .qbar .qb-head .qpct{font-family:var(--mono);color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
 .podium{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:end;width:100%;max-width:660px;margin:0 auto}
-.pod{border:1px solid var(--line);border-radius:18px 18px 0 0;background:var(--ink-2);padding:18px 12px;
-  text-align:center;display:flex;flex-direction:column;gap:6px;justify-content:flex-end}
-.pod .pn{font-weight:600;font-size:clamp(14px,1.6vw,18px);overflow:hidden;text-overflow:ellipsis}
-.pod .ps{font-family:var(--mono);color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+/* Podium blocks are tiles (gold, blue, coral) so they always take the dark
+   tile text, whatever the page theme. */
+.pod{border:var(--bw) solid var(--line);border-bottom-width:0;border-radius:20px 20px 0 0;background:var(--card);color:var(--tfg);
+  padding:18px 12px;text-align:center;display:flex;flex-direction:column;gap:6px;justify-content:flex-end}
+.pod .pn{font-weight:800;font-size:clamp(14px,1.6vw,18px);overflow:hidden;text-overflow:ellipsis}
+.pod .ps{font-family:var(--disp);font-weight:600;font-size:15px;font-variant-numeric:tabular-nums}
 .pod .medal{font-family:var(--disp);font-weight:700;font-size:clamp(26px,4vw,40px)}
-.pod.r1{min-height:190px;border-color:var(--a1)} .pod.r1 .medal{color:var(--a1)}
-.pod.r2{min-height:150px} .pod.r2 .medal{color:var(--muted)}
-.pod.r3{min-height:126px} .pod.r3 .medal{color:var(--a1);opacity:.62}
+.pod.r1{min-height:190px;background:var(--t3)}
+.pod.r2{min-height:150px;background:var(--t2)}
+.pod.r3{min-height:126px;background:var(--t1)}
 
 /* editor */
 .qlist{display:flex;flex-direction:column;gap:10px;width:100%}
@@ -241,8 +257,8 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .pad.stack textarea.inp{min-height:110px;resize:vertical}
 
 /* offline banner */
-.offline{position:fixed;left:0;right:0;bottom:0;background:var(--a3);color:#fff;padding:10px var(--pad);
-  font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;text-align:center;
+.offline{position:fixed;left:0;right:0;bottom:0;background:var(--t1);color:var(--tfg);border-top:var(--bw) solid var(--line);padding:10px var(--pad);
+  font-family:var(--body);font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;text-align:center;
   transform:translateY(110%);transition:transform .25s ease;z-index:60}
 .offline.on{transform:none}
 
@@ -284,7 +300,7 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 /* streak badge: shown on a player's own result when they're a few correct
    answers into a row, surfacing the streak bonus that already exists in
    scoring but otherwise never shows up anywhere in the UI. */
-.streakbadge{display:inline-flex;align-items:center;gap:6px;background:var(--a1);color:#09092d;
+.streakbadge{display:inline-flex;align-items:center;gap:6px;background:var(--t3);color:var(--tfg);
   font-weight:700;padding:7px 16px;border-radius:999px;font-family:var(--mono);font-size:14px;
   margin-top:4px;animation:pop .3s cubic-bezier(.2,.9,.3,1.3)}
 .streakbadge svg{width:15px;height:15px;fill:currentColor}
