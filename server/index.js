@@ -655,7 +655,7 @@ async function joinInfo(pin) {
   let qr = null;
   if (config.publicUrl) {
     try {
-      qr = await QRCode.toDataURL(joinUrl, { margin: 1, width: 340, color: { dark: "#09092d", light: "#f3f3f7" } });
+      qr = await QRCode.toDataURL(joinUrl, { margin: 1, width: 340, color: { dark: "#10223f", light: "#ffffff" } });
     } catch { /* a missing QR is cosmetic, never fatal */ }
   }
   return { joinUrl, qr };

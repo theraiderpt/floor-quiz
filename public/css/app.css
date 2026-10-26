@@ -90,6 +90,7 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
   transition:transform .12s ease,box-shadow .12s ease,opacity .12s ease}
 .btn:hover{transform:translateY(-1px);box-shadow:0 5px 0 var(--line)}
 .btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--line)}
+a.btn{text-decoration:none}
 .btn.ghost{background:var(--card);color:var(--ink);border-color:var(--ctl)}
 .btn.danger{background:var(--card);color:var(--danger);border-color:var(--ctl)}
 .btn.big{padding:15px 32px;font-size:clamp(18px,1.6vw,21px);border-radius:20px}
@@ -113,23 +114,42 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .card p{color:var(--muted);font-size:14px;line-height:1.5}
 .picker{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));width:100%;max-width:720px}
 
-.whatsnew{border:1px solid var(--line);border-radius:18px;background:var(--ink-2);padding:20px 22px;
+.whatsnew{border:var(--bw) solid var(--line);border-radius:20px;background:var(--card);box-shadow:var(--shadow-edge);padding:20px 22px;
   text-align:left;width:min(340px,88vw);display:flex;flex-direction:column;gap:14px}
-.whatsnew-release+.whatsnew-release{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
-.whatsnew-date{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.whatsnew-release+.whatsnew-release{margin-top:14px;padding-top:14px;border-top:2px dashed var(--ctl)}
+.whatsnew-date{font-family:var(--body);font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
 .whatsnew-release ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
 .whatsnew-release li{font-size:13px;line-height:1.5;color:var(--chalk)}
 
+/* ---- host projector (host.html game screens) ----
+   These four screens are read from the back of a room, so they get a wider
+   stage than the console screens and type sized off the viewport. */
+#s-lobby .stage,#s-play .stage,#s-scores .stage,#s-final .stage{max-width:1560px}
+#s-lobby .note{font-size:clamp(15px,1.4vw,20px);font-weight:700}
+
 /* lobby */
 .lobbygrid{display:grid;gap:clamp(18px,3vw,42px);grid-template-columns:auto auto;align-items:center;justify-content:center}
-.pinbox{border:1px solid var(--line);border-radius:22px;background:var(--ink-2);padding:clamp(20px,3.5vw,34px) clamp(24px,5vw,56px);text-align:center}
-.pinbox .pin{font-family:var(--mono);font-weight:600;font-size:clamp(52px,11vw,108px);letter-spacing:.12em;line-height:1;font-variant-numeric:tabular-nums}
-.pinbox .url{font-family:var(--mono);font-size:clamp(12px,1.4vw,16px);color:var(--muted);margin-top:10px;word-break:break-all}
-.qr{border-radius:14px;width:clamp(150px,17vw,230px);height:auto;display:block;background:var(--chalk);padding:8px}
-.roster{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;max-width:1000px}
-.chip{border:var(--bw) solid var(--line);border-radius:999px;padding:7px 16px;background:var(--card);box-shadow:0 3px 0 var(--line);
-  font-family:var(--disp);font-size:16px;font-weight:600;animation:pop .28s cubic-bezier(.2,.9,.3,1.3)}
+.pinbox{border:var(--bw) solid var(--line);border-radius:28px;background:var(--card);box-shadow:0 6px 0 var(--line);
+  padding:clamp(18px,3vw,30px) clamp(28px,5vw,64px);text-align:center;display:flex;flex-direction:column;gap:8px}
+.pinbox .pin{font-family:var(--disp);font-weight:700;font-size:clamp(64px,min(11vw,16vh),148px);letter-spacing:.08em;line-height:1;font-variant-numeric:tabular-nums}
+.pinbox .url{font-family:var(--body);font-weight:800;font-size:clamp(15px,1.6vw,22px);color:var(--muted);word-break:break-all}
+/* Always a white card, whatever the theme: a QR scans best dark on white,
+   and the server draws the code on white to match. */
+.qr{border-radius:22px;width:clamp(150px,min(19vw,30vh),270px);height:auto;display:block;background:#fff;padding:10px;
+  border:var(--bw) solid var(--line);box-shadow:0 6px 0 var(--line);transform:rotate(2deg)}
+.roster{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;max-width:1400px}
+.chip{border:var(--bw) solid var(--line);border-radius:999px;padding:7px 18px;background:var(--card);box-shadow:0 3px 0 var(--line);
+  font-family:var(--disp);font-size:clamp(16px,1.5vw,22px);font-weight:600;cursor:pointer}
+/* Only a chip that has just joined bounces in; host.js drops the class
+   when the animation ends, so a later re-render never replays it. */
+.chip.new{animation:chipin .5s cubic-bezier(.2,.9,.3,1.5)}
+.chip:hover{background:var(--ink-3)}
 .chip.off{opacity:.42}
+/* A full room: tighter chips in a box of their own that scrolls, so the
+   PIN and the Start button stay on screen with 150 names in. */
+.roster.dense{gap:7px;max-height:30vh;overflow-y:auto;padding:4px 4px 8px}
+.roster.dense .chip{font-size:clamp(13px,1.1vw,16px);padding:4px 12px;border-width:2px;box-shadow:0 2px 0 var(--line)}
+@keyframes chipin{0%{opacity:0;transform:scale(.4) translateY(10px)}60%{opacity:1;transform:scale(1.12)}100%{transform:none}}
 @keyframes pop{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
 
 /* question images */
@@ -140,15 +160,19 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
    answer pad still needs most of a phone screen below it. */
 .qimg.compact{max-height:20vh;max-width:min(420px,92%)}
 
-.gifsearch{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--ink-2)}
+.gifsearch{display:flex;flex-direction:column;gap:10px;padding:12px;border:var(--bw) solid var(--line);border-radius:16px;background:var(--card);box-shadow:0 3px 0 var(--line)}
 .gifgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
 .gifgrid button{padding:0;border:2px solid transparent;border-radius:10px;overflow:hidden;background:var(--bg);cursor:pointer;aspect-ratio:1;transition:border-color .15s ease}
 .gifgrid button:hover,.gifgrid button:focus-visible{border-color:var(--a2)}
 .gifgrid img{width:100%;height:100%;object-fit:cover;display:block}
 
 /* question */
-.qtext{font-family:var(--disp);font-weight:700;font-size:clamp(24px,3.9vw,46px);line-height:1.16;letter-spacing:-.02em;text-align:center;max-width:24ch;margin:0 auto}
-.timerwrap{display:flex;align-items:center;gap:16px;width:100%;max-width:820px;margin:0 auto}
+/* The question sits on a white sticker card, like the prompt on the phones. */
+.qtext{font-family:var(--disp);font-weight:700;font-size:clamp(28px,3.6vw,58px);line-height:1.12;letter-spacing:-.015em;text-align:center;
+  width:100%;margin:0 auto;padding:clamp(14px,2vh,24px) clamp(18px,3vw,40px);overflow-wrap:anywhere;
+  background:var(--card);border:var(--bw) solid var(--line);border-radius:26px;box-shadow:0 6px 0 var(--line)}
+.timerwrap{display:flex;align-items:center;gap:clamp(12px,1.6vw,22px);width:100%;margin:0 auto}
+#s-play .track{height:24px;border-width:var(--bw)}
 /* Outlined card-coloured track: the old --ink-3 fill nearly matched the
    light ground, so the countdown read as a bar floating on nothing. */
 .track{flex:1;height:14px;border-radius:99px;background:var(--card);border:2px solid var(--line);overflow:hidden}
@@ -157,9 +181,21 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .fill.warn{background:var(--t3)}
 .fill.crit{background:var(--t1)}
 .clock{font-family:var(--mono);font-weight:600;font-size:clamp(22px,3vw,34px);font-variant-numeric:tabular-nums;min-width:2.2ch;text-align:right;display:inline-block}
+/* Projector clock: a round sticker of fixed size, so the digits changing
+   never shifts the bar beside it. */
+#s-play .clock{font-family:var(--disp);font-weight:700;font-size:clamp(28px,3.2vw,48px);width:2.3em;height:2.3em;flex:none;
+  display:grid;place-items:center;text-align:center;border-radius:50%;background:var(--card);border:var(--bw) solid var(--line);box-shadow:0 4px 0 var(--line)}
+#s-play .clock.crit{background:var(--t1);color:var(--tfg)}
+.anscount{display:flex;align-items:baseline;gap:8px;flex:none;padding:8px 18px;border-radius:999px;background:var(--card);
+  border:var(--bw) solid var(--line);box-shadow:0 4px 0 var(--line);font-weight:800;font-size:clamp(14px,1.2vw,18px);text-transform:uppercase;letter-spacing:.04em}
+.anscount .v{font-family:var(--disp);font-weight:700;font-size:clamp(24px,2.4vw,36px);letter-spacing:0;font-variant-numeric:tabular-nums}
+.anscount .k{color:var(--muted)}
 .clock.crit{color:var(--danger);animation:clockpulse .5s ease-in-out infinite}
 @keyframes clockpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
-.answers{display:grid;grid-template-columns:1fr 1fr;gap:clamp(10px,1.6vw,16px);width:100%;max-width:960px;margin:0 auto}
+/* The tile grid takes whatever height is left under the question, so the
+   options are as large as the projector allows. */
+.answers{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:clamp(12px,1.6vw,22px);width:100%;margin:0 auto;
+  flex:1;min-height:clamp(200px,34vh,560px)}
 .ans{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:clamp(16px,2.4vw,26px);
   border-radius:18px;color:var(--tfg);font-weight:600;text-align:left;font-size:clamp(15px,1.85vw,23px);
   line-height:1.25;min-height:clamp(72px,11vh,124px);transition:opacity .25s ease,filter .25s ease}
@@ -175,9 +211,25 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .ans.c1{background:var(--a1)} .ans.c2{background:var(--a2)} .ans.c3{background:var(--a3)} .ans.c4{background:var(--a4)}
 .ans.dim{opacity:.26;filter:saturate(.4)}
 .ans.hit{box-shadow:0 0 0 3px var(--chalk);animation:tilepop .5s ease}
+/* Projector tiles: the same stickers as the phone pad, sized up. */
+.answers .ans{border:var(--bw) solid var(--line);box-shadow:0 6px 0 var(--line);border-radius:26px;min-height:0;
+  font-family:var(--disp);font-weight:600;font-size:clamp(20px,2.3vw,38px);gap:clamp(14px,1.4vw,22px);overflow-wrap:anywhere}
+.answers .ans .tag{background:rgba(16,34,63,.16);border-radius:14px;width:2em;height:2em}
+/* The answer share: a solid band along the tile's bottom edge, clear of
+   the option text and still readable on a washed-out projector. */
+.answers .ans .bar{inset:auto auto 0 0;height:clamp(10px,1.6vh,16px);background:var(--tfg)}
+.answers .ans .n{font-family:var(--disp);font-weight:700;font-size:.9em;background:#fff;color:var(--tfg);flex:none;
+  border:var(--bw) solid var(--tfg);border-radius:999px;padding:2px 16px;white-space:nowrap}
+.answers .ans .n:empty{display:none}
+/* The page ink (navy or white) ring sits outside the tile, so it stays
+   visible on all four tile colours in both themes. */
+.answers .ans.hit{box-shadow:0 6px 0 var(--line);outline:6px solid var(--ink);outline-offset:5px}
+.answers .ans.dim{opacity:.5;filter:saturate(.7)}
 @keyframes tilepop{0%{transform:scale(1)}45%{transform:scale(1.07)}100%{transform:scale(1)}}
-.counter{font-family:var(--mono);font-size:clamp(12px,1.3vw,15px);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
-.counter.fastest{color:var(--live);font-weight:700;animation:pop .3s cubic-bezier(.2,.9,.3,1.3)}
+.counter{font-family:var(--body);font-weight:800;font-size:clamp(15px,1.5vw,22px);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
+.counter.fastest{align-self:center;text-transform:none;letter-spacing:0;font-family:var(--disp);font-weight:600;font-size:clamp(18px,1.9vw,30px);
+  color:var(--tfg);background:var(--t3);border:var(--bw) solid var(--line);border-radius:999px;box-shadow:0 4px 0 var(--line);padding:6px 24px;
+  animation:popin .45s cubic-bezier(.2,.9,.3,1.4)}
 
 /* leaderboard */
 .board{width:100%;max-width:660px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
@@ -195,32 +247,41 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .lrow.detail.p1 .acc{color:var(--tfg)}
 .lrow.head{background:transparent;border:none;box-shadow:none;padding:4px 18px;animation:none}
 .lrow.head span{font-family:var(--body);font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+/* Projector standings: bigger rows, the top three in the podium colours. */
+#s-scores .board,#s-final .board{max-width:980px}
+#s-scores .lrow,#s-final .lrow{text-align:left;font-size:clamp(18px,1.9vw,30px);padding:clamp(8px,1.2vh,14px) 24px;border-radius:20px;grid-template-columns:2.2em 1fr auto}
+#s-scores .lrow .rank{font-size:1.05em}
+#s-scores .lrow.p2{background:var(--t2);color:var(--tfg)}
+#s-scores .lrow.p3{background:var(--t1);color:var(--tfg)}
+#s-scores .lrow.p2 .rank,#s-scores .lrow.p3 .rank{color:var(--tfg)}
 
 /* text/numeric question and reveal (no tile grid to show) */
 .resplist{display:flex;flex-direction:column;gap:10px;width:100%;max-width:760px;margin:0 auto}
-.respitem{border:1px solid var(--line);border-radius:14px;background:var(--ink-2);padding:14px 18px;
-  display:flex;gap:14px;align-items:baseline;animation:slidein .3s cubic-bezier(.2,.9,.3,1) backwards}
-.respitem .who{font-family:var(--mono);font-size:12px;color:var(--muted);flex:none;min-width:8ch}
-.respitem .what{flex:1;font-size:16px;line-height:1.4}
-.respitem .dist{font-family:var(--mono);font-size:12.5px;color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
-.respitem.hit{border-color:var(--live)}
-.placeholder{color:var(--muted);text-align:center;font-size:15px;padding:30px 0}
+.respitem{border:var(--bw) solid var(--line);border-radius:18px;background:var(--card);box-shadow:0 3px 0 var(--line);padding:14px 20px;
+  display:flex;gap:16px;align-items:baseline;animation:slidein .3s cubic-bezier(.2,.9,.3,1) backwards}
+.respitem .who{font-weight:800;font-size:clamp(14px,1.3vw,18px);color:var(--muted);flex:none;min-width:8ch}
+.respitem .what{flex:1;font-family:var(--disp);font-weight:600;font-size:clamp(18px,1.8vw,28px);line-height:1.3;overflow-wrap:anywhere}
+.respitem .dist{font-weight:800;font-size:clamp(14px,1.3vw,18px);color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
+.respitem.hit{background:var(--t4);color:var(--tfg)}
+.respitem.hit .who,.respitem.hit .dist{color:var(--tfg)}
+.placeholder{color:var(--muted);text-align:center;font-weight:700;font-size:clamp(16px,1.6vw,22px);padding:30px 0}
+#s-play .resplist{max-width:1100px}
 
 /* dashboard */
 .stats{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));width:100%}
-.stat{border:1px solid var(--line);border-radius:16px;background:var(--ink-2);padding:16px 18px;text-align:left}
-.stat .n{font-family:var(--mono);font-weight:600;font-size:clamp(20px,2.6vw,28px);font-variant-numeric:tabular-nums;display:block}
-.stat .l{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:4px;display:block}
-.qitem.click{cursor:pointer;transition:border-color .15s ease,background .15s ease}
-.qitem.click:hover{border-color:var(--muted);background:var(--ink-3)}
+.stat{border:var(--bw) solid var(--line);border-radius:18px;background:var(--card);box-shadow:var(--shadow-edge);padding:16px 18px;text-align:left}
+.stat .n{font-family:var(--disp);font-weight:700;font-size:clamp(22px,2.6vw,30px);font-variant-numeric:tabular-nums;display:block}
+.stat .l{font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:4px;display:block}
+.qitem.click{cursor:pointer;transition:transform .12s ease,background .15s ease}
+.qitem.click:hover{background:var(--ink-3);transform:translateY(-2px)}
 
 /* per-question accuracy */
 .qbars{display:flex;flex-direction:column;gap:8px;width:100%}
-.qbar{display:flex;flex-direction:column;gap:6px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:var(--ink-2)}
-.qbar .qb-head{display:flex;justify-content:space-between;gap:14px;font-size:13.5px}
-.qbar .qb-head .qtxt{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.qbar .qb-head .qpct{font-family:var(--mono);color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
-.podium{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:end;width:100%;max-width:660px;margin:0 auto}
+.qbar{display:flex;flex-direction:column;gap:8px;padding:12px 16px;border:var(--bw) solid var(--line);border-radius:16px;background:var(--card);box-shadow:0 3px 0 var(--line)}
+.qbar .qb-head{display:flex;justify-content:space-between;gap:14px;font-size:14px}
+.qbar .qb-head .qtxt{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qbar .qb-head .qpct{font-weight:800;color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
+.podium{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:end;width:100%;max-width:660px;margin:0 auto;border-bottom:var(--bw) solid var(--line)}
 /* Podium blocks are tiles (gold, blue, coral) so they always take the dark
    tile text, whatever the page theme. */
 .pod{border:var(--bw) solid var(--line);border-bottom-width:0;border-radius:20px 20px 0 0;background:var(--card);color:var(--tfg);
@@ -231,21 +292,39 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .pod.r1{min-height:190px;background:var(--t3)}
 .pod.r2{min-height:150px;background:var(--t2)}
 .pod.r3{min-height:126px;background:var(--t1)}
+/* Projector podium. Each place has a fixed column (2-1-3), so a one or two
+   player game keeps first in the middle. The places rise third, second,
+   first; the delays live here on the place classes so the order is all in
+   one spot, and host.js fires the confetti on first place's animationend. */
+#s-final .podium{max-width:900px;gap:clamp(10px,1.4vw,20px)}
+#s-final .pod{min-width:0;padding:clamp(14px,2vh,24px) 12px;border-radius:26px 26px 0 0;gap:8px;
+  animation:podrise .6s cubic-bezier(.2,.9,.3,1.25) backwards}
+#s-final .pod .medal{font-size:clamp(40px,5vw,80px);line-height:1}
+#s-final .pod .pn{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.2vw,34px);white-space:normal;overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+#s-final .pod .ps{font-size:clamp(16px,1.6vw,24px)}
+#s-final .pod.r3{grid-column:3;min-height:clamp(150px,22vh,240px);animation-delay:.3s}
+#s-final .pod.r2{grid-column:1;min-height:clamp(180px,28vh,300px);animation-delay:1.3s}
+#s-final .pod.r1{grid-column:2;min-height:clamp(220px,35vh,380px);animation-delay:2.3s}
+/* The headline names the winner, so it waits until first place is up. */
+#s-final #fWinner{animation:popin .5s cubic-bezier(.2,.9,.3,1.4) 2.9s backwards}
+#s-final .board{animation:podrise .5s ease-out 3.2s backwards}
 
 /* editor */
 .qlist{display:flex;flex-direction:column;gap:10px;width:100%}
-.qitem{border:1px solid var(--line);border-radius:14px;background:var(--ink-2);padding:14px 16px;display:flex;gap:14px;align-items:flex-start}
-.qitem .idx{font-family:var(--mono);color:var(--muted);font-size:13px;padding-top:2px;flex:none}
+.qitem{border:var(--bw) solid var(--line);border-radius:18px;background:var(--card);box-shadow:0 3px 0 var(--line);padding:14px 16px;display:flex;gap:14px;align-items:flex-start}
+.qitem .idx{font-family:var(--disp);font-weight:700;color:var(--muted);font-size:16px;padding-top:1px;flex:none;font-variant-numeric:tabular-nums}
 .qitem .body{flex:1;min-width:0}
 .qitem .qt{font-weight:600;margin-bottom:6px;line-height:1.35}
-.qitem .meta{font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.05em;display:flex;gap:14px;flex-wrap:wrap}
+.qitem .meta{font-size:13px;font-weight:700;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
 .qitem .acts{display:flex;gap:6px;flex:none}
-.iconbtn{border:1px solid var(--ctl);border-radius:9px;width:32px;height:32px;display:grid;place-items:center;color:var(--muted);font-size:15px}
-.iconbtn:hover{color:var(--chalk);border-color:var(--muted)}
+.iconbtn{border:var(--bw) solid var(--ctl);border-radius:12px;width:36px;height:36px;display:grid;place-items:center;color:var(--ink);font-size:15px;
+  background:var(--card);box-shadow:0 3px 0 var(--line);text-decoration:none;transition:transform .12s ease,background .15s ease}
+.iconbtn[disabled]{opacity:.5;cursor:default}
 .editgrid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
 .optrow{display:flex;gap:10px;align-items:center}
 .optrow .swatch{width:12px;height:32px;border-radius:4px;flex:none}
-.optrow .correct{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+.optrow .correct{display:flex;align-items:center;gap:7px;font-weight:800;font-size:12px;letter-spacing:.06em;
   text-transform:uppercase;color:var(--muted);cursor:pointer;flex:none;white-space:nowrap}
 .optrow input[type=radio],.optrow input[type=checkbox]{accent-color:var(--live);width:17px;height:17px;cursor:pointer}
 
@@ -273,16 +352,14 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 /* theme toggle: one fixed button, present once per page regardless of
    which .screen is on, so it's always reachable. Bottom-right is the one
    corner no screen already puts content in. */
-.themetoggle{position:fixed;right:16px;bottom:16px;z-index:55;width:38px;height:38px;border-radius:50%;
+.themetoggle,.soundtoggle{position:fixed;right:16px;bottom:16px;z-index:55;width:38px;height:38px;border-radius:50%;
   border:var(--bw) solid var(--ctl);background:var(--card);box-shadow:0 3px 0 var(--line);color:var(--chalk);display:grid;place-items:center;
-  cursor:pointer;transition:border-color .15s ease}
-.themetoggle:hover{border-color:var(--muted)}
+  cursor:pointer;transition:transform .12s ease,background .15s ease}
 .themetoggle svg{width:18px;height:18px}
-
-.soundtoggle{position:fixed;right:64px;bottom:16px;z-index:55;width:38px;height:38px;border-radius:50%;
-  border:1px solid var(--ctl);background:var(--ink-2);color:var(--chalk);display:grid;place-items:center;
-  cursor:pointer;transition:border-color .15s ease;font-size:16px}
-.soundtoggle:hover{border-color:var(--muted)}
+.soundtoggle{right:64px;font-size:16px}
+/* Hover lifts and tints the control instead of recolouring its outline: in
+   dark the outline already is the muted colour, so a border change was invisible. */
+.themetoggle:hover,.soundtoggle:hover,.langpick:hover,.iconbtn:not([disabled]):hover{background:var(--ink-3);transform:translateY(-2px)}
 
 /* language picker (js/i18n.js): a pill showing the current code, with the
    native <select> stretched invisibly over it so the phone's own picker
@@ -290,8 +367,7 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 .langpick{position:fixed;left:16px;bottom:16px;z-index:55;height:38px;min-width:48px;padding:0 12px;
   border-radius:19px;border:var(--bw) solid var(--ctl);background:var(--card);box-shadow:0 3px 0 var(--line);color:var(--chalk);
   display:grid;place-items:center;font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.08em;
-  cursor:pointer;transition:border-color .15s ease}
-.langpick:hover,.langpick:focus-within{border-color:var(--muted)}
+  cursor:pointer;transition:transform .12s ease,background .15s ease}
 .langpick:focus-within{outline:2px solid var(--live);outline-offset:3px}
 .langpick select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px}
 
@@ -368,7 +444,7 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
 
 /* Final podium: the host's podium blocks, shorter for a phone, each place
    pinned to its column so a one or two player game keeps first in the middle. */
-.phone .podium{max-width:360px;gap:8px;border-bottom:var(--bw) solid var(--line)}
+.phone .podium{max-width:360px;gap:8px}
 .phone .pod{min-width:0;padding:12px 6px;animation:podrise .45s cubic-bezier(.2,.9,.3,1.2) backwards}
 .phone .pod.r2{grid-column:1;min-height:118px;animation-delay:.15s}
 .phone .pod.r1{grid-column:2;min-height:150px;animation-delay:.3s}
@@ -388,6 +464,8 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
   /* The near-zero duration above still runs the delayed entrances as a
      late flash; switch these off outright. The flood colour still shows. */
   .flood .stage,.popicon,.phone .pod,.streakbadge{animation:none}
+  /* The projector podium shows finished, with the headline, straight away. */
+  #s-final .pod,#s-final #fWinner,#s-final .board,.chip.new,.counter.fastest{animation:none}
 }
 
 /* Layout helpers. The CSP (helmet, style-src 'self') blocks inline style=""
@@ -416,5 +494,6 @@ h2{font-family:var(--disp);font-weight:700;font-size:clamp(20px,2.6vw,30px);lett
   font-family:var(--body);font-size:15px;color:var(--chalk)}
 /* The answer-screen countdown bar sits directly in a column .stage, where
    .track's flex:1 (meant for the host's horizontal timer row) stretched it
-   into a tall empty block. */
-.stage > .track{flex:none}
+   into a tall empty block. In the dashboard's accuracy cards the same
+   flex:1 collapsed it to its border, hiding the fill. */
+.stage > .track,.qbar .track{flex:none}

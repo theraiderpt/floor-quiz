@@ -44,7 +44,8 @@
     apply(t);
   }
 
-  window.FQTheme = { set };
+  // restore() puts back the visitor's own choice after a page imposed one.
+  window.FQTheme = { set, restore: () => apply(storedTheme()) };
 
   apply(storedTheme());
 

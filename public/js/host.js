@@ -21,10 +21,16 @@ function shapeTag(i) {
 }
 const SWATCH = ["var(--a1)", "var(--a2)", "var(--a3)", "var(--a4)"];
 
+/* The projector screens follow the quiz's own theme (set when the lobby
+   opens); every other screen is the host's console, so leaving the game
+   goes back to the host's stored choice. */
+const GAME_SCREENS = ["s-lobby", "s-play", "s-scores", "s-final"];
+
 function show(id) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("on"));
   $(id).classList.add("on");
   window.scrollTo(0, 0);
+  if (!GAME_SCREENS.includes(id)) FQTheme.restore();
   /* Confetti is position:fixed and outlives a quick screen switch (its own
      fall animation runs a couple of seconds), so without this a host who
      taps "back to library" right after the podium would see it still
@@ -184,7 +190,7 @@ $("fileIn").addEventListener("change", e => {
     if (!parsed) return alert(t("host.importFailed"));
     S.quiz = {
       id: null, title: parsed.title, questions: parsed.questions, categoryId: null,
-      joinMode: parsed.joinMode || "name", gapSeconds: parsed.gapSeconds || 5, deliveryMode: parsed.deliveryMode || "live", theme: parsed.theme || "light", shareToken: null
+      joinMode: parsed.joinMode || "name", gapSeconds: parsed.gapSeconds || 5, deliveryMode: parsed.deliveryMode || "live", theme: parsed.theme === "dark" ? "dark" : "light", shareToken: null
     };
     openSetup();
   };
@@ -623,7 +629,8 @@ function createGame() {
     rememberLive();
     fillLobby(res);
     $("lobbyHint").textContent = t("host.waitingPlayers");
-    $("roster").innerHTML = "";
+    resetRoster();
+    FQTheme.set(S.quiz.theme);
     show("s-lobby");
   });
 }
@@ -673,6 +680,9 @@ function resumeLive(onLoad) {
     S.pin = res.pin;
     S.total = res.total;
     if (!S.quiz) S.quiz = { title: res.title, questions: [] };
+    /* Only on a page reload: a plain reconnect keeps whatever theme the
+       host may have switched to with the toggle mid-game. */
+    if (onLoad) FQTheme.set(S.quiz.theme);
     fillLobby(res);
     const replay = (event, data) => { if (data) socket.listeners(event).forEach(fn => fn(data)); };
     const st = res.state;
@@ -700,16 +710,33 @@ $("pNext").addEventListener("click", () => socket.emit("host:next"));
 $("sNext").addEventListener("click", () => socket.emit("host:next"));
 $("fDone").addEventListener("click", () => { forgetLive(); openLibrary(); });
 
+/* Chips are kept per player id and updated in place, so a join only adds
+   (and bounces) the newcomer's chip. Rebuilding the roster on every lobby
+   event replayed the entrance on all of them and, with 150 players, threw
+   away and rebuilt 150 nodes per join. */
+const chips = new Map();
+function resetRoster() { chips.clear(); $("roster").innerHTML = ""; }
+
 socket.on("lobby", d => {
   S.players = d.players;
   const r = $("roster");
-  r.innerHTML = "";
-  d.players.forEach(p => {
-    const c = el("span", "chip" + (p.connected ? "" : " off"), p.name);
+  const seen = new Set(d.players.map(p => p.id));
+  for (const [id, c] of chips) if (!seen.has(id)) { c.remove(); chips.delete(id); }
+  d.players.forEach((p, i) => {
+    let c = chips.get(p.id);
+    if (!c) {
+      c = el("span", "chip new");
+      c.addEventListener("animationend", () => c.classList.remove("new"), { once: true });
+      c.addEventListener("click", () => { if (confirm(t("host.confirmRemove", { name: c.textContent }))) socket.emit("host:kick", { playerId: p.id }); });
+      chips.set(p.id, c);
+    }
+    c.textContent = p.name;
+    c.classList.toggle("off", !p.connected);
     c.title = (p.email ? p.email + " · " : "") + t("host.clickToRemove");
-    c.addEventListener("click", () => { if (confirm(t("host.confirmRemove", { name: p.name }))) socket.emit("host:kick", { playerId: p.id }); });
-    r.appendChild(c);
+    // Moving a node restarts its animation, so only touch the ones out of place.
+    if (r.children[i] !== c) r.insertBefore(c, r.children[i] || null);
   });
+  r.classList.toggle("dense", d.players.length > 40);
   $("lobbyCount").textContent = d.count;
   $("startQuiz").disabled = d.count === 0;
   $("lobbyHint").textContent = d.count ? t("host.playersIn", { n: d.count }) : t("host.waitingPlayers");
@@ -742,7 +769,7 @@ function renderQuestion(s) {
   $("pFoot").textContent = t("host.lockedAsArrive");
   $("pNext").hidden = true;
   $("pSkip").hidden = false;
-  $("pTimerWrap").style.visibility = "visible";
+  $("pTimerWrap").hidden = false;
   $("pImg").hidden = !s.question.img;
   $("pImg").src = s.question.img || "";
   $("pFastest").hidden = true;
@@ -776,7 +803,8 @@ socket.on("answered", d => { $("pAnswered").textContent = d.answered; });
 socket.on("reveal", d => {
   stopClock();
   Sound.play("reveal");
-  $("pTimerWrap").style.visibility = "hidden";
+  // Collapsed, not just invisible, so the reveal tiles take the space.
+  $("pTimerWrap").hidden = true;
   $("pSkip").hidden = true;
 
   if (d.type === "text") {
@@ -835,7 +863,7 @@ socket.on("scores", d => {
   const board = $("sBoard");
   board.innerHTML = "";
   d.board.forEach((p, i) => {
-    const row = el("div", "lrow" + (i === 0 ? " p1" : ""));
+    const row = el("div", "lrow" + (i < 3 ? " p" + (i + 1) : ""));
     row.style.animationDelay = i * 55 + "ms";
     row.append(el("span", "rank", String(i + 1)), el("span", "nm", p.name), el("span", "pts", String(p.score)));
     board.appendChild(row);
@@ -854,12 +882,20 @@ socket.on("final", d => {
   $("fWinner").textContent = d.board.length ? t("host.takesIt", { name: d.board[0].name }) : t("host.noPlayers");
   $("fExport").href = csvHref(d.sessionId);
 
+  /* Places that don't exist (one or two players) are left out rather than
+     drawn empty; the CSS pins each place to its own column and staggers
+     their rise third, second, first. */
   const pod = $("fPodium");
   pod.innerHTML = "";
+  pod.hidden = !d.board.length;
   [1, 0, 2].forEach(r => {
     const p = d.board[r];
+    if (!p) return;
     const box = el("div", "pod r" + (r + 1));
-    box.append(el("span", "medal", String(r + 1)), el("span", "pn", p ? p.name : "—"), el("span", "ps", p ? t("common.pts", { n: p.score }) : ""));
+    box.append(el("span", "medal", String(r + 1)), el("span", "pn", p.name), el("span", "ps", t("common.pts", { n: p.score })));
+    // Confetti waits for first place to land. Under reduced motion there is
+    // no animation (so no event), and confetti() would skip anyway.
+    if (r === 0) box.addEventListener("animationend", () => confetti(), { once: true });
     pod.appendChild(box);
   });
 
@@ -871,7 +907,6 @@ socket.on("final", d => {
     row.append(el("span", "rank", String(i + 4)), el("span", "nm", p.name), el("span", "pts", String(p.score)));
     board.appendChild(row);
   });
-  if (d.board.length) confetti();
   show("s-final");
 });
 

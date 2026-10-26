@@ -224,6 +224,7 @@
   <div class="stage center">
     <div class="lobbygrid">
       <div class="pinbox">
+        <p data-i18n="strip.pin" class="eyebrow">pin</p>
         <div class="pin" id="lobbyPin">0000</div>
         <div class="url" id="lobbyUrl">—</div>
       </div>
@@ -240,12 +241,12 @@
 
 <!-- PLAY -->
 <section class="screen" id="s-play">
-  <div class="strip"><span class="dot"></span><span class="cell"><span data-i18n="strip.pin" class="k">pin</span><span class="v" id="pPin">0000</span></span><span class="cell"><span data-i18n="strip.q" class="k">q</span><span class="v" id="pQn">1/1</span></span><span class="cell"><span data-i18n="strip.players" class="k">players</span><span class="v" id="pPlayers">0</span></span><span class="cell"><span data-i18n="strip.answered" class="k">answered</span><span class="v" id="pAnswered">0</span></span><span class="spacer"></span><span class="cell"><button data-i18n="host.closeEarly" class="k u-caps" id="pSkip">Close early</button></span></div>
+  <div class="strip"><span class="dot"></span><span class="cell"><span data-i18n="strip.pin" class="k">pin</span><span class="v" id="pPin">0000</span></span><span class="cell"><span data-i18n="strip.q" class="k">q</span><span class="v" id="pQn">1/1</span></span><span class="cell"><span data-i18n="strip.players" class="k">players</span><span class="v" id="pPlayers">0</span></span><span class="spacer"></span><span class="cell"><button data-i18n="host.closeEarly" class="k u-caps" id="pSkip">Close early</button></span></div>
   <div class="stage">
     <p class="qtext" id="pQ">…</p>
     <p class="counter" id="pTypeHint" hidden></p>
     <img id="pImg" class="qimg" hidden alt="">
-    <div class="timerwrap" id="pTimerWrap"><div class="track"><div class="fill" id="pFill"></div></div><div class="clock" id="pClock">—</div></div>
+    <div class="timerwrap" id="pTimerWrap"><div class="track"><div class="fill" id="pFill"></div></div><div class="clock" id="pClock">—</div><div class="anscount"><span class="v" id="pAnswered">0</span><span data-i18n="strip.answered" class="k">answered</span></div></div>
     <div class="answers" id="pAnswers"></div>
     <p class="counter" id="pFoot">—</p>
     <p class="counter fastest" id="pFastest" hidden></p>
