@@ -11,6 +11,47 @@
    host's own language and falls back to English for anything missing. */
 const CHANGELOG = [
   {
+    date: "2026-10-26",
+    items: [
+      {
+        en: "A brighter, more playful look for players and the projector, with bold colour tiles and sticker-style buttons.",
+        fr: "Un nouveau look plus lumineux et plus ludique pour les joueurs et le projecteur, avec des tuiles colorées et des boutons façon autocollant.",
+        de: "Ein helleres, verspielteres Design für Spielende und Projektor, mit kräftigen Farbkacheln und Aufkleber-Buttons.",
+        es: "Un aspecto más brillante y divertido para jugadores y proyector, con fichas de colores y botones estilo pegatina.",
+        el: "Πιο φωτεινή και παιχνιδιάρικη εμφάνιση για παίκτες και προβολέα, με έντονα χρωματιστά πλακίδια και κουμπιά τύπου αυτοκόλλητου.",
+        pt: "Um visual mais brilhante e divertido para jogadores e projetor, com mosaicos coloridos e botões estilo autocolante.",
+        ro: "Un aspect mai luminos și mai jucăuș pentru jucători și proiector, cu plăci colorate și butoane în stil autocolant."
+      },
+      {
+        en: "Players now see how far they moved up or down, their answer streak and the top 3 right on their phones.",
+        fr: "Les joueurs voient maintenant sur leur téléphone leur progression au classement, leur série de bonnes réponses et le top 3.",
+        de: "Spielende sehen jetzt direkt auf dem Handy, wie weit sie auf- oder abgestiegen sind, ihre Serie und die Top 3.",
+        es: "Los jugadores ahora ven en su móvil cuántos puestos subieron o bajaron, su racha y el top 3.",
+        el: "Οι παίκτες βλέπουν πλέον στο κινητό τους πόσες θέσεις ανέβηκαν ή έπεσαν, τη σειρά σωστών απαντήσεων και την πρώτη τριάδα.",
+        pt: "Os jogadores passam a ver no telemóvel quantos lugares subiram ou desceram, a sua sequência e o top 3.",
+        ro: "Jucătorii văd acum pe telefon câte locuri au urcat sau coborât, seria de răspunsuri corecte și top 3."
+      },
+      {
+        en: "The final podium now builds up from third place to first.",
+        fr: "Le podium final se construit désormais de la troisième à la première place.",
+        de: "Das Siegerpodest baut sich jetzt vom dritten bis zum ersten Platz auf.",
+        es: "El podio final ahora se construye desde el tercer puesto hasta el primero.",
+        el: "Το τελικό βάθρο χτίζεται πλέον από την τρίτη θέση μέχρι την πρώτη.",
+        pt: "O pódio final passa a ser construído do terceiro ao primeiro lugar.",
+        ro: "Podiumul final se construiește acum de la locul trei până la primul."
+      },
+      {
+        en: "A quiz can now start light or dark on the projector. Pick it in the quiz setup.",
+        fr: "Un quiz peut maintenant démarrer en mode clair ou sombre sur le projecteur. Choisissez-le dans la configuration du quiz.",
+        de: "Ein Quiz kann jetzt hell oder dunkel auf dem Projektor starten. Wähle es in den Quiz-Einstellungen.",
+        es: "Un quiz ahora puede empezar en claro u oscuro en el proyector. Elígelo en la configuración del quiz.",
+        el: "Ένα κουίζ μπορεί πλέον να ξεκινά σε φωτεινό ή σκούρο θέμα στον προβολέα. Επίλεξέ το στις ρυθμίσεις του κουίζ.",
+        pt: "Um quiz pode agora começar em claro ou escuro no projetor. Escolha-o na configuração do quiz.",
+        ro: "Un quiz poate începe acum în mod luminos sau întunecat pe proiector. Alege-l în setările quizului."
+      }
+    ]
+  },
+  {
     date: "2026-10-22",
     items: [
       {
