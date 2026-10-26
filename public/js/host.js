@@ -30,7 +30,7 @@ function show(id) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("on"));
   $(id).classList.add("on");
   window.scrollTo(0, 0);
-  if (!GAME_SCREENS.includes(id)) FQTheme.restore();
+  if (!GAME_SCREENS.includes(id)) window.FQTheme?.restore();
   /* Confetti is position:fixed and outlives a quick screen switch (its own
      fall animation runs a couple of seconds), so without this a host who
      taps "back to library" right after the podium would see it still
@@ -630,7 +630,7 @@ function createGame() {
     fillLobby(res);
     $("lobbyHint").textContent = t("host.waitingPlayers");
     resetRoster();
-    FQTheme.set(S.quiz.theme);
+    window.FQTheme?.set(S.quiz.theme);
     show("s-lobby");
   });
 }
@@ -682,7 +682,7 @@ function resumeLive(onLoad) {
     if (!S.quiz) S.quiz = { title: res.title, questions: [] };
     /* Only on a page reload: a plain reconnect keeps whatever theme the
        host may have switched to with the toggle mid-game. */
-    if (onLoad) FQTheme.set(S.quiz.theme);
+    if (onLoad) window.FQTheme?.set(S.quiz.theme);
     fillLobby(res);
     const replay = (event, data) => { if (data) socket.listeners(event).forEach(fn => fn(data)); };
     const st = res.state;

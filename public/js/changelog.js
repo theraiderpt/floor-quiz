@@ -19,7 +19,7 @@ const CHANGELOG = [
         de: "Ein helleres, verspielteres Design für Spielende und Projektor, mit kräftigen Farbkacheln und Aufkleber-Buttons.",
         es: "Un aspecto más brillante y divertido para jugadores y proyector, con fichas de colores y botones estilo pegatina.",
         el: "Πιο φωτεινή και παιχνιδιάρικη εμφάνιση για παίκτες και προβολέα, με έντονα χρωματιστά πλακίδια και κουμπιά τύπου αυτοκόλλητου.",
-        pt: "Um visual mais brilhante e divertido para jogadores e projetor, com mosaicos coloridos e botões estilo autocolante.",
+        pt: "Um visual mais brilhante e divertido para jogadores e projetor, com blocos coloridos e botões estilo autocolante.",
         ro: "Un aspect mai luminos și mai jucăuș pentru jucători și proiector, cu plăci colorate și butoane în stil autocolant."
       },
       {

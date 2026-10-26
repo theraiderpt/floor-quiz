@@ -224,7 +224,7 @@ a.btn{text-decoration:none}
 /* The page ink (navy or white) ring sits outside the tile, so it stays
    visible on all four tile colours in both themes. */
 .answers .ans.hit{box-shadow:0 6px 0 var(--line);outline:6px solid var(--ink);outline-offset:5px}
-.answers .ans.dim{opacity:.7;filter:saturate(.7)}
+.answers .ans.dim{opacity:.75;filter:saturate(.7)}
 @keyframes tilepop{0%{transform:scale(1)}45%{transform:scale(1.07)}100%{transform:scale(1)}}
 .counter{font-family:var(--body);font-weight:800;font-size:clamp(15px,1.5vw,22px);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
 .counter.fastest{align-self:center;text-transform:none;letter-spacing:0;font-family:var(--disp);font-weight:600;font-size:clamp(18px,1.9vw,30px);
