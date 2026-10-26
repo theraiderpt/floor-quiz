@@ -110,14 +110,22 @@ const results = clients.filter(c => c.resultAt).length;
 console.log(`           ${results}/${clients.length} devices received their personal result`);
 
 /* ---- finish and check the write path ---- */
-host.emit("host:next");
-await sleep(400);
-host.emit("host:next");
+/* Waits are event-driven: the game auto-advances on its own timers, so fixed
+   sleeps plus host:next used to race it and miss the "final" event. */
+const waitFor = (ev, ms = 15000) => new Promise((res, rej) => {
+  const t = setTimeout(() => rej(new Error("timed out waiting for " + ev)), ms);
+  host.once(ev, v => { clearTimeout(t); res(v); });
+});
+const finalP = waitFor("final", 30000);
+const reveal2 = waitFor("reveal");
+host.emit("host:next"); /* reveal -> scores */
+await sleep(300);
+host.emit("host:next"); /* scores -> question two */
 await sleep(600);
-await Promise.all(clients.map(c => new Promise(r => c.s.emit("player:answer", { choice: 2 }, r))));
-await sleep(1200);
-host.emit("host:next");
-const final = await new Promise(r => host.once("final", r));
+await Promise.all(clients.map(c => new Promise(r => c.s.emit("player:answer", { answer: 2 }, r))));
+await reveal2;
+host.emit("host:next"); /* last reveal -> end */
+const final = await finalP;
 console.log(`\nfinal board ${final.board.length} players, winner ${final.board[0].name} on ${final.board[0].score}`);
 
 const csv = await fetch(base + "/api/sessions/" + final.sessionId + "/csv", { headers: { Cookie: cookie } });
