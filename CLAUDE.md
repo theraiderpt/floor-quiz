@@ -95,3 +95,20 @@ sudo tail -30 /var/log/nginx/floor-quiz.error.log
 - Never stop a process by `pkill -f <command string>` on this box: dev/test instances and the
   real PM2-managed production process often run the literal same command, just with different env
   vars, so a substring match can hit production. Kill by the specific PID instead.
+
+## Handover protocol (Claude Code on the VPS and Claude Desktop)
+
+This repo is edited from two places: **Claude Code on the VPS** (has the box, PM2 and the live site) and **Claude Desktop / Claude Code on the web** (works on a GitHub clone and cannot see the VPS files or the VPS-only notes in `~/.claude`). Git is the only channel between them, so everything the other side needs goes in `HANDOVER.md`, committed on the branch you work on.
+
+**Start of a session**
+1. `git fetch --all --prune`, then `git branch -r --no-merged origin/master`. Look at every branch listed: another session may already have built what you are about to build.
+2. Read `HANDOVER.md`: state, claims, decisions, pitfalls.
+3. Check "In progress". Do not touch an area another session has claimed; if you need it, ask the owner. Add your own one-line claim before anything bigger than a small fix.
+
+**During**
+- One branch per session: `cli/<topic>` on the VPS, `desktop/<topic>` in Desktop (automatic `claude/...` names are fine). On the VPS, work agreed in chat is merged, deployed and pushed as the ground rules above describe. A Desktop session never deploys: it pushes a branch.
+- Commits and PRs: no `Co-Authored-By` trailer and no model name (owner rule, any repo).
+
+**End of a session, before saying you are done**
+- Update `HANDOVER.md` on your branch: State, In progress (remove your claim), Next steps, and a new entry at the top of the Session log (date, tool, branch, what changed, what is left, how it was verified).
+- Push the branch and say in the log whether it is merged, deployed, or waiting for the owner. Never put secrets in the handover.
