@@ -195,7 +195,8 @@ socket.on("result", r => {
     v.className = "verdict";
     setFlood(r.answered ? "info" : "none");
     $("rPts").textContent = "";
-    $("rRank").textContent = "—";
+    $("rRank").textContent = r.rank ? "#" + r.rank : "—";
+    renderMovement(r);
     $("rSub").textContent = t("common.totalPoints", { n: r.score });
     return show("s-result");
   }

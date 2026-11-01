@@ -14,7 +14,8 @@ const CHANGELOG = [
     date: "2026-11-01",
     items: [
       "Players who drop off and come back now see their rank movement measured from the previous question.",
-      "Reloading the projector page during a game keeps a dark quiz dark, even if the browser lost its saved copy."
+      "Reloading the projector page during a game keeps a dark quiz dark, even if the browser lost its saved copy.",
+      "After a discussion (text) question, players now see their rank and how far they are from the next place, like after any other question."
     ]
   },
   {
