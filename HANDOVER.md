@@ -7,7 +7,7 @@ Living note shared by Claude Code on the VPS and Claude Desktop. Read it at the 
 - **Shipped 2026-11-01:** `lastRank` is now kept for every player, so someone who rejoins sees movement against the right rank; `host:resume` sends the quiz `theme` so a projector reload keeps a dark quiz dark; `npm audit fix` (body-parser, compression, proxy-addr, qs, express 4.22.3). Changelog entry added.
 - **Last big release before that:** "Sunny Sticker" refresh (2026-10-26), pictures and GIFs, Giphy, "What's new", 7 languages.
 - **Tests:** `npm run smoke` (throwaway database, safe against production).
-- **Audit:** the one remaining finding, `nodemailer`, is fixed on branch `cli/hardening-nodemailer` (10.3.1, `npm audit --omit=dev` 0 vulnerabilities, smoke green including the SMTP sink). Waiting for the owner to merge and deploy.
+- **Audit:** the one remaining finding, `nodemailer`, is fixed on branch `cli/hardening-nodemailer` (10.3.1, `npm audit --omit=dev` 0 vulnerabilities, smoke green including the SMTP sink). Merged and deployed 2026-11-01 (rollback copy `/var/backups/floor-quiz-20261101-002856`).
 - **GitHub:** private `git@github.com:theraiderpt/floor-quiz.git`, branch `master`. Push after every deploy.
 
 ## 2. In progress (claims)
@@ -17,8 +17,8 @@ Nothing claimed. Before starting anything bigger than a small fix, add a line he
 None recorded. Anything that changes game flow, scoring or the visual direction goes through the owner first.
 
 ## 4. Next steps
-1. **Merge and deploy `cli/hardening-nodemailer`** (nodemailer 10.3.1). Checked against its changelog: needs Node 20+ (production runs 24), the TLS and `NoAuth` changes do not touch `server/mail.js`. Only the smoke SMTP sink exercised it, so send one real invite after deploy. Deploy like 2026-11-01: backup, sync a tested `node_modules`, never `npm ci` (see pitfalls).
-2. **Delete `origin/claude/vibrant-hawking-rmml7k`.** Correction of the 2026-10-31 review: nothing is missing from it. `master` already contains that commit (PR #1, `628a71c`): rate limit per socket, daily upload budget, disabled hosts cut off, narrower CSP, 256KB socket buffer, credential-tagged cookies, account lockout. The earlier "still missing" list came from a keyword search and was wrong. The branch is only behind `master`.
+1. **Done 2026-11-01, kept for the record: `cli/hardening-nodemailer` merged and deployed** (nodemailer 10.3.1). Checked against its changelog: needs Node 20+ (production runs 24), the TLS and `NoAuth` changes do not touch `server/mail.js`. Only the smoke SMTP sink exercised it, so send one real invite after deploy. Deploy like 2026-11-01: backup, sync a tested `node_modules`, never `npm ci` (see pitfalls).
+2. **Branch `origin/claude/vibrant-hawking-rmml7k` deleted 2026-11-01.** Correction of the 2026-10-31 review: nothing is missing from it. `master` already contains that commit (PR #1, `628a71c`): rate limit per socket, daily upload budget, disabled hosts cut off, narrower CSP, 256KB socket buffer, credential-tagged cookies, account lockout. The earlier "still missing" list came from a keyword search and was wrong. The branch is only behind `master`.
 3. Optional, a design call: movement line on text questions (the server already sends `prevRank` and `gapToNext`; the rank never changes on a text question).
 4. Approve the `better-sqlite3` install script for npm 12 (`allowScripts`) so `deploy/update.sh` works again.
 
@@ -32,7 +32,7 @@ None recorded. Anything that changes game flow, scoring or the visual direction 
 - Claude Desktop sessions cannot reach the VPS or its `~/.claude` notes: put what matters here.
 
 ## 6. Session log (newest first)
-### 2026-11-01 (later) | Claude Code on the VPS | `cli/hardening-nodemailer`, pushed, not merged, not deployed
+### 2026-11-01 (later) | Claude Code on the VPS | `cli/hardening-nodemailer`, merged to `master` and deployed
 Bumped nodemailer 6 to 10.3.1 (audit clean, smoke green). Re-checked the "missing hardening" claim and found it false: `master` already has every piece (diff in section 4). Gemini was asked to review the nodemailer upgrade but returned nothing usable, so the changelog was read by hand.
 
 ### 2026-11-01 | Claude Code on the VPS | `cli/fixes-2026-11-01`, merged to `master` and deployed
