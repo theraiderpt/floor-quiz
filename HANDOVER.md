@@ -17,13 +17,11 @@ Nothing claimed. Before starting anything bigger than a small fix, add a line he
 None recorded. Anything that changes game flow, scoring or the visual direction goes through the owner first.
 
 ## 4. Next steps
-1. **Done 2026-11-01, kept for the record: `cli/hardening-nodemailer` merged and deployed** (nodemailer 10.3.1). Checked against its changelog: needs Node 20+ (production runs 24), the TLS and `NoAuth` changes do not touch `server/mail.js`. Only the smoke SMTP sink exercised it, so send one real invite after deploy. Deploy like 2026-11-01: backup, sync a tested `node_modules`, never `npm ci` (see pitfalls).
-2. **Branch `origin/claude/vibrant-hawking-rmml7k` deleted 2026-11-01.** Correction of the 2026-10-31 review: nothing is missing from it. `master` already contains that commit (PR #1, `628a71c`): rate limit per socket, daily upload budget, disabled hosts cut off, narrower CSP, 256KB socket buffer, credential-tagged cookies, account lockout. The earlier "still missing" list came from a keyword search and was wrong. The branch is only behind `master`.
-3. Optional, a design call: movement line on text questions (the server already sends `prevRank` and `gapToNext`; the rank never changes on a text question).
-4. Approve the `better-sqlite3` install script for npm 12 (`allowScripts`) so `deploy/update.sh` works again.
+Nothing queued for CX Quiz. Done on 2026-11-01 and kept for the record: lastRank and theme on resume, `npm audit fix`, nodemailer 10.3.1, rank and movement line after text questions, `allowScripts` for `better-sqlite3`, stale branch deleted (its hardening was already in `master` via PR #1).
+Ideas only, not agreed: send one real invite email to confirm SMTP after the nodemailer 10 upgrade (only the smoke SMTP sink tested it).
 
 ## 5. Pitfalls and environment
-- **npm 12 blocks dependency install scripts.** `npm ci` then leaves `better-sqlite3` without its compiled binary and the app cannot start. On 2026-11-01 the deploy avoided `npm ci`: it synced a tested `node_modules` from a worktree (binary copied from production) with rsync, `chown -R deploy:deploy`, and checked `require("better-sqlite3")` as `deploy` before restarting. `deploy/update.sh` still runs `npm ci --omit=dev`: do not use it until the install script is approved.
+- **npm 12 and `better-sqlite3`:** npm 12 blocks dependency install scripts. `package.json` now has `allowScripts` for `better-sqlite3@11.10.0` (tested: `npm ci --omit=dev` in a scratch dir builds the binary), so `deploy/update.sh` works again, untested on the live box. The approval is pinned to the version: after bumping `better-sqlite3`, run `npm approve-scripts better-sqlite3` again. The safe fallback used on 2026-11-01 was to rsync a tested `node_modules` and check `require("better-sqlite3")` as `deploy`.
 - **Editing here is editing production code.** The working tree is what PM2 runs. Check `curl -s localhost:3000/api/health` (`games` must be 0) before a restart, and read the ground rules in `CLAUDE.md` first.
 - **Unmerged branch `origin/claude/vibrant-hawking-rmml7k`** (a web session, 2026-10-04): one commit, "Harden auth, sockets and self-paced flow after security review" (7 files, +340 -51: `server/index.js`, `server/selfpaced.js`, `test/smoke.js`, locales, changelog). It is 22 commits behind `master`, so expect conflicts. It may hold security fixes that `master` still lacks: review it before deleting it, do not merge it blindly.
 - **`/root/fq-review` is a stale copy without git.** Its `CLAUDE.md` is older than this one. Edit only here.
@@ -32,6 +30,9 @@ None recorded. Anything that changes game flow, scoring or the visual direction 
 - Claude Desktop sessions cannot reach the VPS or its `~/.claude` notes: put what matters here.
 
 ## 6. Session log (newest first)
+### 2026-11-01 (end) | Claude Code on the VPS | `cli/text-movement-allowscripts`, merged to `master` (`acae266`), deployed
+Players now see rank and the movement line after text questions; `allowScripts` added so `npm ci` builds `better-sqlite3` on npm 12. No restart needed (client file and package.json only). Verified: smoke green, live `play.js` has the change, health ok, site 200. Rollback copy `/var/backups/floor-quiz-20261101-004626`. Not seen in a real browser.
+
 ### 2026-11-01 (later) | Claude Code on the VPS | `cli/hardening-nodemailer`, merged to `master` and deployed
 Bumped nodemailer 6 to 10.3.1 (audit clean, smoke green). Re-checked the "missing hardening" claim and found it false: `master` already has every piece (diff in section 4). Gemini was asked to review the nodemailer upgrade but returned nothing usable, so the changelog was read by hand.
 
