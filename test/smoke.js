@@ -896,7 +896,7 @@ const joinAs = async (pin, name, playerId) => {
 };
 const rHost = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
 await new Promise(r => rHost.on("connect", r));
-const rQuiz = { title: "Resume Test", questions: [
+const rQuiz = { title: "Resume Test", theme: "dark", questions: [
   { q: "R1", t: 30, opts: ["a", "b"], correct: 0 },
   { q: "R2", t: 30, opts: ["a", "b"], correct: 1 }
 ] };
@@ -930,6 +930,7 @@ await new Promise(r => rHost2.on("connect", r));
 const resumed = await new Promise(r => rHost2.emit("host:resume", { pin: rGame.pin }, r));
 check("host resume lands on the live question", resumed.state?.phase === "question" && resumed.state.qIndex === 0 && resumed.total === 2, JSON.stringify(resumed).slice(0, 200));
 check("host resume reports answers so far", resumed.answered?.answered === 1, JSON.stringify(resumed.answered));
+check("host resume tells the projector the game's theme", resumed.theme === "dark", String(resumed.theme));
 const otherHost = ioc(base, { extraHeaders: { Cookie: cookieB }, transports: ["websocket"] });
 await new Promise(r => otherHost.on("connect", r));
 const stolen = await new Promise(r => otherHost.emit("host:resume", { pin: rGame.pin }, r));
@@ -961,6 +962,41 @@ const rCsv = await (await fetch(base + "/api/sessions/" + rFinalPayload.sessionI
 check("CSV neutralises a formula-looking player name", rCsv.includes(`"'=SUM(A1:A9)"`) && !rCsv.includes(`"=SUM(A1:A9)"`), rCsv);
 check("CSV leaves numeric cells (rank, score) alone", rCsv.includes(`"1","'=SUM(A1:A9)"`), rCsv);
 [rejoined, waiter, doomed].forEach(p => p.sock.disconnect());
+
+/* ---- the rank a player is compared with follows every reveal, even one they
+   were offline for ---- */
+const lrHost = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
+await new Promise(r => lrHost.on("connect", r));
+const lrGame = await new Promise(r => lrHost.emit("host:create", { quiz: { title: "Rank Test", questions: [
+  { q: "L1", t: 30, opts: ["a", "b"], correct: 0 },
+  { q: "L2", t: 30, opts: ["a", "b"], correct: 0 }
+] } }, r));
+const lrA = await joinAs(lrGame.pin, "Ana");
+const lrB = await joinAs(lrGame.pin, "Bruno");
+const lrQ1 = waitFor(lrA.sock, "state", st => st.phase === "question");
+lrHost.emit("host:start");
+await lrQ1;
+lrB.sock.disconnect();
+await sleep(300);
+await new Promise(r => lrA.sock.emit("player:answer", { answer: 0 }, r));
+const lrReveal1 = waitFor(lrHost, "reveal", () => true);
+await new Promise(r => lrHost.emit("host:skip", null, r));
+await lrReveal1;
+const lrBRank = rooms.get(lrGame.pin).players.get(lrB.res.playerId).lastRank;
+check("a player offline at a reveal still gets their rank recorded", lrBRank === 2, String(lrBRank));
+const lrB2 = await joinAs(lrGame.pin, "Bruno", lrB.res.playerId);
+const lrQ2 = waitFor(lrA.sock, "state", st => st.phase === "question" && st.qIndex === 1);
+lrHost.emit("host:next");
+lrHost.emit("host:next");
+await lrQ2;
+await new Promise(r => lrB2.sock.emit("player:answer", { answer: 0 }, r));
+const lrResult = waitFor(lrB2.sock, "result", () => true);
+await new Promise(r => lrHost.emit("host:skip", null, r));
+const lrRes = await lrResult;
+check("after rejoining, rank movement is measured from the previous question", lrRes.prevRank === 2, JSON.stringify([lrRes.prevRank, lrRes.rank]));
+lrHost.emit("host:end");
+[lrA, lrB2].forEach(p => p.sock.disconnect());
+lrHost.disconnect();
 
 /* A lobby cancelled before the first question is not a game: players are
    told, nothing lands in history, and the room is freed at once. */

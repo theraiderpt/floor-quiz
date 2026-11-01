@@ -620,7 +620,7 @@ $("openLobby").addEventListener("click", async () => {
 });
 
 function createGame() {
-  socket.emit("host:create", { quiz: { title: S.quiz.title, questions: S.quiz.questions, joinMode: S.quiz.joinMode, gapSeconds: S.quiz.gapSeconds }, quizId: S.quiz.id }, res => {
+  socket.emit("host:create", { quiz: { title: S.quiz.title, questions: S.quiz.questions, joinMode: S.quiz.joinMode, gapSeconds: S.quiz.gapSeconds, theme: S.quiz.theme }, quizId: S.quiz.id }, res => {
     if (!res || res.error) return alert(I18N.errorText(res, "host.lobbyFailed"));
     S.pin = res.pin;
     S.total = res.state.total;
@@ -682,7 +682,7 @@ function resumeLive(onLoad) {
     if (!S.quiz) S.quiz = { title: res.title, questions: [] };
     /* Only on a page reload: a plain reconnect keeps whatever theme the
        host may have switched to with the toggle mid-game. */
-    if (onLoad) window.FQTheme?.set(S.quiz.theme);
+    if (onLoad) window.FQTheme?.set(S.quiz.theme || res.theme);
     fillLobby(res);
     const replay = (event, data) => { if (data) socket.listeners(event).forEach(fn => fn(data)); };
     const st = res.state;

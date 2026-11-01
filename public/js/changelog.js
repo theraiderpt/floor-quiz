@@ -11,6 +11,13 @@
    host's own language and falls back to English for anything missing. */
 const CHANGELOG = [
   {
+    date: "2026-11-01",
+    items: [
+      "Players who drop off and come back now see their rank movement measured from the previous question.",
+      "Reloading the projector page during a game keeps a dark quiz dark, even if the browser lost its saved copy."
+    ]
+  },
+  {
     date: "2026-10-26",
     items: [
       {

@@ -526,13 +526,17 @@ export class Game {
 
     /* Each player gets their own result, addressed to their socket only. */
     for (const p of this.players.values()) {
-      if (!p.socketId) continue;
-      const a = this.answers.get(p.id);
       const rank = rankById.get(p.id) || null;
-      /* Level on points still gets rank by position, so a gap of 0 is how the
-         client knows it is tied with the player above. */
-      const gapToNext = rank && rank > 1 ? board[rank - 2].score - p.score : null;
-      this.io.to(p.socketId).emit("result", resultFor(q, a, p, rank, board.length, { prevRank: p.lastRank ?? null, gapToNext }));
+      if (p.socketId) {
+        const a = this.answers.get(p.id);
+        /* Level on points still gets rank by position, so a gap of 0 is how the
+           client knows it is tied with the player above. */
+        const gapToNext = rank && rank > 1 ? board[rank - 2].score - p.score : null;
+        this.io.to(p.socketId).emit("result", resultFor(q, a, p, rank, board.length, { prevRank: p.lastRank ?? null, gapToNext }));
+      }
+      /* Kept for every player, connected or not: someone who rejoins later is
+         compared with the previous question, not with the last reveal they
+         happened to be online for. */
       p.lastRank = rank;
     }
 

@@ -773,6 +773,7 @@ io.on("connection", socket => {
       joinUrl,
       qr,
       title: game.quiz.title,
+      theme: game.quiz.theme,
       total: game.total,
       state: game.publicState(),
       answered: { answered: game.answers.size, connected: game.connectedCount() },
