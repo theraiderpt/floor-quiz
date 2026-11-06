@@ -12,9 +12,6 @@ Production domain: **cxquiz.tech**. Runs on a Hostinger KVM 2 VPS, Ubuntu 24.04.
   single scoped edit. Changing or removing an *existing* secret (not just adding a new one) can
   break auth/sessions app-wide, so treat that as the kind of high-risk change worth flagging
   before doing it, same as a schema change.
-- **Never run `certbot` or overwrite `/etc/nginx/sites-available/floor-quiz`.** Certbot owns
-  that file after the first issuance. Copying `deploy/nginx.conf` over it drops the site off
-  HTTPS. Check for `ssl_certificate` in the live file before touching it.
 - **Check before restarting the service, don't ask by default.** `curl -s localhost:3000/api/health`
   reports `games`. If it is `0`, restart freely as part of a deploy. If it is non-zero, a session
   is live and a restart disconnects a whole room: wait for it to end (poll `/api/health`, or check
@@ -24,7 +21,7 @@ Production domain: **cxquiz.tech**. Runs on a Hostinger KVM 2 VPS, Ubuntu 24.04.
   autonomy to implement, run `npm run smoke`, and deploy without stopping to ask first. Still
   explain a diagnosis and wait for agreement before starting on something not yet discussed, and
   still flag anything genuinely high-risk (schema changes, replacing an existing `.env` secret,
-  anything touching nginx, anything that can't be cleanly rolled back) before doing it even if
+  anything touching the Caddy config, anything that can't be cleanly rolled back) before doing it even if
   it's in scope.
 
 ## Operational facts that are easy to get wrong
@@ -64,7 +61,6 @@ npm run smoke            # full game + admin/host/invite/quota checks, 228 asser
 node test/load.js 150    # concurrent player load test
 sudo -u deploy -i pm2 logs floor-quiz --lines 50 --nostream
 sudo -u deploy -i pm2 restart floor-quiz
-sudo tail -30 /var/log/nginx/floor-quiz.error.log
 ```
 
 `npm run smoke` uses a throwaway database and is safe to run against production at any time.
