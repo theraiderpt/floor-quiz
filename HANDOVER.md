@@ -11,7 +11,9 @@ Living note shared by Claude Code on the VPS and Claude Desktop. Read it at the 
 - **GitHub:** private `git@github.com:theraiderpt/floor-quiz.git`, branch `master`. Push after every deploy.
 
 ## 2. In progress (claims)
-Nothing claimed. Before starting anything bigger than a small fix, add a line here on your branch: `date | tool | branch | area`.
+- 2026-11-06 | Claude Code on the web | `desktop/avatars-music` | player avatars (join builder, server, host lobby/leaderboard/podium) and host background music
+
+Before starting anything bigger than a small fix, add a line here on your branch: `date | tool | branch | area`.
 
 ## 3. Owner decisions still open
 None recorded. Anything that changes game flow, scoring or the visual direction goes through the owner first.

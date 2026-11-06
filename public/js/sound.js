@@ -49,6 +49,33 @@
     try { SOUNDS[name](); } catch { /* ignore */ }
   }
 
+  /* Looping background music, host screen only, same reasoning as above.
+     Files live in public/audio and are royalty-free loops; a missing file
+     just stays silent rather than erroring, so the game never depends on it. */
+  const TRACKS = { lobby: "/audio/lobby.mp3", think: "/audio/think.mp3" };
+  const music = new Audio();
+  music.loop = true;
+  music.volume = 0.35;
+  music.addEventListener("error", () => { /* missing or unplayable file: stay silent */ });
+  let track = null;
+
+  function startMusic() {
+    if (muted || !track) return;
+    /* play() rejects when the browser hasn't seen a gesture yet; the
+       pointerdown listener below retries once the host taps anything. */
+    music.play().catch(() => {});
+  }
+
+  function setMusic(name) {
+    const next = TRACKS[name] ? name : null;
+    if (next === track) return startMusic();
+    track = next;
+    music.pause();
+    if (!track) return;
+    music.src = TRACKS[track];
+    startMusic();
+  }
+
   function syncToggles() {
     document.querySelectorAll("[data-sound-toggle]").forEach(btn => { btn.textContent = muted ? "🔇" : "🔊"; });
   }
@@ -57,6 +84,7 @@
     muted = next;
     try { localStorage.setItem(KEY, muted ? "1" : "0"); } catch { /* ignore */ }
     syncToggles();
+    if (muted) music.pause(); else startMusic();
   }
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -67,7 +95,8 @@
     /* Any tap unlocks audio for the session, satisfying autoplay policy
        without a dedicated "enable sound" prompt. */
     document.addEventListener("pointerdown", () => { try { ensureCtx(); } catch { /* ignore */ } }, { once: true });
+    document.addEventListener("pointerdown", () => { if (music.paused) startMusic(); });
   });
 
-  window.Sound = { play };
+  window.Sound = { play, music: setMusic };
 })();
