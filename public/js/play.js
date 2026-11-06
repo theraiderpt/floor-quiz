@@ -63,6 +63,50 @@ function randomNickname() {
 }
 $("jNick").addEventListener("click", () => { $("jName").value = randomNickname(); });
 
+/* ------------------------------------------------------------- avatar --- */
+
+/* localStorage, not Session: the character is the player's own across
+   games, so it should still be there next week, not only until the tab closes. */
+const AV_KEY = "cxq.avatar";
+const AV_SLOTS = [["c", "play.avColour"], ["s", "play.avBody"], ["e", "play.avEyes"], ["m", "play.avMouth"], ["h", "play.avHeadwear"]];
+let avatar = (() => {
+  try { const raw = localStorage.getItem(AV_KEY); if (raw) return Avatar.normalize(JSON.parse(raw)); } catch { }
+  return Avatar.random();
+})();
+
+function drawAvatar(id, size) { $(id).replaceChildren(Avatar.svg(avatar, size)); }
+
+function setAvatar(next) {
+  avatar = Avatar.normalize(next);
+  try { localStorage.setItem(AV_KEY, JSON.stringify(avatar)); } catch { }
+  drawAvatar("jAvPreview", 120);
+}
+
+/* Built in JS rather than static HTML because the arrow labels name their
+   slot, and each row needs re-labelling on a language switch. */
+function renderAvRows() {
+  const rows = $("jAvRows");
+  rows.replaceChildren();
+  AV_SLOTS.forEach(([k, key]) => {
+    const slot = t(key);
+    const row = el("div", "avrow");
+    const step = d => () => setAvatar({ ...avatar, [k]: (avatar[k] + d + Avatar.SLOTS[k]) % Avatar.SLOTS[k] });
+    const prev = el("button", "avarrow", "‹"), next = el("button", "avarrow", "›");
+    prev.type = next.type = "button";
+    prev.setAttribute("aria-label", t("play.avPrev", { slot }));
+    next.setAttribute("aria-label", t("play.avNext", { slot }));
+    prev.addEventListener("click", step(-1));
+    next.addEventListener("click", step(1));
+    row.append(prev, el("span", "avlabel", slot), next);
+    rows.appendChild(row);
+  });
+}
+
+renderAvRows();
+setAvatar(avatar);
+$("jAvShuffle").addEventListener("click", () => setAvatar(Avatar.random()));
+document.addEventListener("langchange", renderAvRows);
+
 $("jPin").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); });
 $("jName").addEventListener("keydown", e => { if (e.key === "Enter") join(); });
 $("jGo").addEventListener("click", () => join());
@@ -78,7 +122,7 @@ function join(rejoinWith) {
   if (!name) return ($("jErr").textContent = t("err.name_required"));
 
   $("jGo").disabled = true;
-  socket.emit("player:join", { pin, name, email, playerId: rejoinWith?.playerId }, res => {
+  socket.emit("player:join", { pin, name, email, playerId: rejoinWith?.playerId, avatar }, res => {
     $("jGo").disabled = false;
     if (!res || res.error) {
       Session.clear();
@@ -95,6 +139,8 @@ function join(rejoinWith) {
     $("wName").textContent = me.name;
     $("rName").textContent = me.name;
     $("fName").textContent = me.name;
+    drawAvatar("wAv", 72);
+    drawAvatar("fAv", 48);
     $("wMsg").textContent = res.rejoined ? t("play.backIn") : t("play.youreIn", { name: me.name.split(" ")[0] });
     updateScore();
     applyState(res.state);
@@ -273,7 +319,10 @@ function renderPodium(g) {
     const p = top3[r];
     if (!p) return;
     const box = el("div", "pod r" + (r + 1));
-    box.append(el("span", "medal", String(r + 1)), el("span", "pn", p.name), el("span", "ps", t("common.pts", { n: p.score })));
+    box.append(el("span", "medal", String(r + 1)));
+    /* An older server sends no avatar per entry: the block just goes without. */
+    if (p.avatar) box.append(Avatar.svg(p.avatar, 44));
+    box.append(el("span", "pn", p.name), el("span", "ps", t("common.pts", { n: p.score })));
     if (g.rank === r + 1) { box.classList.add("you"); box.prepend(el("span", "youtag", t("play.podiumYou"))); }
     pod.appendChild(box);
   });

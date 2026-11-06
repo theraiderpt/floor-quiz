@@ -457,6 +457,37 @@ a.btn{text-decoration:none}
 .lrow.me{grid-template-columns:auto 1fr auto auto;width:100%;max-width:360px;background:var(--t2);color:var(--tfg);text-align:left}
 .lrow.me .rank{color:var(--tfg)}
 
+/* avatars: phone builder */
+.avatar{display:block;flex:none}
+/* A collapsible card so a returning player can fold it away and keep the
+   Join button near the top of a small phone. */
+.avbuild{border:var(--bw) solid var(--line);border-radius:20px;background:var(--card);box-shadow:var(--shadow-edge);text-align:left}
+.avbuild summary{cursor:pointer;min-height:44px;display:flex;align-items:center;padding:0 16px;list-style:none;
+  font-weight:800;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.avbuild summary::-webkit-details-marker{display:none}
+.avbuild summary::after{content:"▾";content:"▾"/"";margin-left:auto;font-size:16px;transition:transform .15s ease}
+.avbuild:not([open]) summary::after{transform:rotate(-90deg)}
+.avbody{display:flex;gap:12px;padding:0 12px 12px;align-items:center}
+.avside{display:flex;flex-direction:column;align-items:center;gap:8px;flex:none}
+.avpreview{width:120px;height:120px;border-radius:18px;background:var(--ink-3);border:2px solid var(--ctl);display:grid;place-items:center}
+.avshuffle{padding:8px 12px;min-height:44px;font-size:14px;border-radius:14px;gap:6px}
+.avrows{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.avrow{display:flex;align-items:center;gap:4px}
+.avlabel{flex:1;min-width:0;text-align:center;font-weight:800;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.avarrow{width:44px;height:36px;flex:none;border:2px solid var(--ctl);border-radius:12px;background:var(--card);color:var(--ink);
+  font-family:var(--disp);font-weight:700;font-size:22px;line-height:1;box-shadow:0 2px 0 var(--line);transition:transform .1s ease;position:relative}
+/* The visible button is 36px tall to keep five rows compact; this extends
+   the tap area to the 44px minimum without growing the layout. */
+.avarrow::before{content:"";position:absolute;inset:-4px 0}
+.avarrow:active{transform:translateY(2px);box-shadow:none}
+.avme{display:grid;place-items:center}
+.fhead{display:flex;align-items:center;gap:12px;justify-content:center}
+.pod .avatar{align-self:center}
+/* The builder adds a card's height to the join form; tighter spacing keeps
+   Join on the first screen of a ~380px phone. */
+.phone #s-join .stage{gap:12px;padding-top:12px}
+.phone #s-join .logo{font-size:clamp(40px,12vw,60px)}
+
 @media (max-width:760px){ .lobbygrid{grid-template-columns:1fr} }
 @media (max-width:620px){ .answers{grid-template-columns:1fr} .podium{gap:8px} .qitem{flex-wrap:wrap} }
 @media (prefers-reduced-motion:reduce){
@@ -497,3 +528,21 @@ a.btn{text-decoration:none}
    into a tall empty block. In the dashboard's accuracy cards the same
    flex:1 collapsed it to its border, hiding the fill. */
 .stage > .track,.qbar .track{flex:none}
+
+/* avatars: host screen */
+/* Kahoot-style lobby: the face sits above the name, so each chip becomes a
+   small sticker card instead of a pill. */
+.chip.hasav{display:inline-flex;flex-direction:column;align-items:center;gap:2px;border-radius:20px;padding:8px 14px 6px}
+.chip.hasav .avatar{width:56px;height:56px}
+/* A full room keeps the pill shape with a thumbnail, or 150 cards would
+   push Start off the projector. */
+.roster.dense .chip.hasav{flex-direction:row;gap:6px;border-radius:999px;padding:3px 12px 3px 4px}
+.roster.dense .chip.hasav .avatar{width:28px;height:28px}
+.lrow.hasav{grid-template-columns:2.4em auto 1fr auto}
+#s-scores .lrow.hasav,#s-final .lrow.hasav{grid-template-columns:2.2em auto 1fr auto}
+.lrow .avatar{width:clamp(32px,3vw,48px);height:clamp(32px,3vw,48px)}
+/* Perched on the block's top edge, so the face rises with its place. */
+#s-final .pod.hasav .avatar{width:clamp(64px,7vw,96px);height:clamp(64px,7vw,96px);margin-top:calc(-0.5 * clamp(64px,7vw,96px) - clamp(14px,2vh,24px));
+  filter:drop-shadow(0 4px 0 var(--line))}
+#s-final .pod.r1.hasav .avatar{width:clamp(80px,9vw,120px);height:clamp(80px,9vw,120px);margin-top:calc(-0.5 * clamp(80px,9vw,120px) - clamp(14px,2vh,24px))}
+#s-final .podium:has(.pod.hasav){margin-top:clamp(40px,6vh,64px)}

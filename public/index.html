@@ -21,6 +21,16 @@
       <label for="jPin" data-i18n="play.pin">Game PIN</label>
       <input class="inp pin" id="jPin" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
     </div>
+    <details class="avbuild u-w340" id="jAvBox" open>
+      <summary data-i18n="play.avCustomise">Customise your character</summary>
+      <div class="avbody">
+        <div class="avside">
+          <div class="avpreview" id="jAvPreview" aria-hidden="true"></div>
+          <button class="btn ghost avshuffle" id="jAvShuffle" type="button"><span aria-hidden="true">🎲</span> <span data-i18n="play.avShuffle">Shuffle</span></button>
+        </div>
+        <div class="avrows" id="jAvRows"></div>
+      </div>
+    </details>
     <div class="field u-w340">
       <label for="jName" data-i18n="common.yourName">Your name</label>
       <div class="row u-nowrap">
@@ -40,6 +50,7 @@
 <section class="screen" id="s-wait">
   <div class="strip"><span class="dot" id="wDot"></span><span class="cell"><span class="k" data-i18n="strip.you">you</span><span class="v" id="wName">—</span></span><span class="spacer"></span><span class="cell"><span class="k" data-i18n="strip.score">score</span><span class="v" id="wScore">0</span></span></div>
   <div class="stage center">
+    <div class="avme" id="wAv"></div>
     <div class="pulse"></div>
     <h2 id="wMsg"></h2>
     <p class="sub" id="wSub"></p>
@@ -72,7 +83,7 @@
   <div class="strip"><span class="dot idle"></span><span class="cell"><span class="k" data-i18n="strip.finished">finished</span><span class="v" id="fName">—</span></span></div>
   <div class="stage center">
     <p class="eyebrow" data-i18n="common.thatsTheLot">That's the lot</p>
-    <h1 id="fRank">—</h1>
+    <div class="fhead"><div class="avme sm" id="fAv"></div><h1 id="fRank">—</h1></div>
     <p class="bigpts" id="fScore">0</p>
     <div class="podium" id="fPodium" hidden></div>
     <div class="lrow me" id="fMe" hidden></div>
@@ -89,6 +100,7 @@
 </button>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="/js/avatar.js"></script>
 <script src="/js/play.js"></script>
 </body>
 </html>
