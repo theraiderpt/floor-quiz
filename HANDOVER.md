@@ -18,7 +18,6 @@ None recorded. Anything that changes game flow, scoring or the visual direction 
 
 ## 4. Next steps
 - **Review and deploy `desktop/avatars-music`** (waiting for the owner, not merged). Smoke green (228). Restart needed: server code changed.
-- **Lobby music:** `public/audio/lobby.mp3` is not in the repo yet. Without it the lobby stays silent by design. The owner is choosing an upbeat royalty-free track; drop it in at that path, no code change.
 Nothing queued for CX Quiz. Done on 2026-11-01 and kept for the record: lastRank and theme on resume, `npm audit fix`, nodemailer 10.3.1, rank and movement line after text questions, `allowScripts` for `better-sqlite3`, stale branch deleted (its hardening was already in `master` via PR #1).
 Ideas only, not agreed: send one real invite email to confirm SMTP after the nodemailer 10 upgrade (only the smoke SMTP sink tested it).
 
@@ -33,7 +32,7 @@ Ideas only, not agreed: send one real invite email to confirm SMTP after the nod
 
 ## 6. Session log (newest first)
 ### 2026-11-06 | Claude Code on the web | `desktop/avatars-music`, pushed, not merged or deployed
-Player avatars: `public/js/avatar.js` renders SVG characters (5 slots, headset is the default headwear), builder on the phone join screen (remembered in localStorage `cxq.avatar`), server `cleanAvatar()` clamps input, avatars in lobby, standings, final board and `gameover.top3`, shown on the host lobby, leaderboard and podium and on the phone podium. Avatars are stripped before results are saved: no schema change. Host background music: `Sound.music()` in `sound.js`, `think.mp3` (Pixabay licence) loops during questions, `lobby.mp3` slot ready but empty, the existing speaker toggle mutes both. Verified: smoke 228 all passed, headless screenshots of join, lobby and podium in light and dark. Not seen on a real phone or projector, music not heard in a real browser.
+Player avatars: `public/js/avatar.js` renders SVG characters (5 slots, headset is the default headwear), builder on the phone join screen (remembered in localStorage `cxq.avatar`), server `cleanAvatar()` clamps input, avatars in lobby, standings, final board and `gameover.top3`, shown on the host lobby, leaderboard and podium and on the phone podium. Avatars are stripped before results are saved: no schema change. Host background music: `Sound.music()` in `sound.js`, `think.mp3` (Pixabay licence) loops during questions, `lobby.mp3` (Pixabay licence, re-encoded to 128 kbps) loops in the lobby, the existing speaker toggle mutes both. Verified: smoke 228 all passed, headless screenshots of join, lobby and podium in light and dark. Not seen on a real phone or projector, music not heard in a real browser.
 
 ### 2026-11-01 (end) | Claude Code on the VPS | `cli/text-movement-allowscripts`, merged to `master` (`acae266`), deployed
 Players now see rank and the movement line after text questions; `allowScripts` added so `npm ci` builds `better-sqlite3` on npm 12. No restart needed (client file and package.json only). Verified: smoke green, live `play.js` has the change, health ok, site 200. Rollback copy `/var/backups/floor-quiz-20261101-004626`. Not seen in a real browser.
