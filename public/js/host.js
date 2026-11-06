@@ -34,6 +34,10 @@ function show(id) {
   $(id).classList.add("on");
   window.scrollTo(0, 0);
   if (!GAME_SCREENS.includes(id)) window.FQTheme?.restore();
+  /* `state` re-shows s-play on every answer, so only a real screen change
+     may touch the music, or the question loop would restart each time. */
+  if (id !== show.current) Sound.music(id === "s-lobby" ? "lobby" : null);
+  show.current = id;
   /* Confetti is position:fixed and outlives a quick screen switch (its own
      fall animation runs a couple of seconds), so without this a host who
      taps "back to library" right after the podium would see it still
@@ -765,8 +769,10 @@ socket.on("state", s => {
     S.endsAt = Date.now() + s.msLeft;
     runClock(s.question.t * 1000);
     show("s-play");
+    Sound.music("think");
   } else if (s.phase === "reveal") {
     stopClock();
+    Sound.music(null);
     $("pClock").textContent = "0";
     $("pFill").style.width = "0%";
   }

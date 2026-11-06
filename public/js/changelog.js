@@ -11,6 +11,29 @@
    host's own language and falls back to English for anything missing. */
 const CHANGELOG = [
   {
+    date: "2026-11-06",
+    items: [
+      {
+        en: "Players can build a silly character before joining, headset included. It shows in the lobby, on the leaderboard and on the podium.",
+        fr: "Les joueurs peuvent créer un personnage rigolo avant de rejoindre, casque inclus. Il apparaît dans la salle d'attente, au classement et sur le podium.",
+        de: "Spielende können vor dem Beitritt eine lustige Figur gestalten, Headset inklusive. Sie erscheint in der Lobby, in der Rangliste und auf dem Podest.",
+        es: "Los jugadores pueden crear un personaje divertido antes de unirse, con auriculares incluidos. Aparece en la sala de espera, en la clasificación y en el podio.",
+        el: "Οι παίκτες μπορούν να φτιάξουν έναν αστείο χαρακτήρα πριν μπουν, με ακουστικά. Εμφανίζεται στην αίθουσα αναμονής, στην κατάταξη και στο βάθρο.",
+        pt: "Os jogadores podem criar uma personagem divertida antes de entrar, com auscultadores incluídos. Aparece na sala de espera, na classificação e no pódio.",
+        ro: "Jucătorii își pot crea un personaj amuzant înainte să intre, cu căști incluse. Apare în sala de așteptare, în clasament și pe podium."
+      },
+      {
+        en: "Background music now plays on the projector during questions. The speaker button mutes it.",
+        fr: "Une musique de fond joue désormais sur le projecteur pendant les questions. Le bouton haut-parleur la coupe.",
+        de: "Während der Fragen läuft jetzt Hintergrundmusik auf dem Projektor. Die Lautsprecher-Taste schaltet sie stumm.",
+        es: "Ahora suena música de fondo en el proyector durante las preguntas. El botón del altavoz la silencia.",
+        el: "Τώρα παίζει μουσική υπόκρουση στον προβολέα κατά τις ερωτήσεις. Το κουμπί του ηχείου τη σβήνει.",
+        pt: "Passa a tocar música de fundo no projetor durante as perguntas. O botão do altifalante silencia-a.",
+        ro: "Acum se aude muzică de fundal pe proiector în timpul întrebărilor. Butonul de difuzor o oprește."
+      }
+    ]
+  },
+  {
     date: "2026-11-01",
     items: [
       "Players who drop off and come back now see their rank movement measured from the previous question.",
