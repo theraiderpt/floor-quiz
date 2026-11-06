@@ -348,16 +348,34 @@ const PIN = gameCreated.pin;
 
 /* ---- three players join ---- */
 const names = ["Ana", "Kostas", "Marta"];
+/* Ana picks a valid avatar, Kostas sends garbage, Marta sends none: the
+   server must store something renderable for all three. */
+const ANA_AV = { c: 7, s: 3, e: 5, m: 4, h: 2 };
+const sentAvatars = [ANA_AV, { c: -1, h: 999, x: 5 }, undefined];
+const ZERO_AV = { c: 0, s: 0, e: 0, m: 0, h: 0 };
+const sameAv = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const lobbyFull = waitFor(hostSocket, "lobby", l => l.count === 3);
 const players = [];
-for (const name of names) {
+for (const [i, name] of names.entries()) {
   const s = ioc(base, { transports: ["websocket"] });
   await new Promise(r => s.on("connect", r));
-  const res = await new Promise(r => s.emit("player:join", { pin: PIN, name }, r));
-  players.push({ socket: s, name, id: res.playerId, results: [], over: null });
+  const res = await new Promise(r => s.emit("player:join", { pin: PIN, name, avatar: sentAvatars[i] }, r));
+  players.push({ socket: s, name, id: res.playerId, avatar: res.avatar, results: [], over: null });
   s.on("result", d => players.find(p => p.socket === s).results.push(d));
   s.on("gameover", d => { players.find(p => p.socket === s).over = d; });
 }
 check("all three players joined", players.every(p => p.id), JSON.stringify(players.map(p => p.id)));
+check("a chosen avatar is echoed in the join ack", sameAv(players[0].avatar, ANA_AV), JSON.stringify(players[0].avatar));
+check("a garbage avatar comes back cleaned", sameAv(players[1].avatar, ZERO_AV), JSON.stringify(players[1].avatar));
+check("a missing avatar defaults to all zeros", sameAv(players[2].avatar, ZERO_AV), JSON.stringify(players[2].avatar));
+const lobbyEv = await lobbyFull;
+check("the host lobby list carries each player's avatar",
+  lobbyEv.players.every(lp => sameAv(lp.avatar, players.find(p => p.id === lp.id)?.avatar)),
+  JSON.stringify(lobbyEv.players));
+const { cleanAvatar } = await import("../server/game.js");
+check("cleanAvatar tolerates null, strings, arrays and huge or fractional numbers",
+  [null, "abc", [1, 2], 42, { c: 1e300, s: 1.5, e: "2", m: NaN, h: 5 }].map(cleanAvatar)
+    .every((a, i) => sameAv(a, i === 4 ? { c: 0, s: 0, e: 2, m: 0, h: 5 } : ZERO_AV)));
 
 const dupe = ioc(base, { transports: ["websocket"] });
 await new Promise(r => dupe.on("connect", r));
@@ -434,6 +452,7 @@ hostSocket.emit("host:next");    // deliberately no ack
 await sleep(300);
 check("standings emitted", scoreEvents.length === 1);
 check("standings ordered by score", scoreEvents[0]?.board[0]?.name === "Ana", JSON.stringify(scoreEvents[0]?.board.map(p => p.name)));
+check("the between-question leaderboard carries avatars", sameAv(scoreEvents[0]?.board[0]?.avatar, ANA_AV), JSON.stringify(scoreEvents[0]?.board[0]));
 
 const q2 = waitFor(players[0].socket, "state", s => s.phase === "question" && s.qIndex === 1);
 hostSocket.emit("host:next");
@@ -474,6 +493,10 @@ const top3 = players[0].over.top3;
 check("gameover carries the top three in board order",
   top3?.length === 3 && top3.every((t, i) => t.name === board[i].name && t.score === board[i].score),
   JSON.stringify(top3));
+check("gameover top3 entries carry avatars",
+  top3?.every(t => sameAv(t.avatar, players.find(p => p.name === t.name)?.avatar)), JSON.stringify(top3));
+check("the final board carries avatars",
+  board.every(b => sameAv(b.avatar, players.find(p => p.id === b.id)?.avatar)), JSON.stringify(board.map(b => b.avatar)));
 
 /* ---- results persisted ---- */
 const sessionId = finals[0].sessionId;
@@ -888,10 +911,10 @@ hostSocket4.disconnect();
 
 /* ---- host resume, kicks, rejoin lock-in, finished-game cleanup, CSV
    formula guard ---- */
-const joinAs = async (pin, name, playerId) => {
+const joinAs = async (pin, name, playerId, avatar) => {
   const sock = ioc(base, { transports: ["websocket"] });
   await new Promise(r => sock.on("connect", r));
-  const res = await new Promise(r => sock.emit("player:join", { pin, name, playerId }, r));
+  const res = await new Promise(r => sock.emit("player:join", { pin, name, playerId, avatar }, r));
   return { sock, res };
 };
 const rHost = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
@@ -901,7 +924,7 @@ const rQuiz = { title: "Resume Test", theme: "dark", questions: [
   { q: "R2", t: 30, opts: ["a", "b"], correct: 1 }
 ] };
 const rGame = await new Promise(r => rHost.emit("host:create", { quiz: rQuiz }, r));
-const formula = await joinAs(rGame.pin, "=SUM(A1:A9)");
+const formula = await joinAs(rGame.pin, "=SUM(A1:A9)", undefined, ANA_AV);
 const waiter = await joinAs(rGame.pin, "Waiter");
 const doomed = await joinAs(rGame.pin, "Doomed");
 
@@ -920,6 +943,7 @@ await new Promise(r => formula.sock.emit("player:answer", { answer: 0 }, r));
 formula.sock.disconnect();
 const rejoined = await joinAs(rGame.pin, "=SUM(A1:A9)", formula.res.playerId);
 check("a player rejoining after answering is told so", rejoined.res.state.youAnswered === true, JSON.stringify(rejoined.res.state));
+check("a rejoin without an avatar keeps the one picked at join", sameAv(rejoined.res.avatar, ANA_AV), JSON.stringify(rejoined.res.avatar));
 const reAnswer = await new Promise(r => rejoined.sock.emit("player:answer", { answer: 1 }, r));
 check("a resubmission after rejoining is refused as already_answered", reAnswer.code === "already_answered", JSON.stringify(reAnswer));
 

@@ -34,6 +34,21 @@ export function cleanName(raw) {
     .slice(0, 18);
 }
 
+/* Option counts per avatar slot, mirrored by public/js/avatar.js. The phone
+   sends whatever it likes, so every slot is clamped here before anyone
+   else's screen renders it. */
+const AVATAR_SLOTS = { c: 8, s: 4, e: 6, m: 6, h: 6 };
+
+export function cleanAvatar(raw) {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const [k, n] of Object.entries(AVATAR_SLOTS)) {
+    const v = Number(src[k]);
+    out[k] = Number.isInteger(v) && v >= 0 && v < n ? v : 0;
+  }
+  return out;
+}
+
 function sanitiseQuestion(q) {
   const type = QUESTION_TYPES.includes(q?.type) ? q.type : "single";
   const text = String(q?.q || "").trim().slice(0, 200);
@@ -248,10 +263,13 @@ export class Game {
 
   /* ------------------------------------------------ players ------------- */
 
-  addPlayer(socket, rawName, existingId, rawEmail) {
+  addPlayer(socket, rawName, existingId, rawEmail, rawAvatar) {
     this.touch();
     if (existingId && this.players.has(existingId)) {
       const p = this.players.get(existingId);
+      /* A reconnect that sends no avatar (older client, or a bare resume)
+         keeps the one picked at join instead of resetting to the default. */
+      if (rawAvatar != null) p.avatar = cleanAvatar(rawAvatar);
       p.connected = true;
       p.socketId = socket.id;
       return { player: p, rejoined: true };
@@ -278,6 +296,7 @@ export class Game {
       id: randomUUID(),
       name,
       email: isValidEmail(email) ? email : null,
+      avatar: cleanAvatar(rawAvatar),
       socketId: socket.id,
       connected: true,
       score: 0,
@@ -325,6 +344,7 @@ export class Game {
         id: p.id,
         name: p.name,
         email: p.email || null,
+        avatar: p.avatar,
         score: p.score,
         correctCount: p.correctCount,
         answered: p.answered
@@ -369,7 +389,7 @@ export class Game {
 
   broadcastLobby() {
     this.io.to(this.hostRoom).emit("lobby", {
-      players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, email: p.email || null, connected: p.connected })),
+      players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, email: p.email || null, avatar: p.avatar, connected: p.connected })),
       count: this.players.size
     });
   }
@@ -585,7 +605,7 @@ export class Game {
     this.phase = "final";
     const board = this.standings();
     try {
-      const withLogs = board.map(p => ({ ...p, log: this.players.get(p.id)?.log || [] }));
+      const withLogs = board.map(({ avatar, ...p }) => ({ ...p, log: this.players.get(p.id)?.log || [] }));
       store.sessions.close(this.sessionId, withLogs, this.quiz.questions.map(q => q.q));
       this.onSaved?.(this.sessionId);
     } catch (err) {
@@ -595,7 +615,7 @@ export class Game {
     this.lastFinal = { board, sessionId: this.sessionId };
     this.io.to(this.hostRoom).emit("final", this.lastFinal);
     const rankById = new Map(board.map((p, i) => [p.id, i + 1]));
-    const top3 = board.slice(0, 3).map(p => ({ name: p.name, score: p.score }));
+    const top3 = board.slice(0, 3).map(p => ({ name: p.name, score: p.score, avatar: p.avatar }));
     for (const p of this.players.values()) {
       if (!p.socketId) continue;
       this.io.to(p.socketId).emit("gameover", {

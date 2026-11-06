@@ -2,6 +2,9 @@
 
 const $ = id => document.getElementById(id);
 const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
+/* avatar.js may be missing (stale cache, blocked script) and older game
+   payloads have no avatar: either way the screen just shows names. */
+const avatarOf = (p, size) => (typeof Avatar !== "undefined" && p?.avatar ? Avatar.svg(p.avatar, size) : null);
 const LETTERS = ["A", "B", "C", "D"];
 const COLORS = ["c1", "c2", "c3", "c4"];
 /* One shape per position - triangle/diamond/circle/square - the same
@@ -727,10 +730,20 @@ socket.on("lobby", d => {
     if (!c) {
       c = el("span", "chip new");
       c.addEventListener("animationend", () => c.classList.remove("new"), { once: true });
-      c.addEventListener("click", () => { if (confirm(t("host.confirmRemove", { name: c.textContent }))) socket.emit("host:kick", { playerId: p.id }); });
+      c.append(el("span", "cn"));
+      c.addEventListener("click", () => { if (confirm(t("host.confirmRemove", { name: c.lastChild.textContent }))) socket.emit("host:kick", { playerId: p.id }); });
       chips.set(p.id, c);
     }
-    c.textContent = p.name;
+    c.lastChild.textContent = p.name;
+    // Only redraw on change: a rejoin or a kick re-sends the whole roster.
+    const avKey = JSON.stringify(p.avatar || null);
+    if (c.dataset.av !== avKey) {
+      c.dataset.av = avKey;
+      if (c.firstChild !== c.lastChild) c.firstChild.remove();
+      const svg = avatarOf(p, 56);
+      if (svg) c.prepend(svg);
+      c.classList.toggle("hasav", Boolean(svg));
+    }
     c.classList.toggle("off", !p.connected);
     c.title = (p.email ? p.email + " · " : "") + t("host.clickToRemove");
     // Moving a node restarts its animation, so only touch the ones out of place.
@@ -865,7 +878,9 @@ socket.on("scores", d => {
   d.board.forEach((p, i) => {
     const row = el("div", "lrow" + (i < 3 ? " p" + (i + 1) : ""));
     row.style.animationDelay = i * 55 + "ms";
-    row.append(el("span", "rank", String(i + 1)), el("span", "nm", p.name), el("span", "pts", String(p.score)));
+    const svg = avatarOf(p, 48);
+    row.classList.toggle("hasav", Boolean(svg));
+    row.append(el("span", "rank", String(i + 1)), ...(svg ? [svg] : []), el("span", "nm", p.name), el("span", "pts", String(p.score)));
     board.appendChild(row);
   });
   if (!d.board.length) board.appendChild(el("p", "note", t("host.noScores")));
@@ -892,6 +907,8 @@ socket.on("final", d => {
     const p = d.board[r];
     if (!p) return;
     const box = el("div", "pod r" + (r + 1));
+    const svg = avatarOf(p, r === 0 ? 120 : 96);
+    if (svg) { box.classList.add("hasav"); box.append(svg); }
     box.append(el("span", "medal", String(r + 1)), el("span", "pn", p.name), el("span", "ps", t("common.pts", { n: p.score })));
     // Confetti waits for first place to land. Under reduced motion there is
     // no animation (so no event), and confetti() would skip anyway.
@@ -904,7 +921,9 @@ socket.on("final", d => {
   d.board.slice(3, 12).forEach((p, i) => {
     const row = el("div", "lrow");
     row.style.animationDelay = i * 45 + "ms";
-    row.append(el("span", "rank", String(i + 4)), el("span", "nm", p.name), el("span", "pts", String(p.score)));
+    const svg = avatarOf(p, 40);
+    row.classList.toggle("hasav", Boolean(svg));
+    row.append(el("span", "rank", String(i + 4)), ...(svg ? [svg] : []), el("span", "nm", p.name), el("span", "pts", String(p.score)));
     board.appendChild(row);
   });
   show("s-final");

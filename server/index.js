@@ -849,7 +849,7 @@ io.on("connection", socket => {
      covers undefined, so emit("player:join", null) used to throw here and
      take the whole process (and every live game) down. */
   on("player:join", (payload, ack) => {
-    const { pin, name, playerId, email } = payload ?? {};
+    const { pin, name, playerId, email, avatar } = payload ?? {};
     const pinText = String(pin ?? "").trim().slice(0, 8);
     const ip = clientIp(socket);
     if (pinLockedOut(ip)) return ack?.({ error: "Too many wrong PINs. Wait a minute.", code: "rate_pin" });
@@ -865,7 +865,7 @@ io.on("connection", socket => {
       return ack?.({ error: `No game running on PIN ${pinText}.`, code: "no_pin", pin: pinText });
     }
 
-    const res = game.addPlayer(socket, cleanName(name), playerId, email);
+    const res = game.addPlayer(socket, cleanName(name), playerId, email, avatar);
     if (res.error) return ack?.({ error: res.error });
 
     socket.join(game.room);
@@ -876,6 +876,7 @@ io.on("connection", socket => {
     ack?.({
       playerId: res.player.id,
       name: res.player.name,
+      avatar: res.player.avatar,
       rejoined: res.rejoined,
       score: res.player.score,
       /* Personalised: a rejoin mid-question needs this player's own shuffled
