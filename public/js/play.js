@@ -1,6 +1,7 @@
 "use strict";
 
 const $ = id => document.getElementById(id);
+I18N.privacyNote($("jPrivacy"));
 const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
 const LETTERS = ["A", "B", "C", "D"];
 const COLORS = ["c1", "c2", "c3", "c4"];

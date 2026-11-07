@@ -113,6 +113,19 @@
     buildPicker();
   });
 
-  window.I18N = { t, errorText, apply, setLang, get lang() { return lang; }, supported: SUPPORTED };
+  /** Fills the "how long we keep your answers" line on a join screen. The
+   *  period comes from the server so the text can't drift from the real setting. */
+  function privacyNote(node) {
+    if (!node) return;
+    fetch("/api/privacy").then(r => r.json()).then(({ retentionDays }) => {
+      const n = Math.max(1, Math.round(retentionDays / 30.44));
+      const render = () => { node.textContent = t("play.privacy", { n }); };
+      render();
+      node.hidden = false;
+      document.addEventListener("langchange", render);
+    }).catch(() => { /* no note beats a wrong one */ });
+  }
+
+  window.I18N = { t, errorText, apply, setLang, privacyNote, get lang() { return lang; }, supported: SUPPORTED };
   window.t = t;
 })();

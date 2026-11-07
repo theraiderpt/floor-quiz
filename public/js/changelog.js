@@ -11,6 +11,38 @@
    host's own language and falls back to English for anything missing. */
 const CHANGELOG = [
   {
+    date: "2026-11-07",
+    items: [
+      {
+        en: "Players' phones no longer contact Google or Giphy: fonts and picked GIFs are now served from CX Quiz itself.",
+        fr: "Les téléphones des joueurs ne contactent plus Google ni Giphy : les polices et les GIF choisis sont désormais servis par CX Quiz.",
+        de: "Die Handys der Spielenden kontaktieren weder Google noch Giphy: Schriften und ausgewählte GIFs kommen jetzt direkt von CX Quiz.",
+        es: "Los móviles de los jugadores ya no contactan con Google ni Giphy: las fuentes y los GIF elegidos se sirven desde CX Quiz.",
+        el: "Τα κινητά των παικτών δεν επικοινωνούν πια με Google ή Giphy: οι γραμματοσειρές και τα GIF που επιλέγεις έρχονται πλέον από το CX Quiz.",
+        pt: "Os telemóveis dos jogadores deixam de contactar a Google ou o Giphy: os tipos de letra e os GIF escolhidos passam a vir do próprio CX Quiz.",
+        ro: "Telefoanele jucătorilor nu mai contactează Google sau Giphy: fonturile și GIF-urile alese vin acum direct de la CX Quiz."
+      },
+      {
+        en: "Game results are deleted automatically after 12 months, and the join screen tells players so.",
+        fr: "Les résultats des parties sont supprimés automatiquement après 12 mois, et l'écran d'accès l'indique aux joueurs.",
+        de: "Spielergebnisse werden nach 12 Monaten automatisch gelöscht, und der Beitrittsbildschirm weist darauf hin.",
+        es: "Los resultados de las partidas se borran automáticamente a los 12 meses, y la pantalla de acceso lo indica a los jugadores.",
+        el: "Τα αποτελέσματα των παιχνιδιών διαγράφονται αυτόματα μετά από 12 μήνες και η οθόνη εισόδου το λέει στους παίκτες.",
+        pt: "Os resultados dos jogos são apagados automaticamente ao fim de 12 meses, e o ecrã de entrada informa os jogadores.",
+        ro: "Rezultatele jocurilor se șterg automat după 12 luni, iar ecranul de intrare îi anunță pe jucători."
+      },
+      {
+        en: "Admins can delete a game's results on request and see who changed what in the new Activity tab.",
+        fr: "Les admins peuvent supprimer les résultats d'une partie sur demande et voir qui a modifié quoi dans le nouvel onglet Activité.",
+        de: "Admins können die Ergebnisse eines Spiels auf Anfrage löschen und im neuen Tab Aktivität sehen, wer was geändert hat.",
+        es: "Los admins pueden borrar los resultados de una partida si se solicita y ver quién cambió qué en la nueva pestaña Actividad.",
+        el: "Οι διαχειριστές μπορούν να διαγράψουν τα αποτελέσματα ενός παιχνιδιού κατόπιν αιτήματος και να δουν ποιος άλλαξε τι στη νέα καρτέλα Δραστηριότητα.",
+        pt: "Os admins podem apagar os resultados de um jogo a pedido e ver quem alterou o quê no novo separador Atividade.",
+        ro: "Adminii pot șterge la cerere rezultatele unui joc și pot vedea cine a schimbat ce în noua filă Activitate."
+      }
+    ]
+  },
+  {
     date: "2026-11-06",
     items: [
       {

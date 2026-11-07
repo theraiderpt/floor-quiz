@@ -1,8 +1,7 @@
-/* Question pictures: either uploaded by the host (stored on disk, served
-   back as a short /uploads/... URL) or picked from Giphy (stored as Giphy's
-   own CDN URL, nothing to host). Either way `img` on a question ends up as
-   a short string cheap enough to travel in every state broadcast, unlike
-   the old scheme of embedding the picture itself as base64 on the question. */
+/* Question pictures: uploaded by the host, or picked from Giphy and copied
+   here once. Both are stored on disk and served back as a short /uploads/...
+   URL, so `img` stays cheap to broadcast and players' phones only ever load
+   pictures from our own origin, never from Giphy. */
 
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -56,6 +55,10 @@ export async function saveImageUpload(dataUrl) {
   const [, mime, b64] = m;
   const bytes = Buffer.from(b64, "base64");
   if (!MAGIC[mime](bytes)) throw codedError("img_type", "That doesn't look like a supported image (JPEG, PNG, WebP or GIF).");
+  return writeUpload(bytes, mime);
+}
+
+async function writeUpload(bytes, mime) {
   const cap = MAX_BYTES[mime] || MAX_BYTES.default;
   if (bytes.length > cap) {
     const size = (bytes.length / 1e6).toFixed(1), max = (cap / 1e6).toFixed(1);
@@ -65,6 +68,48 @@ export async function saveImageUpload(dataUrl) {
   const filename = randomUUID() + EXT_BY_MIME[mime];
   await fs.writeFile(path.join(config.uploadsDir, filename), bytes);
   return "/uploads/" + filename;
+}
+
+export const isGiphyUrl = s => typeof s === "string" && /^https:\/\/[a-z0-9-]+\.giphy\.com\//.test(s);
+
+/** Downloads a GIF the host picked on Giphy and stores it like an upload.
+ *  Only Giphy's own media hosts, no redirects, and the same type and size
+ *  checks as an upload, so a host can't use this to make the server fetch
+ *  arbitrary URLs. @returns {Promise<{url: string, bytes: number}>} */
+export async function saveGiphyGif(url) {
+  if (!isGiphyUrl(url)) throw codedError("img_type", "That doesn't look like a supported image (JPEG, PNG, WebP or GIF).");
+  const res = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw codedError("giphy_failed", "Giphy download failed (" + res.status + ").", { status: res.status });
+  if (Number(res.headers.get("content-length")) > MAX_BYTES["image/gif"]) {
+    throw codedError("img_too_big", "That GIF is too large.", { size: "?", max: (MAX_BYTES["image/gif"] / 1e6).toFixed(1) });
+  }
+  const bytes = Buffer.from(await res.arrayBuffer());
+  const mime = Object.keys(MAGIC).find(m => MAGIC[m](bytes));
+  if (!mime) throw codedError("img_type", "That doesn't look like a supported image (JPEG, PNG, WebP or GIF).");
+  return { url: await writeUpload(bytes, mime), bytes: bytes.length };
+}
+
+/* Quizzes saved before GIFs were copied here still point at Giphy's CDN.
+   Rewrites those to local copies; one that fails to download keeps its Giphy
+   URL and is retried on the next run. */
+export async function migrateGiphyImages() {
+  const copies = new Map(); // Giphy URL -> local URL, so a GIF used twice is fetched once
+  let changed = 0;
+  for (const quiz of store.quizzes.withGiphy()) {
+    let dirty = false;
+    for (const q of quiz.questions) {
+      if (!isGiphyUrl(q.img)) continue;
+      try {
+        if (!copies.has(q.img)) copies.set(q.img, (await saveGiphyGif(q.img)).url);
+        q.img = copies.get(q.img);
+        dirty = true;
+      } catch (err) {
+        console.error("giphy copy failed:", q.img, err.message);
+      }
+    }
+    if (dirty) { store.quizzes.setQuestions(quiz.id, quiz.questions); changed++; }
+  }
+  return changed;
 }
 
 /** Proxies a Giphy search server-side so the API key never reaches the

@@ -454,7 +454,17 @@ async function runGifSearch(query) {
       img.loading = "lazy";
       img.alt = g.title;
       b.appendChild(img);
-      b.addEventListener("click", () => { setEditorImage(g.url); $("eGifSearch").hidden = true; });
+      b.addEventListener("click", async () => {
+        $("eGifStatus").textContent = t("host.gifSaving");
+        try {
+          const { url } = await api("/giphy/save", { method: "POST", body: { url: g.url } });
+          setEditorImage(url);
+          $("eGifSearch").hidden = true;
+          $("eGifStatus").textContent = "";
+        } catch (err) {
+          $("eGifStatus").textContent = err.message;
+        }
+      });
       $("eGifResults").appendChild(b);
     });
   } catch (err) {

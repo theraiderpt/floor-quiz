@@ -80,6 +80,16 @@ CREATE TABLE IF NOT EXISTS bank_questions (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+/* Who did what in the admin area. The actor is stored as an email, not a
+   foreign key, so the trail survives the account being deleted. */
+CREATE TABLE IF NOT EXISTS audit_log (
+  id     INTEGER PRIMARY KEY AUTOINCREMENT,
+  at     TEXT NOT NULL DEFAULT (datetime('now')),
+  actor  TEXT NOT NULL,
+  action TEXT NOT NULL,
+  detail TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_results_session ON results(session_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bank_category ON bank_questions(category_id);
@@ -161,6 +171,17 @@ const stmt = {
   ),
   getSession: db.prepare("SELECT * FROM sessions WHERE id = ?"),
   discardSession: db.prepare("DELETE FROM sessions WHERE id = ? AND ended_at IS NULL"),
+  deleteSession: db.prepare("DELETE FROM sessions WHERE id = ?"),
+  /* Finished games past the retention period, plus rows opened for a game
+     that never finished (a lobby abandoned and swept from memory). Results
+     go with them through ON DELETE CASCADE. */
+  purgeSessions: db.prepare(
+    `DELETE FROM sessions
+     WHERE (ended_at IS NOT NULL AND ended_at < datetime('now', ?))
+        OR (ended_at IS NULL AND started_at < datetime('now', '-2 days'))`
+  ),
+  insertAudit: db.prepare("INSERT INTO audit_log (actor, action, detail) VALUES (?, ?, ?)"),
+  listAudit: db.prepare("SELECT id, at, actor, action, detail FROM audit_log ORDER BY id DESC LIMIT ?"),
   countSessions: db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE ended_at IS NOT NULL"),
   insertResult: db.prepare(
     `INSERT INTO results (session_id, rank, name, score, correct_count, answered, email, answers_json)
@@ -259,6 +280,9 @@ const stmt = {
      FROM hosts ORDER BY hosts.created_at DESC`
   ),
   allQuizQuestionsJson: db.prepare("SELECT questions FROM quizzes"),
+  quizzesWithGiphy: db.prepare("SELECT id, questions FROM quizzes WHERE questions LIKE '%giphy.com%'"),
+  /* Leaves updated_at alone: a background rewrite is not an edit by the host. */
+  setQuizQuestions: db.prepare("UPDATE quizzes SET questions = ? WHERE id = ?"),
   getHost: db.prepare("SELECT * FROM hosts WHERE id = ?"),
   getHostByEmail: db.prepare("SELECT * FROM hosts WHERE email = ?"),
   insertHost: db.prepare("INSERT INTO hosts (email, max_players) VALUES (?, ?)"),
@@ -329,10 +353,17 @@ const parseBank = row =>
   };
 
 export const store = {
+  audit: {
+    add: (actor, action, detail) => stmt.insertAudit.run(String(actor), action, detail == null ? null : String(detail)),
+    list: (limit = 200) => stmt.listAudit.all(limit)
+  },
+
   quizzes: {
     /* Every saved quiz's questions as one JSON string, for finding which
        uploaded pictures are still referenced (see sweepOrphanUploads). */
     allQuestionsJson: () => stmt.allQuizQuestionsJson.all().map(r => r.questions).join("\n"),
+    withGiphy: () => stmt.quizzesWithGiphy.all().map(r => ({ id: r.id, questions: JSON.parse(r.questions) })),
+    setQuestions: (id, questions) => stmt.setQuizQuestions.run(JSON.stringify(questions), id),
     list: hostId => stmt.listQuizzes.all(hostId).map(parseQuiz),
     /* Scoped by host so one host can never see or touch another's quiz; a
        mismatch reads exactly like "doesn't exist" to the caller. */
@@ -391,6 +422,8 @@ export const store = {
     /* A lobby cancelled before the first question: drop the row opened for
        it. Never touches a session that actually finished. */
     discard: sessionId => stmt.discardSession.run(sessionId).changes > 0,
+    remove: id => stmt.deleteSession.run(id).changes > 0,
+    purgeOlderThan: days => stmt.purgeSessions.run(`-${Math.floor(days)} days`).changes,
 
     list: (hostId, limit = 40) => stmt.listSessions.all(hostId, limit),
     listAll: (limit = 100) => stmt.listAllSessions.all(limit),

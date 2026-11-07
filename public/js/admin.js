@@ -58,6 +58,7 @@ function switchTab(name) {
   else if (name === "hosts") loadHosts();
   else if (name === "categories") loadCategories();
   else if (name === "bank") loadBank();
+  else if (name === "activity") loadAudit();
 }
 
 /* --------------------------------------------------------- overview ----- */
@@ -99,7 +100,36 @@ async function loadOverview() {
     );
     body.appendChild(meta);
     item.appendChild(body);
+    const del = el("button", "iconbtn", "✕"); del.title = t("admin.deleteGame");
+    del.addEventListener("click", async () => {
+      if (!confirm(t("admin.confirmDeleteGame", { title: g.title, n: g.player_count }))) return;
+      await api("/admin/games/" + g.id, { method: "DELETE" });
+      await loadOverview();
+    });
+    const acts = el("div", "acts"); acts.appendChild(del);
+    item.appendChild(acts);
     gl.appendChild(item);
+  });
+}
+
+/* ---------------------------------------------------------- activity ---- */
+
+async function loadAudit() {
+  const rows = await api("/admin/audit");
+  const wrap = $("auditList");
+  wrap.innerHTML = "";
+  if (!rows.length) wrap.appendChild(el("p", "note", t("admin.noActivity")));
+  rows.forEach(r => {
+    const item = el("div", "qitem");
+    item.appendChild(el("span", "idx", r.at.slice(5, 10)));
+    const body = el("div", "body");
+    const label = t("audit." + r.action, { n: Number(r.detail) || 0 });
+    body.appendChild(el("p", "qt", r.detail && r.action !== "retention_purge" ? `${label}: ${r.detail}` : label));
+    const meta = el("div", "meta");
+    meta.append(el("span", null, r.actor === "system" ? t("audit.system") : r.actor), el("span", null, r.at.slice(0, 16) + " UTC"));
+    body.appendChild(meta);
+    item.appendChild(body);
+    wrap.appendChild(item);
   });
 }
 

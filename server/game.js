@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { SCORING, FLOW, config } from "./config.js";
 import { store } from "./db.js";
+import { isGiphyUrl } from "./media.js";
 
 export const PHASES = ["lobby", "question", "reveal", "scores", "final"];
 export const QUESTION_TYPES = ["single", "multi", "text", "numeric"];
@@ -8,14 +9,11 @@ export const QUESTION_TYPES = ["single", "multi", "text", "numeric"];
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 export const isValidEmail = s => typeof s === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
 
-/* Pictures aren't embedded on the question any more (server/media.js saves
-   uploads to disk and Giphy picks stay on Giphy's CDN), so `img` is always
-   a short URL now: either our own `/uploads/...` path or an `https://` URL
-   on Giphy's media CDN. A generous length cap just guards against garbage,
-   not against a real picture's worth of bytes. */
+/* `img` is a short URL: our own `/uploads/...` path, or a Giphy CDN URL on a
+   quiz saved before picked GIFs were copied here (server/media.js rewrites
+   those in the background). A generous length cap just guards against garbage. */
 const MAX_IMG_URL_CHARS = 600;
 const isOwnUpload = s => /^\/uploads\/[0-9a-f-]{36}\.(?:jpg|png|webp|gif)$/.test(s);
-const isGiphyUrl = s => /^https:\/\/[a-z0-9-]+\.giphy\.com\//.test(s);
 
 /* Scoring lives server side and nowhere else. The client is never told the
    correct answer until the question is closed, and never computes its own

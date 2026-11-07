@@ -15,6 +15,8 @@ export const config = {
   publicUrl: (process.env.PUBLIC_URL || "").replace(/\/+$/, ""),
   dbPath: process.env.DB_PATH || path.join(ROOT, "data", "floor-quiz.db"),
   maxPlayers: Number(process.env.MAX_PLAYERS || 400),
+  /* How long finished games (player names, emails, answers) are kept. */
+  retentionDays: Math.max(1, Number(process.env.RETENTION_DAYS) || 365),
   giphyApiKey: process.env.GIPHY_API_KEY || "",
   smtp: {
     host: process.env.SMTP_HOST || "",

@@ -1290,6 +1290,58 @@ check("an edited self-paced quiz reaches new attempts while an old attempt is st
   firstCache.question?.q === "before edit" && secondCache.question?.q === "after edit",
   firstCache.question?.q + " / " + secondCache.question?.q);
 
+/* ---- privacy: self-hosted fonts, GIF copies, retention, audit trail ---- */
+const page = await fetch(base + "/");
+const csp = page.headers.get("content-security-policy") || "";
+check("the CSP no longer allows Google Fonts", !/googleapis|gstatic/.test(csp), csp);
+const appCss = await (await fetch(base + "/css/app.css")).text();
+const fontsCss = await fetch(base + "/fonts/fonts.css");
+check("fonts load from our own origin", !/googleapis/.test(appCss) && fontsCss.status === 200, "fonts.css " + fontsCss.status);
+
+const gifNoAuth = await fetch(base + "/api/giphy/save", { method: "POST", headers: jsonHdr, body: JSON.stringify({ url: "https://media.giphy.com/x.gif" }) });
+check("saving a GIF needs a host", gifNoAuth.status === 401, "got " + gifNoAuth.status);
+const gifElsewhere = await fetch(base + "/api/giphy/save", { method: "POST", headers: { ...jsonHdr, Cookie: cookie }, body: JSON.stringify({ url: base + "/api/health" }) });
+check("the GIF copier refuses anything that isn't a Giphy URL", gifElsewhere.status === 400 && (await gifElsewhere.json()).code === "img_type", "got " + gifElsewhere.status);
+
+const privacy = await (await fetch(base + "/api/privacy")).json();
+check("the join screen can read the retention period", privacy.retentionDays === 365, JSON.stringify(privacy));
+
+const auditRows = await (await fetch(base + "/api/admin/audit", { headers: { Cookie: adminCookie } })).json();
+check("admin sign-in and host creation are in the audit log",
+  auditRows.some(r => r.action === "login" && r.actor === "admin@smoke.test") &&
+  auditRows.some(r => r.action === "host_create" && r.actor === "admin@smoke.test"),
+  JSON.stringify(auditRows.slice(0, 5)));
+const auditAsHost = await fetch(base + "/api/admin/audit", { headers: { Cookie: cookie } });
+check("hosts cannot read the audit log", auditAsHost.status === 401, "got " + auditAsHost.status);
+
+await fetch(base + "/api/quizzes/" + cacheQuiz.id, { method: "DELETE", headers: { Cookie: cookie } });
+const afterQuizDelete = await (await fetch(base + "/api/admin/audit", { headers: { Cookie: adminCookie } })).json();
+check("a host deleting a quiz is recorded with their email",
+  afterQuizDelete.some(r => r.action === "quiz_delete" && r.actor === "hosta@smoke.test" && r.detail === "cache check"),
+  JSON.stringify(afterQuizDelete.slice(0, 3)));
+
+const gamesBefore = await (await fetch(base + "/api/admin/games", { headers: { Cookie: adminCookie } })).json();
+const victim = gamesBefore[0];
+const delAsHost = await fetch(base + "/api/admin/games/" + victim.id, { method: "DELETE", headers: { Cookie: cookie } });
+check("hosts cannot delete games through the admin API", delAsHost.status === 401, "got " + delAsHost.status);
+const delGame = await (await fetch(base + "/api/admin/games/" + victim.id, { method: "DELETE", headers: { Cookie: adminCookie } })).json();
+const gamesAfter = await (await fetch(base + "/api/admin/games", { headers: { Cookie: adminCookie } })).json();
+check("an admin can delete a game and its results",
+  delGame.ok === true && !gamesAfter.some(g => g.id === victim.id) && store.sessions.get(victim.id) === null,
+  JSON.stringify(delGame));
+const afterGameDelete = await (await fetch(base + "/api/admin/audit", { headers: { Cookie: adminCookie } })).json();
+check("the game deletion is in the audit log", afterGameDelete[0]?.action === "game_delete", JSON.stringify(afterGameDelete[0]));
+
+/* Every game in this run finished seconds ago: a one-day period keeps them, a
+   zero-day period (only reachable from code) removes them with their results. */
+const keptCount = store.sessions.count();
+check("results inside the retention period are kept", store.sessions.purgeOlderThan(1) === 0 && store.sessions.count() === keptCount);
+await sleep(1100); // ended_at has one-second resolution
+const anyGame = gamesAfter[0];
+const purged = store.sessions.purgeOlderThan(0);
+check("results past the retention period are deleted with their player rows",
+  purged >= 1 && store.sessions.count() === 0 && store.sessions.get(anyGame.id) === null, "purged " + purged);
+
 /* ---- done ---- */
 players.forEach(p => p.socket.disconnect());
 hostSocket.disconnect();

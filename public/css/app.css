@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans:wght@400;600;700;800&display=swap");
+@import url("/fonts/fonts.css");
 
 /* "Sunny Sticker": flat colour fills, thick ink outlines and a solid bottom
    edge, so everything reads like a sticker. Light is the default (easiest
@@ -546,3 +546,6 @@ a.btn{text-decoration:none}
   filter:drop-shadow(0 4px 0 var(--line))}
 #s-final .pod.r1.hasav .avatar{width:clamp(80px,9vw,120px);height:clamp(80px,9vw,120px);margin-top:calc(-0.5 * clamp(80px,9vw,120px) - clamp(14px,2vh,24px))}
 #s-final .podium:has(.pod.hasav){margin-top:clamp(40px,6vh,64px)}
+
+/* privacy line under the join buttons */
+.note.privacy{max-width:340px;font-size:12px;text-align:center;margin:0 auto 64px}

@@ -40,6 +40,7 @@
     <span class="cell"><button data-i18n="admin.hosts" class="k tab u-caps" data-tab="hosts">Hosts</button></span>
     <span class="cell"><button data-i18n="admin.categories" class="k tab u-caps" data-tab="categories">Categories</button></span>
     <span class="cell"><button data-i18n="admin.bank" class="k tab u-caps" data-tab="bank">Question bank</button></span>
+    <span class="cell"><button data-i18n="admin.activity" class="k tab u-caps" data-tab="activity">Activity</button></span>
     <span class="cell"><button data-i18n="common.signOut" class="k u-caps" id="logout">Sign out</button></span>
   </div>
 
@@ -113,6 +114,12 @@
       <div class="row"><button data-i18n="admin.addToBank" class="btn" id="bAdd">+ Add to bank</button></div>
     </div>
     <div class="qlist" id="bankList"></div>
+  </div>
+
+  <!-- activity -->
+  <div class="stage tabpage" id="tab-activity">
+    <div><p data-i18n="admin.activity" class="eyebrow">Activity</p><h2 data-i18n="admin.activityHeading">Who changed what</h2></div>
+    <div class="qlist" id="auditList"></div>
   </div>
 </section>
 

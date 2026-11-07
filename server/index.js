@@ -13,7 +13,7 @@ import { Rooms, sanitiseQuiz, cleanName } from "./game.js";
 import { Attempts } from "./selfpaced.js";
 import { sendInviteEmail, mailEnabled } from "./mail.js";
 import { hashPassword, verifyPassword, randomToken } from "./auth.js";
-import { saveImageUpload, searchGiphy, sweepOrphanUploads } from "./media.js";
+import { saveImageUpload, searchGiphy, saveGiphyGif, migrateGiphyImages, sweepOrphanUploads } from "./media.js";
 import { sessionCsv, csvFilename, emailSessionResults } from "./results.js";
 
 const app = express();
@@ -30,7 +30,7 @@ const io = new IOServer(server, {
 const rooms = new Rooms(io);
 const attempts = new Attempts();
 
-/* Nginx sits in front, so trust exactly one proxy hop for client IPs. */
+/* Caddy sits in front, so trust exactly one proxy hop for client IPs. */
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
@@ -44,12 +44,11 @@ app.use(
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "https://fonts.googleapis.com"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        styleSrc: ["'self'"],
+        fontSrc: ["'self'"],
         /* data: for the tiny inline QR code and file-picker preview; Giphy's
-           CDN for GIFs picked from the search panel (server/media.js proxies
-           the search itself, but the picked GIF's own pixels load straight
-           from Giphy, not through us). */
+           CDN only for the thumbnails in the host's GIF search panel (a picked
+           GIF is copied to /uploads, see server/media.js). */
         imgSrc: ["'self'", "data:", "https://*.giphy.com"],
         /* 'self' alone doesn't cover the websocket on older Safari, so name
            the public origin's ws/wss form explicitly rather than allowing
@@ -71,6 +70,11 @@ const safe = fn => (req, res) =>
     console.error(req.method, req.path, "failed:", err.message);
     if (!res.headersSent) res.status(500).json({ error: "Something went wrong.", code: "server" });
   });
+
+/* Best effort: a failed audit write must never block the action it records. */
+function audit(actor, action, detail) {
+  try { store.audit.add(actor, action, detail); } catch (err) { console.error("audit write failed:", err.message); }
+}
 
 /* Rejects , ; < > " as well: nodemailer reads a comma as a second recipient. */
 const isEmail = s => /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/.test(s);
@@ -292,6 +296,7 @@ app.post("/api/admin/login", adminLoginLimiter, (req, res) => {
     return res.status(401).json({ error: "That email or password is not right.", code: "bad_login" });
   }
   noteLogin("admin:" + email, true);
+  audit(admin.email, "login");
   setAuthCookie(req, res, { role: "admin", id: admin.id, tag: credTag(admin) });
   res.json({ ok: true });
 });
@@ -338,6 +343,7 @@ app.post("/api/admin/hosts", requireAdmin, safe(async (req, res) => {
   if (store.hosts.getByEmail(email)) return res.status(409).json({ error: "A host with that email already exists.", code: "host_exists" });
   const maxPlayers = clamp(Number(req.body?.maxPlayers) || 400, 1, 2000);
   const host = store.hosts.create(email, maxPlayers);
+  audit(req.admin.email, "host_create", email);
   const inviteLink = newInvite(host.id);
   const emailed = await emailInvite(host.email, inviteLink);
   res.status(201).json({ host, inviteLink, emailed });
@@ -348,15 +354,22 @@ app.post("/api/admin/hosts/:id/reinvite", requireAdmin, safe(async (req, res) =>
   if (!host) return res.status(404).json({ error: "No such host.", code: "no_host" });
   const inviteLink = newInvite(host.id);
   store.hosts.clearReset(host.id);
+  audit(req.admin.email, "host_reinvite", host.email);
   res.json({ inviteLink, emailed: await emailInvite(host.email, inviteLink) });
 }));
 
 app.patch("/api/admin/hosts/:id", requireAdmin, (req, res) => {
   const id = Number(req.params.id);
-  if (!store.hosts.get(id)) return res.status(404).json({ error: "No such host.", code: "no_host" });
-  if (req.body?.maxPlayers != null) store.hosts.updateQuota(id, clamp(Number(req.body.maxPlayers) || 400, 1, 2000));
+  const host = store.hosts.get(id);
+  if (!host) return res.status(404).json({ error: "No such host.", code: "no_host" });
+  if (req.body?.maxPlayers != null) {
+    const max = clamp(Number(req.body.maxPlayers) || 400, 1, 2000);
+    store.hosts.updateQuota(id, max);
+    audit(req.admin.email, "host_quota", `${host.email}: ${max}`);
+  }
   if (["active", "disabled"].includes(req.body?.status)) {
     store.hosts.setStatus(id, req.body.status);
+    audit(req.admin.email, req.body.status === "disabled" ? "host_disable" : "host_enable", host.email);
     /* Cut a disabled host's live connections now rather than at their next click. */
     if (req.body.status === "disabled") {
       for (const s of io.sockets.sockets.values()) if (s.data.hostId === id) { s.data.isHost = false; s.disconnect(true); }
@@ -366,7 +379,10 @@ app.patch("/api/admin/hosts/:id", requireAdmin, (req, res) => {
 });
 
 app.delete("/api/admin/hosts/:id", requireAdmin, (req, res) => {
-  res.json({ ok: store.hosts.remove(Number(req.params.id)) });
+  const host = store.hosts.get(Number(req.params.id));
+  const ok = host ? store.hosts.remove(host.id) : false;
+  if (ok) audit(req.admin.email, "host_delete", host.email);
+  res.json({ ok });
 });
 
 /* ---------------------------------------------------- admin: categories --- */
@@ -377,14 +393,19 @@ app.post("/api/admin/categories", requireAdmin, (req, res) => {
   const name = String(req.body?.name || "").trim().slice(0, 60);
   if (!name) return res.status(400).json({ error: "Name a category.", code: "cat_name" });
   try {
-    res.status(201).json(store.categories.create(name));
+    const created = store.categories.create(name);
+    audit(req.admin.email, "category_create", name);
+    res.status(201).json(created);
   } catch {
     res.status(409).json({ error: "That category already exists.", code: "cat_exists" });
   }
 });
 
 app.delete("/api/admin/categories/:id", requireAdmin, (req, res) => {
-  res.json({ ok: store.categories.remove(Number(req.params.id)) });
+  const cat = store.categories.get(Number(req.params.id));
+  const ok = cat ? store.categories.remove(cat.id) : false;
+  if (ok) audit(req.admin.email, "category_delete", cat.name);
+  res.json({ ok });
 });
 
 /* ---------------------------------------------------- admin: bank & overview --- */
@@ -402,14 +423,30 @@ app.post("/api/admin/bank", requireAdmin, (req, res) => {
   if (!q || opts.length < 2) return res.status(400).json({ error: "Add question text and at least two options.", code: "bank_incomplete" });
   const t = clamp(Number(req.body?.t) || 20, 5, 120);
   const correct = clamp(Number(req.body?.correct) || 0, 0, opts.length - 1);
-  res.status(201).json(store.bank.create(categoryId, q, t, opts, correct));
+  const created = store.bank.create(categoryId, q, t, opts, correct);
+  audit(req.admin.email, "bank_create", q);
+  res.status(201).json(created);
 });
 
 app.delete("/api/admin/bank/:id", requireAdmin, (req, res) => {
-  res.json({ ok: store.bank.remove(Number(req.params.id)) });
+  const q = store.bank.get(Number(req.params.id));
+  const ok = q ? store.bank.remove(q.id) : false;
+  if (ok) audit(req.admin.email, "bank_delete", q.q);
+  res.json({ ok });
 });
 
 app.get("/api/admin/games", requireAdmin, (req, res) => res.json(store.sessions.listAll(100)));
+
+/* Deletes a finished game and every player's result in it, for an erasure
+   request that can't wait for the retention period. */
+app.delete("/api/admin/games/:id", requireAdmin, (req, res) => {
+  const s = store.sessions.get(Number(req.params.id));
+  const ok = s ? store.sessions.remove(s.id) : false;
+  if (ok) audit(req.admin.email, "game_delete", `${s.title} (${s.started_at.slice(0, 10)}, ${s.player_count})`);
+  res.json({ ok });
+});
+
+app.get("/api/admin/audit", requireAdmin, (req, res) => res.json(store.audit.list(200)));
 
 app.get("/api/admin/overview", requireAdmin, (req, res) => {
   const hosts = store.hosts.list();
@@ -448,23 +485,40 @@ const mediaLimiter = rateLimit({
 const UPLOAD_DAILY_BYTES = 60e6;
 const uploadUsage = new Map(); // hostId -> { bytes, resetAt }
 
-app.post("/api/uploads/image", requireHost, mediaLimiter, async (req, res) => {
+function uploadUsageFor(hostId) {
   const now = Date.now();
-  let usage = uploadUsage.get(req.hostAccount.id);
+  let usage = uploadUsage.get(hostId);
   if (!usage || usage.resetAt <= now) {
     usage = { bytes: 0, resetAt: now + 24 * 60 * 60 * 1000 };
-    uploadUsage.set(req.hostAccount.id, usage);
+    uploadUsage.set(hostId, usage);
   }
+  return usage;
+}
+const quotaReply = res => res.status(429).json({ error: "Daily upload limit reached. Try again tomorrow.", code: "upload_quota" });
+
+app.post("/api/uploads/image", requireHost, mediaLimiter, async (req, res) => {
+  const usage = uploadUsageFor(req.hostAccount.id);
   const claimed = typeof req.body?.dataUrl === "string" ? req.body.dataUrl.length * 0.75 : 0;
-  if (usage.bytes + claimed > UPLOAD_DAILY_BYTES) {
-    return res.status(429).json({ error: "Daily upload limit reached. Try again tomorrow.", code: "upload_quota" });
-  }
+  if (usage.bytes + claimed > UPLOAD_DAILY_BYTES) return quotaReply(res);
   try {
     const url = await saveImageUpload(req.body?.dataUrl);
     usage.bytes += claimed;
     res.status(201).json({ url });
   } catch (err) {
     res.status(400).json({ error: err.message, code: err.code, ...err.vars });
+  }
+});
+
+/* A picked GIF is copied to our disk so players' phones never load from Giphy. */
+app.post("/api/giphy/save", requireHost, mediaLimiter, async (req, res) => {
+  const usage = uploadUsageFor(req.hostAccount.id);
+  if (usage.bytes >= UPLOAD_DAILY_BYTES) return quotaReply(res);
+  try {
+    const { url, bytes } = await saveGiphyGif(req.body?.url);
+    usage.bytes += bytes;
+    res.status(201).json({ url });
+  } catch (err) {
+    res.status(err.code === "giphy_failed" ? 502 : 400).json({ error: err.message, code: err.code || "giphy_failed", ...err.vars });
   }
 });
 
@@ -498,7 +552,10 @@ app.put("/api/quizzes/:id", requireHost, (req, res) => {
 });
 
 app.delete("/api/quizzes/:id", requireHost, (req, res) => {
-  res.json({ ok: store.quizzes.remove(Number(req.params.id), req.hostAccount.id) });
+  const quiz = store.quizzes.get(Number(req.params.id), req.hostAccount.id);
+  const ok = quiz ? store.quizzes.remove(quiz.id, req.hostAccount.id) : false;
+  if (ok) audit(req.hostAccount.email, "quiz_delete", quiz.title);
+  res.json({ ok });
 });
 
 /* ----------------------------------------------------------- sessions --- */
@@ -551,6 +608,9 @@ app.get("/api/stats/quizzes/:groupKey/questions", requireHost, (req, res) => {
   if (!parsed) return;
   res.json(store.stats.questionBreakdown(req.hostAccount.id, parsed.quizId, parsed.title));
 });
+
+/* Public: the join screens show players how long their answers are kept. */
+app.get("/api/privacy", (req, res) => res.json({ retentionDays: config.retentionDays }));
 
 app.get("/api/health", (req, res) => res.json({ ok: true, games: rooms.stats().games, uptime: Math.round(process.uptime()) }));
 
@@ -663,7 +723,7 @@ async function joinInfo(pin) {
 
 /* Live-game PINs are only four digits, so an outsider could walk the whole
    space. Failed lookups are counted per client IP (the last X-Forwarded-For
-   hop is the one nginx appended); successful joins are not, so a classroom
+   hop is the one Caddy appended); successful joins are not, so a classroom
    behind one NAT can all join at once. */
 const PIN_MISS_LIMIT = 60;
 const PIN_MISS_WINDOW_MS = 60 * 1000;
@@ -916,9 +976,24 @@ server.listen(config.port, config.host, () => {
   if (config.publicUrl) console.log(`Players join at ${config.publicUrl}`);
 });
 
-const uploadSweep = () => sweepOrphanUploads().catch(err => console.error("upload sweep failed:", err.message));
+/* Copy any remaining Giphy pictures first, so the sweep sees the new files referenced. */
+const uploadSweep = () => migrateGiphyImages()
+  .catch(err => console.error("giphy migration failed:", err.message))
+  .then(sweepOrphanUploads)
+  .catch(err => console.error("upload sweep failed:", err.message));
 setTimeout(uploadSweep, 60 * 1000).unref();
 setInterval(uploadSweep, 24 * 60 * 60 * 1000).unref();
+
+function purgeOldResults() {
+  try {
+    const n = store.sessions.purgeOlderThan(config.retentionDays);
+    if (n) audit("system", "retention_purge", n);
+  } catch (err) {
+    console.error("retention purge failed:", err.message);
+  }
+}
+setTimeout(purgeOldResults, 30 * 1000).unref();
+setInterval(purgeOldResults, 24 * 60 * 60 * 1000).unref();
 
 function shutdown(signal) {
   console.log(`${signal} received, closing.`);
