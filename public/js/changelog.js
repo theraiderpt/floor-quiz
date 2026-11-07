@@ -39,6 +39,42 @@ const CHANGELOG = [
         el: "Οι διαχειριστές μπορούν να διαγράψουν τα αποτελέσματα ενός παιχνιδιού κατόπιν αιτήματος και να δουν ποιος άλλαξε τι στη νέα καρτέλα Δραστηριότητα.",
         pt: "Os admins podem apagar os resultados de um jogo a pedido e ver quem alterou o quê no novo separador Atividade.",
         ro: "Adminii pot șterge la cerere rezultatele unui joc și pot vedea cine a schimbat ce în noua filă Activitate."
+      },
+      {
+        en: "Fixed: a question could end early when a player answered and then lost their connection.",
+        fr: "Corrigé : une question pouvait se terminer trop tôt quand un joueur répondait puis perdait sa connexion.",
+        de: "Behoben: Eine Frage konnte zu früh enden, wenn jemand antwortete und danach die Verbindung verlor.",
+        es: "Corregido: una pregunta podía terminar antes de tiempo si un jugador respondía y luego perdía la conexión.",
+        el: "Διορθώθηκε: μια ερώτηση μπορούσε να τελειώσει νωρίς όταν ένας παίκτης απαντούσε και μετά έχανε τη σύνδεση.",
+        pt: "Corrigido: uma pergunta podia terminar antes do tempo quando um jogador respondia e depois perdia a ligação.",
+        ro: "Corectat: o întrebare se putea încheia prea devreme când un jucător răspundea și apoi pierdea conexiunea."
+      },
+      {
+        en: "Open-text questions no longer count as 0% in your statistics.",
+        fr: "Les questions à réponse libre ne comptent plus comme 0 % dans vos statistiques.",
+        de: "Freitextfragen zählen in deiner Statistik nicht mehr als 0 %.",
+        es: "Las preguntas de texto libre ya no cuentan como 0 % en tus estadísticas.",
+        el: "Οι ερωτήσεις ελεύθερου κειμένου δεν μετράνε πια ως 0% στα στατιστικά σου.",
+        pt: "As perguntas de resposta livre deixam de contar como 0% nas tuas estatísticas.",
+        ro: "Întrebările cu răspuns liber nu mai contează ca 0% în statisticile tale."
+      },
+      {
+        en: "A lobby closes by itself if its host screen has been gone for 10 minutes.",
+        fr: "Une salle d'attente se ferme d'elle-même si l'écran de l'animateur a disparu depuis 10 minutes.",
+        de: "Eine Lobby schließt sich von selbst, wenn der Moderationsbildschirm 10 Minuten lang weg ist.",
+        es: "Una sala de espera se cierra sola si la pantalla del presentador lleva 10 minutos desconectada.",
+        el: "Μια αίθουσα αναμονής κλείνει μόνη της αν η οθόνη του παρουσιαστή λείπει για 10 λεπτά.",
+        pt: "Uma sala de espera fecha sozinha se o ecrã do anfitrião estiver desligado há 10 minutos.",
+        ro: "O sală de așteptare se închide singură dacă ecranul gazdei lipsește de 10 minute."
+      },
+      {
+        en: "\"Game already started\" and \"game full\" messages now appear in each player's language.",
+        fr: "Les messages « partie déjà commencée » et « partie complète » s'affichent désormais dans la langue de chaque joueur.",
+        de: "Die Meldungen „Spiel läuft bereits“ und „Spiel ist voll“ erscheinen jetzt in der Sprache der Spielenden.",
+        es: "Los mensajes «la partida ya empezó» y «partida llena» aparecen ahora en el idioma de cada jugador.",
+        el: "Τα μηνύματα «το παιχνίδι έχει ήδη ξεκινήσει» και «το παιχνίδι είναι γεμάτο» εμφανίζονται πλέον στη γλώσσα κάθε παίκτη.",
+        pt: "As mensagens «o jogo já começou» e «jogo cheio» aparecem agora na língua de cada jogador.",
+        ro: "Mesajele „jocul a început deja” și „jocul este plin” apar acum în limba fiecărui jucător."
       }
     ]
   },

@@ -17,20 +17,10 @@ Nothing claimed. Before starting anything bigger than a small fix, add a line he
 None recorded. Anything that changes game flow, scoring or the visual direction goes through the owner first.
 
 ## 4. Next steps
-- **Review and deploy `desktop/review-privacy`** (waiting for the owner, not merged). Smoke green (241). Restart needed (server code). **Additive schema change:** new `audit_log` table, created by `CREATE TABLE IF NOT EXISTS` at boot; rollback is safe (old code ignores the table).
+- **Review and deploy `desktop/review-privacy`** (waiting for the owner, not merged). Smoke green (248). Restart needed (server code). **Additive schema change:** new `audit_log` table, created by `CREATE TABLE IF NOT EXISTS` at boot; rollback is safe (old code ignores the table).
 - **First boot after deploy deletes data:** 30 seconds after start, finished games older than `RETENTION_DAYS` (default 365) are deleted with their results, plus session rows opened more than 2 days ago that never finished. Take the usual backup first. To keep everything for now, set `RETENTION_DAYS` in `.env` to a large number before restarting.
 - **First boot also copies Giphy pictures:** 60 seconds after start, every saved quiz still pointing at Giphy's CDN gets its GIFs downloaded to the uploads folder and rewritten to `/uploads/...` (needs outbound HTTPS from the box to `*.giphy.com`). Failures keep the Giphy URL and retry daily; check `pm2 logs` for `giphy copy failed`.
-- **Code review findings, reported to the owner, not fixed, not yet agreed** (2026-11-07):
-  1. A question closes early when a player answers and then disconnects: `submitAnswer` compares `answers.size` (includes disconnected players) with `connectedCount()`. Reproduced. Fix: count only answers from connected players.
-  2. Open-text answers are logged as literal text, so `questionBreakdown` counts them as "skipped" (0% at the top of "hardest questions") and `answered` drags down quiz accuracy.
-  3. A lobby abandoned by its host stays in memory for 4 hours, so `/api/health` reports `games > 0` and blocks restarts.
-  4. `player:join` returns `addPlayer` errors without `code` (game started, game full, name or email required), so phones show them in English only.
-Nothing queued for CX Quiz. Worth doing the next time someone runs a real game: hear the music through the room speakers and try the builder on a real phone (only headless Chromium has run them so far).
-Small items seen in the 2026-11-06 review, not fixed, not agreed:
-- On a 380x700 phone the open builder pushes Join below the fold (bottom at y=800). The page scrolls and the tap works. Starting the card closed for returning players would fix it.
-- `host.js` guards `Avatar` against a stale cache but calls `Sound.music` unguarded in `show()`, and `play.js` needs `Avatar` at load. Static files cache for 1h, so a browser mixing old and new files could throw in the first hour after this deploy. Unlikely, since a page normally loads its files together. `Sound.music?.()` is the fix if it is ever seen.
-- The "What's new" entry mentions music during questions but not the lobby loop.
-Ideas only, not agreed: send one real invite email to confirm SMTP after the nodemailer 10 upgrade (only the smoke SMTP sink tested it).
+- The four code review findings from 2026-11-07 are fixed on the same branch (see the session log).
 
 ## 5. Pitfalls and environment
 - **npm 12 and `better-sqlite3`:** npm 12 blocks dependency install scripts. `package.json` now has `allowScripts` for `better-sqlite3@11.10.0` (tested: `npm ci --omit=dev` in a scratch dir builds the binary), so `deploy/update.sh` works again, untested on the live box. The approval is pinned to the version: after bumping `better-sqlite3`, run `npm approve-scripts better-sqlite3` again. The safe fallback used on 2026-11-01 was to rsync a tested `node_modules` and check `require("better-sqlite3")` as `deploy`.
@@ -42,6 +32,9 @@ Ideas only, not agreed: send one real invite email to confirm SMTP after the nod
 - Claude Desktop sessions cannot reach the VPS or its `~/.claude` notes: put what matters here.
 
 ## 6. Session log (newest first)
+### 2026-11-07 (later) | Claude Code on the web | `desktop/review-privacy`, pushed, not merged or deployed
+Fixed the four code review findings, agreed with the owner: (1) `Game.closeIfAllAnswered()` closes a question early only when every connected player has answered, and is also re-checked when a player drops; (2) open-text answers no longer count as skipped in `questionBreakdown` (the question gets no accuracy) or against quiz accuracy in `statsByQuiz` (`json_each` over `answers_json`); (3) a lobby is cancelled once its host screen has been gone for `HOST_GONE_MS` (default 10 minutes; `host:resume` cancels the countdown); (4) `player:join` passes `addPlayer`'s error `code`. Verified: smoke 248 all passed; with the old logic put back, the 5 related checks fail.
+
 ### 2026-11-07 | Claude Code on the web | `desktop/review-privacy`, pushed, not merged or deployed
 Code review of server and client (findings in section 4) and three items from the security assessment. #5: fonts self-hosted in `public/fonts` (Fontsource 5.3.0, Latin, Latin Extended and Greek subsets, 432 KB), Google removed from the CSP; a picked GIF is downloaded by `POST /api/giphy/save` into the uploads folder (Giphy hosts only, no redirects, type and size checks, counts against the daily upload quota); `migrateGiphyImages()` runs before the daily orphan sweep. The host's own GIF search thumbnails still load from Giphy. #2: `RETENTION_DAYS` (default 365) purge at boot and daily, admin "delete game" (`DELETE /api/admin/games/:id`), privacy line on the join and self-paced start screens (`GET /api/privacy`). #7: `audit_log` table, admin Activity tab (`GET /api/admin/audit`), logging admin sign-in, host create, re-invite, quota, enable, disable and delete, categories, bank questions, game deletes, host quiz deletes and retention purges. Also fixed two stale nginx comments in `server/index.js`. Verified: smoke 241 all passed, a real Giphy download and the migration run in a scratch database (dedupes, a dead link keeps its URL), headless screenshots of the join screen and the admin Overview and Activity tabs, zero third-party requests from the join page.
 

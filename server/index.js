@@ -827,6 +827,7 @@ io.on("connection", socket => {
     socket.join(game.room);
     socket.join(game.hostRoom);
     socket.data.pin = game.pin;
+    game.hostBack();
     const { joinUrl, qr } = await joinInfo(game.pin);
     ack?.({
       pin: game.pin,
@@ -926,7 +927,7 @@ io.on("connection", socket => {
     }
 
     const res = game.addPlayer(socket, cleanName(name), playerId, email, avatar);
-    if (res.error) return ack?.({ error: res.error });
+    if (res.error) return ack?.({ error: res.error, code: res.code });
 
     socket.join(game.room);
     socket.data.pin = game.pin;
@@ -961,10 +962,15 @@ io.on("connection", socket => {
     rooms.playerIndex.delete(socket.id);
     const game = rooms.get(socket.data.pin);
     if (!game) return;
+    if (socket.data.isHost && game.hostId === socket.data.hostId) {
+      game.hostLeft((io.sockets.adapter.rooms.get(game.hostRoom)?.size || 0) > 0);
+    }
     if (ref) {
       game.markDisconnected(socket.id);
       game.broadcastLobby();
       game.broadcastState();
+      /* The one player everyone was waiting on may be the one who just left. */
+      game.closeIfAllAnswered();
     }
   });
 });

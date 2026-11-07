@@ -52,6 +52,8 @@ process.env.SMTP_PORT = String(smtpSink.address().port);
 process.env.SMTP_USER = "";
 /* Short, so the finished-game cleanup can be observed without a 2 minute wait. */
 process.env.FINISHED_GRACE_MS = "1500";
+/* Short, so an abandoned lobby's cancellation can be observed too. */
+process.env.HOST_GONE_MS = "1500";
 
 const { server, attempts, rooms, io: serverIo } = await import("../server/index.js");
 const { store } = await import("../server/db.js");
@@ -1260,6 +1262,64 @@ for (let i = 0; i < 11; i++) {
 }
 const fRight = await fetch(base + "/api/login", { method: "POST", headers: jsonHdr, body: JSON.stringify({ email: "hostf@smoke.test", password: "hostf-pass-123" }) });
 check("repeated failures lock the account even for the right password", fCodes[0] === 401 && fRight.status === 429, fCodes.join(",") + " then " + fRight.status);
+
+/* ---- code review fixes (2026-11-07) ---- */
+const fixHost = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
+await new Promise(r => fixHost.on("connect", r));
+const fixGame = await new Promise(r => fixHost.emit("host:create", { quiz: { title: "Early close", questions: [{ q: "E1", t: 30, opts: ["a", "b"], correct: 0 }] } }, r));
+const ea = await joinAs(fixGame.pin, "Early A");
+const eb = await joinAs(fixGame.pin, "Early B");
+const ec = await joinAs(fixGame.pin, "Early C");
+await new Promise(r => fixHost.emit("host:start", null, r));
+const late = await joinAs(fixGame.pin, "Too Late");
+check("a join the game refuses carries a translatable code", late.res.code === "game_started", JSON.stringify(late.res));
+late.sock.disconnect();
+await new Promise(r => ea.sock.emit("player:answer", { answer: 0 }, r));
+ea.sock.disconnect();
+await sleep(200);
+await new Promise(r => eb.sock.emit("player:answer", { answer: 0 }, r));
+await sleep(900);
+check("an answer from a phone that dropped doesn't close the question on someone still thinking",
+  rooms.get(fixGame.pin)?.phase === "question", rooms.get(fixGame.pin)?.phase);
+ec.sock.disconnect();
+await sleep(900);
+check("the question closes once the last player still thinking drops out", rooms.get(fixGame.pin)?.phase === "reveal", rooms.get(fixGame.pin)?.phase);
+await new Promise(r => fixHost.emit("host:end", null, r));
+fixHost.disconnect();
+
+const hostGoneMs = Number(process.env.HOST_GONE_MS);
+const lobbyHost = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
+await new Promise(r => lobbyHost.on("connect", r));
+const backGame = await new Promise(r => lobbyHost.emit("host:create", { quiz: { title: "Host comes back", questions: [{ q: "B1", t: 10, opts: ["a", "b"], correct: 0 }] } }, r));
+lobbyHost.disconnect();
+await sleep(300);
+const lobbyHost2 = ioc(base, { extraHeaders: { Cookie: cookie }, transports: ["websocket"] });
+await new Promise(r => lobbyHost2.on("connect", r));
+await new Promise(r => lobbyHost2.emit("host:resume", { pin: backGame.pin }, r));
+await sleep(hostGoneMs + 500);
+check("a lobby whose host reconnects in time stays open", rooms.get(backGame.pin)?.phase === "lobby");
+await new Promise(r => lobbyHost2.emit("host:end", null, r));
+
+const goneGame = await new Promise(r => lobbyHost2.emit("host:create", { quiz: { title: "Host walks away", questions: [{ q: "G1", t: 10, opts: ["a", "b"], correct: 0 }] } }, r));
+const waiting = await joinAs(goneGame.pin, "Waiting");
+const toldCancelled = new Promise(r => { waiting.sock.on("cancelled", () => r(true)); setTimeout(() => r(false), hostGoneMs + 1500); });
+lobbyHost2.disconnect();
+check("a lobby whose host is gone is cancelled after the grace period", (await toldCancelled) && !rooms.get(goneGame.pin));
+waiting.sock.disconnect();
+
+/* An open-text answer is stored as its literal text: neither "skipped" nor wrong. */
+const hostAId = store.hosts.getByEmail("hosta@smoke.test").id;
+const statSid = store.sessions.open("9999", null, "open text stats", hostAId);
+store.sessions.close(statSid, [
+  { name: "S1", score: 600, correctCount: 1, answered: 2, log: ["Right", "We should call back sooner"] },
+  { name: "S2", score: 0, correctCount: 0, answered: 1, log: ["Wrong", "No answer"] }
+], ["Scored question", "Open question"]);
+const statRow = (await (await fetch(base + "/api/stats/quizzes", { headers: { Cookie: cookie } })).json()).find(q => q.title === "open text stats");
+check("open-text answers don't drag down a quiz's accuracy", statRow?.accuracy === 50, JSON.stringify(statRow));
+const statQs = await (await fetch(base + "/api/stats/quizzes/" + encodeURIComponent(statRow.groupKey) + "/questions", { headers: { Cookie: cookie } })).json();
+const byText = Object.fromEntries(statQs.map(q => [q.q, q]));
+check("an open-text question has no accuracy instead of 0%",
+  byText["Open question"]?.accuracy === null && byText["Scored question"]?.accuracy === 50, JSON.stringify(statQs));
 
 /* Wrong-PIN guessing is throttled; run last since it locks this IP out for a minute. */
 /* Five sockets x 14 guesses: each stays under the per-socket event rate limit, so

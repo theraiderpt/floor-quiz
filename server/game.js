@@ -407,6 +407,7 @@ export class Game {
     this.qIndex = index;
     this.phase = "question";
     this.answers = new Map();
+    this.earlyClose = false;
     const q = this.current;
     this.questionEndsAt = Date.now() + q.t * 1000;
 
@@ -460,13 +461,26 @@ export class Game {
       connected: this.connectedCount()
     });
 
-    /* Everyone in the room has answered, so stop the clock rather than
-       making the floor stare at a countdown with nothing happening. */
-    if (this.answers.size >= this.connectedCount()) {
-      this.clearTimer();
-      this.timer = setTimeout(() => this.closeQuestion(), 600);
-    }
+    this.closeIfAllAnswered();
     return { ok: true };
+  }
+
+  /* Everyone still connected has answered, so stop the clock rather than
+     making the floor stare at a countdown with nothing happening. Counted per
+     connected player, not by answers.size: an answer from a phone that has
+     since dropped must not stand in for someone still thinking. */
+  closeIfAllAnswered() {
+    if (this.phase !== "question" || this.earlyClose) return;
+    let connected = 0;
+    for (const p of this.players.values()) {
+      if (!p.connected) continue;
+      if (!this.answers.has(p.id)) return;
+      connected++;
+    }
+    if (!connected) return;
+    this.earlyClose = true;
+    this.clearTimer();
+    this.timer = setTimeout(() => this.closeQuestion(), 600);
   }
 
   closeQuestion() {
@@ -632,8 +646,22 @@ export class Game {
     if (this.timer) { clearTimeout(this.timer); this.timer = null; }
   }
 
+  /* A lobby whose host closed the laptop never starts, but would sit in memory
+     (and in /api/health's live count, which gates restarts) until the 4-hour
+     sweep. Once the projector has been gone for a while, cancel it. A started
+     game needs none of this: it auto-advances to the end on its own. */
+  hostLeft(stillHere) {
+    clearTimeout(this.hostGoneTimer);
+    if (stillHere || this.phase !== "lobby") return;
+    this.hostGoneTimer = setTimeout(() => { if (this.phase === "lobby") this.end(); }, FLOW.hostGoneMs);
+    this.hostGoneTimer.unref?.();
+  }
+
+  hostBack() { clearTimeout(this.hostGoneTimer); }
+
   destroy() {
     this.clearTimer();
+    clearTimeout(this.hostGoneTimer);
     this.players.clear();
     this.answers.clear();
   }

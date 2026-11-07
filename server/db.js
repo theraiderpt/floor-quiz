@@ -224,7 +224,11 @@ const stmt = {
      ),
      byResult AS (
        SELECT grp.gkey AS gkey, AVG(r.score) AS avgScore,
-              SUM(r.correct_count) AS totalCorrect, SUM(r.answered) AS totalAnswered
+              SUM(r.correct_count) AS totalCorrect,
+              /* An open-text answer is logged as its literal text and counted in
+                 "answered", but has no right or wrong, so it stays out of accuracy. */
+              SUM(r.answered) - SUM((SELECT COUNT(*) FROM json_each(COALESCE(r.answers_json, '[]'))
+                                     WHERE value NOT IN ('Right', 'Wrong', 'No answer'))) AS totalAnswered
        FROM grp JOIN results r ON r.session_id = grp.id
        GROUP BY grp.gkey
      )
@@ -489,11 +493,14 @@ export const store = {
         try { log = JSON.parse(row.answers_json || "[]"); } catch { log = []; }
         log.forEach((outcome, i) => {
           const text = questions[i] || `Question ${i + 1}`;
-          if (!tally.has(text)) tally.set(text, { right: 0, wrong: 0, skipped: 0 });
+          if (!tally.has(text)) tally.set(text, { right: 0, wrong: 0, skipped: 0, open: false });
           const t = tally.get(text);
           if (outcome === "Right") t.right++;
           else if (outcome === "Wrong") t.wrong++;
-          else t.skipped++;
+          else if (outcome === "No answer") t.skipped++;
+          /* Anything else is an open-text response: a discussion prompt with
+             no right answer, so the question gets no accuracy at all. */
+          else t.open = true;
         });
       }
       return [...tally.entries()].map(([q, t]) => {
@@ -504,7 +511,7 @@ export const store = {
           wrong: t.wrong,
           skipped: t.skipped,
           total,
-          accuracy: total ? Math.round((t.right / total) * 100) : null
+          accuracy: total && !t.open ? Math.round((t.right / total) * 100) : null
         };
       });
     }
