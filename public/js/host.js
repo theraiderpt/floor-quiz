@@ -57,7 +57,9 @@ async function api(path, opts = {}) {
   return data;
 }
 
-const socket = io({ transports: ["websocket", "polling"], reconnectionDelayMax: 4000 });
+/* /demo serves this same page: no sign-in, one ready-made game on a fixed PIN. */
+const DEMO = location.pathname === "/demo";
+const socket = io({ transports: ["websocket", "polling"], reconnectionDelayMax: 4000, auth: { demo: DEMO } });
 
 const S = {
   quiz: null,        // { id, title, questions, categoryId }
@@ -137,6 +139,8 @@ $("logout").addEventListener("click", async () => {
 /* ---------------------------------------------------------- library ----- */
 
 async function openLibrary() {
+  /* A demo has no library: everywhere a host would land there, offer a new demo instead. */
+  if (DEMO) return showDemo(t("demo.over"), true);
   const list = await api("/quizzes");
   const wrap = $("libList");
   wrap.innerHTML = "";
@@ -912,6 +916,7 @@ socket.on("final", d => {
   $("fPlayers").textContent = d.board.length;
   $("fWinner").textContent = d.board.length ? t("host.takesIt", { name: d.board[0].name }) : t("host.noPlayers");
   $("fExport").href = csvHref(d.sessionId);
+  $("fExport").hidden = !d.sessionId;
 
   /* Places that don't exist (one or two players) are left out rather than
      drawn empty; the CSS pins each place to its own column and staggers
@@ -1292,5 +1297,36 @@ document.addEventListener("langchange", () => {
   else if (on === "s-quiz-sessions" && S.dash.groupKey) openQuizSessions(S.dash.groupKey);
 });
 
-/* Resume straight into the library if the cookie is still good. */
-api("/me").then(r => { if (r.host && !resumeLive(true)) openLibrary(); }).catch(() => { });
+/* ------------------------------------------------------------- demo --- */
+
+function showDemo(msg, canRestart) {
+  $("demoMsg").textContent = msg;
+  $("demoAgain").hidden = !canRestart;
+  show("s-demo");
+}
+
+async function startDemo() {
+  showDemo(t("demo.starting"), false);
+  try {
+    const { pin } = await api("/demo/start", { method: "POST" });
+    S.pin = pin;
+    rememberLive();
+    /* The demo pass is a cookie set just now, and a socket's identity is
+       fixed when it connects, so reconnect to present it. The connect
+       handler then resumes the game like a projector reload would. */
+    socket.disconnect().connect();
+  } catch (err) {
+    showDemo(err.message, true);
+  }
+}
+
+if (DEMO) {
+  $("fDone").hidden = true;
+  $("fDemoAgain").hidden = false;
+  $("demoAgain").addEventListener("click", startDemo);
+  $("fDemoAgain").addEventListener("click", startDemo);
+  startDemo();
+} else {
+  /* Resume straight into the library if the cookie is still good. */
+  api("/me").then(r => { if (r.host && !resumeLive(true)) openLibrary(); }).catch(() => { });
+}

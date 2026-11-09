@@ -9,7 +9,8 @@ import QRCode from "qrcode";
 
 import { config, PUBLIC_DIR } from "./config.js";
 import { store } from "./db.js";
-import { Rooms, sanitiseQuiz, cleanName } from "./game.js";
+import { Rooms, DEMO_PIN, sanitiseQuiz, cleanName } from "./game.js";
+import { DEMO_QUIZ } from "./demo.js";
 import { Attempts } from "./selfpaced.js";
 import { sendInviteEmail, mailEnabled } from "./mail.js";
 import { hashPassword, verifyPassword, randomToken } from "./auth.js";
@@ -676,7 +677,46 @@ app.post("/api/selfpaced/attempts/:attemptId/answer", selfpacedAnswerLimiter, (r
    never changes once saved, so these are safe to cache hard. */
 app.use("/uploads", express.static(config.uploadsDir, { maxAge: "30d", fallthrough: true }));
 app.use(express.static(PUBLIC_DIR, { maxAge: config.isProd ? "1h" : 0, extensions: ["html"] }));
+/* ---- /demo: a ready-made game on PIN 1234 with no sign-in, for showing
+   the tool to someone. One at a time, a small room, nothing saved, and it
+   ends itself. The browser that starts it gets a short-lived pass (a signed
+   cookie) that can only drive that one game. ---- */
+const DEMO_HOST = "demo";
+const DEMO_COOKIE = "fq_demo";
+const DEMO_MAX_PLAYERS = 20;
+const DEMO_MAX_MS = 30 * 60 * 1000;
+const DEMO_EVENTS = new Set(["host:resume", "host:start", "host:next", "host:skip", "host:end", "host:kick"]);
+let demo = null; // { token, game }
+const demoLive = () => Boolean(demo && !demo.game.finished && rooms.get(DEMO_PIN) === demo.game);
+
+const demoLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Wait a moment.", code: "rate_media" }
+});
+
+app.post("/api/demo/start", demoLimiter, (req, res) => {
+  if (demoLive()) {
+    /* The same browser reloading the page gets its own demo back. */
+    if (verify(readCookie(req.headers.cookie, DEMO_COOKIE))?.demo === demo.token) return res.json({ pin: DEMO_PIN });
+    return res.status(409).json({ error: "A demo is already running. Try again in a few minutes.", code: "demo_busy" });
+  }
+  /* A demo that just finished can still be in memory for its podium grace period. */
+  const leftover = rooms.get(DEMO_PIN);
+  if (leftover) rooms.remove(DEMO_PIN, leftover);
+  const game = rooms.create(sanitiseQuiz(DEMO_QUIZ), null, DEMO_HOST, DEMO_MAX_PLAYERS, { pin: DEMO_PIN, persist: false });
+  setTimeout(() => game.end(), DEMO_MAX_MS).unref();
+  demo = { token: randomToken(), game };
+  const pass = sign({ demo: demo.token, exp: Date.now() + DEMO_MAX_MS });
+  const secure = req.secure ? "; Secure" : "";
+  res.setHeader("Set-Cookie", `${DEMO_COOKIE}=${encodeURIComponent(pass)}; HttpOnly; Path=/; Max-Age=${DEMO_MAX_MS / 1000}; SameSite=Lax${secure}`);
+  res.status(201).json({ pin: DEMO_PIN });
+});
+
 app.get("/host", (req, res) => res.sendFile("host.html", { root: PUBLIC_DIR }));
+app.get("/demo", (req, res) => res.sendFile("host.html", { root: PUBLIC_DIR }));
 app.get("/admin", (req, res) => res.sendFile("admin.html", { root: PUBLIC_DIR }));
 app.get("/invite/:token", (req, res) => res.sendFile("invite.html", { root: PUBLIC_DIR }));
 app.get("/play", (req, res) => res.sendFile("index.html", { root: PUBLIC_DIR }));
@@ -700,6 +740,16 @@ io.use((socket, next) => {
 });
 
 io.use((socket, next) => {
+  /* The /demo page asks for its demo pass explicitly, so a host who is also
+     signed in on that laptop still drives the demo, not their own account. */
+  if (socket.handshake.auth?.demo) {
+    if (demoLive() && verify(readCookie(socket.handshake.headers.cookie, DEMO_COOKIE))?.demo === demo.token) {
+      socket.data.isHost = true;
+      socket.data.hostId = DEMO_HOST;
+      socket.data.demo = true;
+    }
+    return next();
+  }
   const host = hostFromPayload(verify(readCookie(socket.handshake.headers.cookie, COOKIE)));
   if (host) {
     socket.data.isHost = true;
@@ -768,7 +818,14 @@ io.on("connection", socket => {
     tokens--;
     /* Host rights are decided at connect, so a host disabled mid-session
        would keep working until they reload. Re-check on every host event. */
-    if (event.startsWith("host:") && socket.data.isHost) {
+    if (event.startsWith("host:") && socket.data.demo) {
+      /* A demo pass drives the one demo game and nothing else: no creating
+         games, no library, and it stops working once that game is over. */
+      if (!DEMO_EVENTS.has(event) || !demoLive()) {
+        socket.data.isHost = false;
+        return reply?.({ error: "Sign in first.", code: "auth" });
+      }
+    } else if (event.startsWith("host:") && socket.data.isHost) {
       const h = store.hosts.get(socket.data.hostId);
       if (!h || h.status !== "active") {
         socket.data.isHost = false;

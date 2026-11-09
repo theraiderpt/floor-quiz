@@ -14,13 +14,22 @@ const CHANGELOG = [
     date: "2026-11-09",
     items: [
       {
-        en: "The final podium now has a drumroll, a hit as each place lands and a fanfare for the winner.",
-        fr: "Le podium final a désormais un roulement de tambour, un coup à chaque place révélée et une fanfare pour le gagnant.",
-        de: "Das Siegerpodest hat jetzt einen Trommelwirbel, einen Schlag für jeden Platz und eine Fanfare für den Sieg.",
-        es: "El podio final tiene ahora redoble de tambor, un golpe al aparecer cada puesto y una fanfarria para el ganador.",
-        el: "Το τελικό βάθρο έχει πλέον τύμπανα, ένα χτύπημα για κάθε θέση και φανφάρα για τον νικητή.",
-        pt: "O pódio final tem agora rufar de tambores, uma batida a cada lugar revelado e uma fanfarra para o vencedor.",
-        ro: "Podiumul final are acum rafală de tobe, o lovitură la fiecare loc dezvăluit și o fanfară pentru câștigător."
+        en: "The final podium now has a drumroll, a hit as each place lands, and a fanfare and crowd cheer for the winner.",
+        fr: "Le podium final a désormais un roulement de tambour, un coup à chaque place révélée, puis une fanfare et les acclamations du public pour le gagnant.",
+        de: "Das Siegerpodest hat jetzt einen Trommelwirbel, einen Schlag für jeden Platz und für den Sieg eine Fanfare mit Jubel.",
+        es: "El podio final tiene ahora redoble de tambor, un golpe al aparecer cada puesto, y fanfarria y ovación para el ganador.",
+        el: "Το τελικό βάθρο έχει πλέον τύμπανα, ένα χτύπημα για κάθε θέση, και φανφάρα με επευφημίες για τον νικητή.",
+        pt: "O pódio final tem agora rufar de tambores, uma batida a cada lugar revelado, e fanfarra e aplausos para o vencedor.",
+        ro: "Podiumul final are acum rafală de tobe, o lovitură la fiecare loc dezvăluit, apoi fanfară și ovații pentru câștigător."
+      },
+      {
+        en: "New demo page: open /demo on any screen to run a short sample quiz on PIN 1234, no sign-in needed. Nothing is saved, and it ends itself after 30 minutes.",
+        fr: "Nouvelle page de démo : ouvrez /demo sur n'importe quel écran pour lancer un court quiz d'exemple avec le PIN 1234, sans connexion. Rien n'est enregistré et elle se termine seule après 30 minutes.",
+        de: "Neue Demoseite: Öffne /demo auf einem beliebigen Bildschirm für ein kurzes Beispielquiz mit PIN 1234, ganz ohne Anmeldung. Nichts wird gespeichert, und sie endet nach 30 Minuten von selbst.",
+        es: "Nueva página de demo: abre /demo en cualquier pantalla para lanzar un quiz de ejemplo corto con el PIN 1234, sin iniciar sesión. No se guarda nada y termina sola a los 30 minutos.",
+        el: "Νέα σελίδα demo: άνοιξε το /demo σε οποιαδήποτε οθόνη για ένα σύντομο κουίζ επίδειξης με PIN 1234, χωρίς σύνδεση. Δεν αποθηκεύεται τίποτα και τελειώνει μόνο του μετά από 30 λεπτά.",
+        pt: "Nova página de demonstração: abre /demo em qualquer ecrã para correr um quiz de exemplo curto com o PIN 1234, sem iniciar sessão. Nada fica guardado e termina sozinha ao fim de 30 minutos.",
+        ro: "Pagină nouă de demonstrație: deschide /demo pe orice ecran pentru un quiz scurt de exemplu cu PIN-ul 1234, fără autentificare. Nu se salvează nimic și se încheie singură după 30 de minute."
       }
     ]
   },

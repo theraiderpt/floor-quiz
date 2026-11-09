@@ -57,7 +57,7 @@ CLI. After a deploy, commit and `git push origin master` so GitHub matches what 
 ## Commands
 
 ```bash
-npm run smoke            # full game + admin/host/invite/quota checks, 248 assertions. Run before every restart.
+npm run smoke            # full game + admin/host/invite/quota checks, 262 assertions. Run before every restart.
 node test/load.js 150    # concurrent player load test
 sudo -u deploy -i pm2 logs floor-quiz --lines 50 --nostream
 sudo -u deploy -i pm2 restart floor-quiz

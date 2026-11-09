@@ -1321,6 +1321,55 @@ const byText = Object.fromEntries(statQs.map(q => [q.q, q]));
 check("an open-text question has no accuracy instead of 0%",
   byText["Open question"]?.accuracy === null && byText["Scored question"]?.accuracy === 50, JSON.stringify(statQs));
 
+/* ---- /demo: no sign-in, PIN 1234, one at a time, nothing saved ---- */
+const demoPage = await fetch(base + "/demo");
+check("/demo serves the projector page", demoPage.status === 200 && (await demoPage.text()).includes('id="s-demo"'));
+const sessionsBeforeDemo = store.sessions.count();
+const demoRes = await fetch(base + "/api/demo/start", { method: "POST" });
+const demoBody = await demoRes.json();
+const demoCookie = (demoRes.headers.get("set-cookie") || "").split(";")[0];
+check("starting a demo needs no sign-in and uses PIN 1234", demoRes.status === 201 && demoBody.pin === "1234" && demoCookie.startsWith("fq_demo="), JSON.stringify(demoBody));
+const demoBusy = await fetch(base + "/api/demo/start", { method: "POST" });
+check("a second visitor can't start another demo while one runs", demoBusy.status === 409 && (await demoBusy.json()).code === "demo_busy", "got " + demoBusy.status);
+const demoAgain = await fetch(base + "/api/demo/start", { method: "POST", headers: { Cookie: demoCookie } });
+check("the browser that started the demo gets it back on reload", demoAgain.status === 200 && (await demoAgain.json()).pin === "1234");
+check("the demo game is small and is never saved", rooms.get("1234")?.maxPlayers === 20 && rooms.get("1234")?.sessionId === null && store.sessions.count() === sessionsBeforeDemo);
+
+const noPass = ioc(base, { auth: { demo: true }, transports: ["websocket"] });
+await new Promise(r => noPass.on("connect", r));
+const noPassResume = await new Promise(r => noPass.emit("host:resume", { pin: "1234" }, r));
+check("controlling the demo needs the pass from starting it", noPassResume.code === "auth", JSON.stringify(noPassResume));
+noPass.disconnect();
+
+const demoHost = ioc(base, { auth: { demo: true }, extraHeaders: { Cookie: demoCookie }, transports: ["websocket"] });
+await new Promise(r => demoHost.on("connect", r));
+const demoResume = await new Promise(r => demoHost.emit("host:resume", { pin: "1234" }, r));
+check("the demo pass drives the demo game", demoResume.pin === "1234" && demoResume.state?.phase === "lobby", JSON.stringify(demoResume).slice(0, 120));
+const demoEscape = await new Promise(r => demoHost.emit("host:create", { quiz: { title: "x", questions: [{ q: "q", t: 10, opts: ["a", "b"], correct: 0 }] } }, r));
+check("a demo pass can't create other games", demoEscape.code === "auth" && ![...rooms.games.values()].some(g => g.quiz.title === "x"), JSON.stringify(demoEscape));
+
+const demoHost2 = ioc(base, { auth: { demo: true }, extraHeaders: { Cookie: demoCookie }, transports: ["websocket"] });
+await new Promise(r => demoHost2.on("connect", r));
+await new Promise(r => demoHost2.emit("host:resume", { pin: "1234" }, r));
+const demoPlayer = await joinAs("1234", "Demo Dana");
+check("players join the demo with PIN 1234", Boolean(demoPlayer.res.playerId), JSON.stringify(demoPlayer.res));
+await new Promise(r => demoHost2.emit("host:start", null, r));
+check("the demo starts from its pass", rooms.get("1234")?.phase === "question");
+const demoFinal = new Promise(r => demoHost2.on("final", r));
+await new Promise(r => demoHost2.emit("host:end", null, r));
+const finalPayload = await demoFinal;
+check("a finished demo leaves nothing in results or history", finalPayload.sessionId === null && store.sessions.count() === sessionsBeforeDemo, JSON.stringify(finalPayload).slice(0, 120));
+const afterEnd = await new Promise(r => demoHost2.emit("host:start", null, r));
+check("the pass stops working once its demo is over", afterEnd.code === "auth", JSON.stringify(afterEnd));
+const nextDemo = await fetch(base + "/api/demo/start", { method: "POST" });
+check("a new demo can start once the last one is over", nextDemo.status === 201);
+const staleHost = ioc(base, { auth: { demo: true }, extraHeaders: { Cookie: demoCookie }, transports: ["websocket"] });
+await new Promise(r => staleHost.on("connect", r));
+const staleResume = await new Promise(r => staleHost.emit("host:resume", { pin: "1234" }, r));
+check("an old pass can't drive the next demo", staleResume.code === "auth", JSON.stringify(staleResume));
+rooms.get("1234")?.end();
+[demoHost, demoHost2, staleHost, demoPlayer.sock].forEach(s => s.disconnect());
+
 /* Wrong-PIN guessing is throttled; run last since it locks this IP out for a minute. */
 /* Five sockets x 14 guesses: each stays under the per-socket event rate limit, so
    what's being measured is the per-IP wrong-PIN throttle. */

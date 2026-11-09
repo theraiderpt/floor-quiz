@@ -14,6 +14,16 @@
 </head>
 <body>
 
+<!-- DEMO: what /demo shows while starting, when busy, and after the game -->
+<section class="screen" id="s-demo">
+  <div class="strip"><span class="dot idle"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><span data-i18n="demo.strip" class="k">demo</span></span></div>
+  <div class="stage center">
+    <h1 data-i18n="demo.heading">Try CX Quiz</h1>
+    <p class="note" id="demoMsg"></p>
+    <button data-i18n="demo.again" class="btn big" id="demoAgain" hidden>Start a new demo</button>
+  </div>
+</section>
+
 <!-- LOGIN -->
 <section class="screen on" id="s-login">
   <div class="strip"><span class="dot idle"></span><span class="cell"><span class="v">CX Quiz</span></span><span class="spacer"></span><span class="cell"><span data-i18n="strip.hostConsole" class="k">host console</span></span></div>
@@ -275,6 +285,7 @@
     <div class="row u-center">
       <a data-i18n="host.downloadResults" class="btn" id="fExport" href="#">Download results (CSV)</a>
       <button data-i18n="common.backToLibrary" class="btn ghost" id="fDone">Back to library</button>
+      <button data-i18n="demo.again" class="btn ghost" id="fDemoAgain" hidden>Start a new demo</button>
     </div>
   </div>
 </section>

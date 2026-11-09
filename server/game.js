@@ -220,7 +220,7 @@ export function shuffledOrder(n) {
 }
 
 export class Game {
-  constructor({ pin, quiz, quizId, io, hostId, maxPlayers }) {
+  constructor({ pin, quiz, quizId, io, hostId, maxPlayers, persist = true }) {
     this.pin = pin;
     this.io = io;
     this.quiz = quiz;
@@ -239,7 +239,8 @@ export class Game {
     this.questionEndsAt = 0;
     this.createdAt = Date.now();
     this.touchedAt = Date.now();
-    this.sessionId = store.sessions.open(pin, this.quizId, quiz.title, hostId);
+    /* No row for a game that is never saved (the /demo game). */
+    this.sessionId = persist ? store.sessions.open(pin, this.quizId, quiz.title, hostId) : null;
     this.finished = false;
     /* The last host-facing payload of each kind, replayed to a host socket
        that reconnects (or a host page that reloads) mid-game, so the
@@ -608,7 +609,7 @@ export class Game {
        Nothing was played, so nothing goes into history or the stats. */
     if (this.qIndex < 0) {
       this.phase = "final";
-      store.sessions.discard(this.sessionId);
+      if (this.sessionId) store.sessions.discard(this.sessionId);
       this.io.to(this.room).emit("cancelled");
       this.onFinish?.(true);
       return;
@@ -616,12 +617,14 @@ export class Game {
 
     this.phase = "final";
     const board = this.standings();
-    try {
-      const withLogs = board.map(({ avatar, ...p }) => ({ ...p, log: this.players.get(p.id)?.log || [] }));
-      store.sessions.close(this.sessionId, withLogs, this.quiz.questions.map(q => q.q));
-      this.onSaved?.(this.sessionId);
-    } catch (err) {
-      console.error("Could not save results for session", this.sessionId, err.message);
+    if (this.sessionId) {
+      try {
+        const withLogs = board.map(({ avatar, ...p }) => ({ ...p, log: this.players.get(p.id)?.log || [] }));
+        store.sessions.close(this.sessionId, withLogs, this.quiz.questions.map(q => q.q));
+        this.onSaved?.(this.sessionId);
+      } catch (err) {
+        console.error("Could not save results for session", this.sessionId, err.message);
+      }
     }
     this.broadcastState();
     this.lastFinal = { board, sessionId: this.sessionId };
@@ -669,6 +672,9 @@ export class Game {
 
 /* --------------------------------------------------- registry ----------- */
 
+/* Reserved for /demo, so it is easy to type and never handed to a real game. */
+export const DEMO_PIN = "1234";
+
 export class Rooms {
   constructor(io) {
     this.io = io;
@@ -682,14 +688,13 @@ export class Rooms {
   newPin() {
     for (let i = 0; i < 200; i++) {
       const pin = String(Math.floor(1000 + Math.random() * 9000));
-      if (!this.games.has(pin)) return pin;
+      if (pin !== DEMO_PIN && !this.games.has(pin)) return pin;
     }
     throw Object.assign(new Error("No free PINs. Too many games are running at once."), { code: "no_pins" });
   }
 
-  create(quiz, quizId, hostId, maxPlayers) {
-    const pin = this.newPin();
-    const game = new Game({ pin, quiz, quizId, io: this.io, hostId, maxPlayers });
+  create(quiz, quizId, hostId, maxPlayers, { pin = this.newPin(), persist = true } = {}) {
+    const game = new Game({ pin, quiz, quizId, io: this.io, hostId, maxPlayers, persist });
     this.games.set(pin, game);
     /* A finished game used to sit in memory until the 4-hour sweep, so
        /api/health over-reported live games (which the deploy rule reads to
