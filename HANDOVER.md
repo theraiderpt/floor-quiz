@@ -32,6 +32,9 @@ None recorded. Anything that changes game flow, scoring or the visual direction 
 - Claude Desktop sessions cannot reach the VPS or its `~/.claude` notes: put what matters here.
 
 ## 6. Session log (newest first)
+### 2026-11-09 | Claude Code on the web | `desktop/review-privacy`, pushed, not merged or deployed
+Podium celebration sounds: `Sound.play("podium")` is now a synth sequence timed to the podium CSS (drumroll 0 to 2.6s, hits at 0.7s and 1.7s as third and second land, crash and fanfare at 2.7s for first), then plays `public/audio/cheer.mp3` if it exists (not in the repo yet: the owner is picking a royalty-free crowd cheer; the slot stays silent until then). Verified: rendered offline in headless Chromium (peak 0.45, no clipping, timing checked on a spectrogram); not heard on real speakers. The owner's earlier `/demo` idea (no-login demo game on PIN 1234) was proposed but never agreed or built.
+
 ### 2026-11-07 (later) | Claude Code on the web | `desktop/review-privacy`, pushed, not merged or deployed
 Fixed the four code review findings, agreed with the owner: (1) `Game.closeIfAllAnswered()` closes a question early only when every connected player has answered, and is also re-checked when a player drops; (2) open-text answers no longer count as skipped in `questionBreakdown` (the question gets no accuracy) or against quiz accuracy in `statsByQuiz` (`json_each` over `answers_json`); (3) a lobby is cancelled once its host screen has been gone for `HOST_GONE_MS` (default 10 minutes; `host:resume` cancels the countdown); (4) `player:join` passes `addPlayer`'s error `code`. Verified: smoke 248 all passed; with the old logic put back, the 5 related checks fail.
 

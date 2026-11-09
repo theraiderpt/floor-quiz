@@ -11,6 +11,20 @@
    host's own language and falls back to English for anything missing. */
 const CHANGELOG = [
   {
+    date: "2026-11-09",
+    items: [
+      {
+        en: "The final podium now has a drumroll, a hit as each place lands and a fanfare for the winner.",
+        fr: "Le podium final a désormais un roulement de tambour, un coup à chaque place révélée et une fanfare pour le gagnant.",
+        de: "Das Siegerpodest hat jetzt einen Trommelwirbel, einen Schlag für jeden Platz und eine Fanfare für den Sieg.",
+        es: "El podio final tiene ahora redoble de tambor, un golpe al aparecer cada puesto y una fanfarria para el ganador.",
+        el: "Το τελικό βάθρο έχει πλέον τύμπανα, ένα χτύπημα για κάθε θέση και φανφάρα για τον νικητή.",
+        pt: "O pódio final tem agora rufar de tambores, uma batida a cada lugar revelado e uma fanfarra para o vencedor.",
+        ro: "Podiumul final are acum rafală de tobe, o lovitură la fiecare loc dezvăluit și o fanfară pentru câștigător."
+      }
+    ]
+  },
+  {
     date: "2026-11-07",
     items: [
       {
