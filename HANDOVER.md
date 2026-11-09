@@ -2,12 +2,12 @@
 
 Living note shared by Claude Code on the VPS and Claude Desktop. Read it at the start of a session, update it at the end (protocol at the end of `CLAUDE.md`). It holds state and decisions, not code. No secrets in here. Ground rules, operational facts and conventions are in `CLAUDE.md` and are authoritative.
 
-## 1. State (written 2026-11-06, VPS session; facts checked that day)
-- **`master` = `origin/master`, app code at `d371566`, deployed 2026-11-06** (PM2 `floor-quiz` restarted with 0 games running, health ok, site 200, `npm run smoke` 228 passed on the production tree). Production runs from this directory (`/var/www/floor-quiz`, PM2 as `deploy`). Rollback copy: `/var/backups/floor-quiz-20261106-111736` (pre-merge code at `50fee0e`).
-- **Shipped 2026-11-06:** player avatars (builder on the phone join screen, shown in lobby, leaderboard and podium) and host background music (lobby and question loops, Pixabay licence, muted by the speaker toggle). No schema change.
-- **Earlier releases:** 2026-11-01 `lastRank` for all players, theme on `host:resume`, text-question movement line, nodemailer 10.3.1, `allowScripts` for `better-sqlite3`. 2026-10-26 "Sunny Sticker" refresh; before that pictures and GIFs, Giphy, "What's new", 7 languages.
+## 1. State (written 2026-11-09, VPS session; facts checked that day)
+- **`master` = `origin/master`, deployed 2026-11-09** (fast-forward of `desktop/review-privacy`: privacy hardening with self-hosted fonts, Giphy copies, retention and admin audit log; fixes; podium sounds; `/demo` on PIN 1234). PM2 `floor-quiz` restarted with 0 games, health ok, site, `/host`, `/demo`, `/fonts/fonts.css`, `/audio/cheer.mp3` all 200. Smoke 262 passed in a worktree before merging. Rollback copy (code and database): `/var/backups/floor-quiz-20261109-162613` (pre-merge code at `b266646`). `audit_log` table added at boot (additive).
+- **Retention:** `RETENTION_DAYS` is not set in `.env`, so the default of 365 days applies.
+- **Earlier releases:** 2026-11-06 avatars and host music; 2026-11-01 `lastRank`, nodemailer 10.3.1, `allowScripts`; 2026-10-26 "Sunny Sticker"; before that pictures and GIFs, Giphy, "What's new", 7 languages.
 - **Tests:** `npm run smoke` (throwaway database, safe against production).
-- **Audit:** `npm audit --omit=dev` was at 0 vulnerabilities on 2026-11-01; not re-run on 2026-11-06 (no dependency changed).
+- **Audit:** `npm audit --omit=dev` last run 2026-11-01 (0 vulnerabilities).
 - **GitHub:** private `git@github.com:theraiderpt/floor-quiz.git`, branch `master`. Push after every deploy.
 
 ## 2. In progress (claims)
@@ -17,10 +17,9 @@ Nothing claimed. Before starting anything bigger than a small fix, add a line he
 None recorded. Anything that changes game flow, scoring or the visual direction goes through the owner first.
 
 ## 4. Next steps
-- **Review and deploy `desktop/review-privacy`** (waiting for the owner, not merged). Smoke green (262). Restart needed (server code). **Additive schema change:** new `audit_log` table, created by `CREATE TABLE IF NOT EXISTS` at boot; rollback is safe (old code ignores the table).
-- **First boot after deploy deletes data:** 30 seconds after start, finished games older than `RETENTION_DAYS` (default 365) are deleted with their results, plus session rows opened more than 2 days ago that never finished. Take the usual backup first. To keep everything for now, set `RETENTION_DAYS` in `.env` to a large number before restarting.
-- **First boot also copies Giphy pictures:** 60 seconds after start, every saved quiz still pointing at Giphy's CDN gets its GIFs downloaded to the uploads folder and rewritten to `/uploads/...` (needs outbound HTTPS from the box to `*.giphy.com`). Failures keep the Giphy URL and retry daily; check `pm2 logs` for `giphy copy failed`.
-- The four code review findings from 2026-11-07 are fixed on the same branch (see the session log).
+- Not verified after the 2026-11-09 deploy: the uploads folder was created (Giphy copy ran, no `giphy copy failed` seen) but not every quiz was inspected; the retention job logged nothing; `/demo` and the podium sounds were not tried on a real phone, projector or speakers.
+- Small items from the 2026-11-06 review, not fixed, not agreed: open builder pushes Join below the fold on a 380x700 phone; `Sound.music` is called unguarded in `host.js` `show()` (use `Sound.music?.()` if a stale cache is ever seen); the "What's new" entry does not mention the lobby music loop.
+- Idea only: send one real invite email to confirm SMTP after the nodemailer 10 upgrade.
 
 ## 5. Pitfalls and environment
 - **npm 12 and `better-sqlite3`:** npm 12 blocks dependency install scripts. `package.json` now has `allowScripts` for `better-sqlite3@11.10.0` (tested: `npm ci --omit=dev` in a scratch dir builds the binary), so `deploy/update.sh` works again, untested on the live box. The approval is pinned to the version: after bumping `better-sqlite3`, run `npm approve-scripts better-sqlite3` again. The safe fallback used on 2026-11-01 was to rsync a tested `node_modules` and check `require("better-sqlite3")` as `deploy`.
@@ -32,6 +31,8 @@ None recorded. Anything that changes game flow, scoring or the visual direction 
 - Claude Desktop sessions cannot reach the VPS or its `~/.claude` notes: put what matters here.
 
 ## 6. Session log (newest first)
+### 2026-11-09 (deploy) | Claude Code on the VPS | `master` fast-forwarded to `desktop/review-privacy`, deployed, pushed
+Deployed on the owner's instruction. Backup first (code and database), smoke 262 green in a worktree, 0 games, restart, endpoints 200, startup jobs ran without errors in the logs. Branch `origin/desktop/review-privacy` is now merged and can be deleted.
 ### 2026-11-09 (later) | Claude Code on the web | `desktop/review-privacy`, pushed, not merged or deployed
 `/demo`, agreed with the owner: the projector page in demo mode runs `server/demo.js` (6 questions, one of each type) on PIN 1234 (`DEMO_PIN`, never handed to a normal game). `POST /api/demo/start` (10 per 15 minutes per IP) creates it with `persist: false` (no `sessions` row, nothing in results, history or stats), 20 players max, auto-end after 30 minutes, one demo at a time (`409 demo_busy`), and sets a signed `fq_demo` cookie. A socket that connects with `auth: { demo: true }` and that cookie may only send `host:resume/start/next/skip/end/kick` for that one game, and the pass dies when the game ends or a new demo starts. A signed-in host opening `/demo` still drives the demo (the demo flag takes priority over the host cookie). Also added the owner's crowd cheer as `public/audio/cheer.mp3` (Pixabay licence), played as first place lands. Verified: smoke 262 all passed (14 demo checks: busy, reload, pass required, no game creation, nothing saved, stale pass refused); headless run of lobby with 3 phones, busy screen in a second browser, projector reload mid-question, play-through to the podium (CSV export hidden, "Start a new demo" opens a fresh lobby).
 
