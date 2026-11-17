@@ -1,6 +1,7 @@
 import { csvLabels, csvOutcome } from "./csv-labels.js";
 import { sendMail } from "./mail.js";
 import { store } from "./db.js";
+import { stripFormat } from "./fmt.js";
 
 /* Player names and free-text answers come from the public. A cell that
    starts with = + - @ (or a tab/CR) is run as a formula by Excel and
@@ -18,7 +19,7 @@ export function sessionCsv(s, lang) {
   let questions = [];
   try { questions = JSON.parse(s.questions_json || "[]"); } catch { questions = []; }
   const L = csvLabels(lang);
-  const qHeaders = questions.map((q, i) => `${L.q}${i + 1}: ${q}`);
+  const qHeaders = questions.map((q, i) => `${L.q}${i + 1}: ${stripFormat(q)}`);
   const lines = [[L.rank, L.name, L.email, L.score, L.correct, L.answered, ...qHeaders].map(cell).join(",")];
   s.results.forEach(r => {
     let log = [];

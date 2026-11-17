@@ -13,7 +13,24 @@ export const isValidEmail = s => typeof s === "string" && /^[^\s@]+@[^\s@]+\.[^\
    quiz saved before picked GIFs were copied here (server/media.js rewrites
    those in the background). A generous length cap just guards against garbage. */
 const MAX_IMG_URL_CHARS = 600;
+const MAX_Q_CHARS = 300;
+const MAX_OPT_CHARS = 160;
 const isOwnUpload = s => /^\/uploads\/[0-9a-f-]{36}\.(?:jpg|png|webp|gif)$/.test(s);
+
+/* A question carries at most one kind of media: a YouTube video, a slide
+   deck (pages of a PDF, each stored as an ordinary upload) or one picture.
+   Priority runs in that order if a client sends more than one. */
+const MAX_SLIDES = 20;
+const isYoutubeId = s => typeof s === "string" && /^[A-Za-z0-9_-]{11}$/.test(s);
+function cleanMedia(q) {
+  const yt = isYoutubeId(q?.yt) ? q.yt : null;
+  const slides = !yt && Array.isArray(q?.slides)
+    ? q.slides.filter(u => typeof u === "string" && u.length <= MAX_IMG_URL_CHARS && isOwnUpload(u)).slice(0, MAX_SLIDES)
+    : [];
+  const img = !yt && !slides.length && typeof q?.img === "string" && q.img.length <= MAX_IMG_URL_CHARS && (isOwnUpload(q.img) || isGiphyUrl(q.img))
+    ? q.img : null;
+  return { img, slides, yt };
+}
 
 /* Scoring lives server side and nowhere else. The client is never told the
    correct answer until the question is closed, and never computes its own
@@ -49,25 +66,25 @@ export function cleanAvatar(raw) {
 
 function sanitiseQuestion(q) {
   const type = QUESTION_TYPES.includes(q?.type) ? q.type : "single";
-  const text = String(q?.q || "").trim().slice(0, 200);
+  /* Room beyond the old 200 for formatting markers (see public/js/fmt.js). */
+  const text = String(q?.q || "").trim().slice(0, MAX_Q_CHARS);
   if (!text) return null;
   const seconds = clamp(Number(q?.t) || 20, 5, 120);
-  const img = typeof q?.img === "string" && q.img.length <= MAX_IMG_URL_CHARS && (isOwnUpload(q.img) || isGiphyUrl(q.img))
-    ? q.img : null;
+  const media = cleanMedia(q);
 
-  if (type === "text") return { type, q: text, t: seconds, img };
+  if (type === "text") return { type, q: text, t: seconds, ...media };
 
   if (type === "numeric") {
     const target = Number(q?.target);
     if (!Number.isFinite(target)) return null;
     const tolerance = clamp(Number(q?.tolerance) || 0, 0, 1_000_000_000);
-    return { type, q: text, t: seconds, img, target, tolerance };
+    return { type, q: text, t: seconds, ...media, target, tolerance };
   }
 
   /* "single" and "multi" are both option-based, so they share the opts
      sanitising and the per-player shuffle flag. */
   const opts = (Array.isArray(q?.opts) ? q.opts : [])
-    .map(o => String(o || "").trim().slice(0, 120))
+    .map(o => String(o || "").trim().slice(0, MAX_OPT_CHARS))
     .filter(Boolean)
     .slice(0, 4);
   if (opts.length < 2) return null;
@@ -78,11 +95,11 @@ function sanitiseQuestion(q) {
       .filter(i => Number.isInteger(i) && i >= 0 && i < opts.length)
       .sort((a, b) => a - b);
     if (!correct.length) return null;
-    return { type, q: text, t: seconds, img, opts, correct, shuffle };
+    return { type, q: text, t: seconds, ...media, opts, correct, shuffle };
   }
 
   const correct = clamp(Number(q?.correct) || 0, 0, opts.length - 1);
-  return { type: "single", q: text, t: seconds, img, opts, correct, shuffle };
+  return { type: "single", q: text, t: seconds, ...media, opts, correct, shuffle };
 }
 
 /* Questions arriving from the host console are never trusted as-is. */
@@ -157,6 +174,8 @@ export function publicQuestion(question, optOrder) {
     q: question.q,
     t: question.t,
     img: question.img || null,
+    slides: question.slides?.length ? question.slides : undefined,
+    yt: question.yt || undefined,
     shuffle: Boolean(question.shuffle),
     opts: question.opts ? (order ? order.map(i => question.opts[i]) : question.opts) : undefined
   };

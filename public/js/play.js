@@ -256,9 +256,9 @@ socket.on("result", r => {
   $("rPts").textContent = r.points ? "+" + r.points : "+0";
   $("rRank").textContent = r.rank ? "#" + r.rank : "—";
 
-  const correctDescription = r.type === "multi" ? r.correctTexts.join(", ")
+  const correctDescription = r.type === "multi" ? r.correctTexts.map(Fmt.plain).join(", ")
     : r.type === "numeric" ? String(r.target)
-    : r.correctText;
+    : Fmt.plain(r.correctText);
   const guessNote = r.type === "numeric" && r.answered ? t("play.youGuessed", { value: r.value }) + " " : "";
   const total = t("common.totalPoints", { n: r.score });
   $("rSub").textContent = r.correct
@@ -343,9 +343,9 @@ function renderPad(s) {
   streak.innerHTML = "";
   streak.hidden = !(me.streak > 1);
   if (me.streak > 1) streak.appendChild(streakBadge(me.streak, true));
-  $("aQ").textContent = s.question.q;
-  $("aImg").hidden = !s.question.img;
-  $("aImg").src = s.question.img || "";
+  Fmt.set($("aQ"), s.question.q);
+  /* Phones show slides but not the video itself: the shared screen plays it. */
+  Media.show($("aImg"), $("aMedia"), s.question, { video: false });
   const pad = $("aPad");
   pad.innerHTML = "";
   pad.className = "pad";
@@ -391,7 +391,7 @@ function renderSinglePad(pad, s) {
   s.question.opts.forEach((o, i) => {
     const b = el("button", "ans " + COLORS[i]);
     b.appendChild(shapeTag(i));
-    b.appendChild(el("span", "txt", o));
+    b.appendChild(Fmt.set(el("span", "txt"), o));
     b.addEventListener("click", () => {
       if (answered) return;
       [...pad.children].forEach((n, k) => { n.classList.add(k === i ? "picked" : "faded"); n.disabled = true; });
@@ -406,7 +406,7 @@ function renderMultiPad(pad, s) {
   s.question.opts.forEach((o, i) => {
     const b = el("button", "ans " + COLORS[i]);
     b.appendChild(shapeTag(i));
-    b.appendChild(el("span", "txt", o));
+    b.appendChild(Fmt.set(el("span", "txt"), o));
     b.dataset.i = String(i);
     b.addEventListener("click", () => {
       if (answered) return;

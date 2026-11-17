@@ -96,9 +96,8 @@ function renderQuestion(q) {
      comment on Attempt.answer() in server/selfpaced.js. */
   S.qIndex = q.qIndex;
   $("tQn").textContent = (S.qIndex + 1) + "/" + S.total;
-  $("tQ").textContent = q.q;
-  $("tImg").hidden = !q.img;
-  $("tImg").src = q.img || "";
+  Fmt.set($("tQ"), q.q);
+  Media.show($("tImg"), $("tMedia"), q);
   $("tScore").textContent = S.score;
   const hint = TYPE_HINTS[q.type] ? t(TYPE_HINTS[q.type]) : "";
   $("tHint").textContent = hint;
@@ -137,7 +136,7 @@ function renderSinglePad(pad, q) {
   q.opts.forEach((o, i) => {
     const b = el("button", "ans " + COLORS[i]);
     b.appendChild(shapeTag(i));
-    b.appendChild(el("span", "txt", o));
+    b.appendChild(Fmt.set(el("span", "txt"), o));
     b.addEventListener("click", () => {
       if (S.answered) return;
       [...pad.children].forEach((n, k) => { n.classList.add(k === i ? "picked" : "faded"); n.disabled = true; });
@@ -152,7 +151,7 @@ function renderMultiPad(pad, q) {
   q.opts.forEach((o, i) => {
     const b = el("button", "ans " + COLORS[i]);
     b.appendChild(shapeTag(i));
-    b.appendChild(el("span", "txt", o));
+    b.appendChild(Fmt.set(el("span", "txt"), o));
     b.dataset.i = String(i);
     b.addEventListener("click", () => { if (!S.answered) b.classList.toggle("picked"); });
     pad.appendChild(b);
@@ -215,9 +214,9 @@ function showFeedback(res) {
     v.textContent = res.correct ? t("common.correct") : t("common.notThisTime");
     v.className = "verdict " + (res.correct ? "good" : "bad");
     $("fbPts").textContent = res.points ? "+" + res.points : "+0";
-    const correctDescription = res.correctTexts ? res.correctTexts.join(", ")
+    const correctDescription = res.correctTexts ? res.correctTexts.map(Fmt.plain).join(", ")
       : res.target != null ? String(res.target)
-      : res.correctText;
+      : Fmt.plain(res.correctText);
     const total = t("common.totalPoints", { n: S.score });
     $("fbSub").textContent = res.correct
       ? total

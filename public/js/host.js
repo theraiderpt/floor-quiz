@@ -264,7 +264,7 @@ function renderSetup() {
     const item = el("div", "qitem");
     item.appendChild(el("span", "idx", String(i + 1).padStart(2, "0")));
     const body = el("div", "body");
-    body.appendChild(el("p", "qt", q.q));
+    body.appendChild(el("p", "qt", Fmt.plain(q.q)));
     const meta = el("div", "meta");
     meta.appendChild(el("span", null, q.t + "s"));
     meta.appendChild(el("span", null, t(TYPE_LABELS[q.type] || TYPE_LABELS.single)));
@@ -354,14 +354,29 @@ async function persistQuiz() {
 
 /* ------------------------------------------------------------ editor --- */
 
+/* A question has one kind of media at a time: a picture, a slide deck or a
+   YouTube video. Setting one clears the others. */
 let editingImg = null;
+let editingSlides = [];
+let editingYt = null;
 
-function setEditorImage(dataUrl) {
-  editingImg = dataUrl || null;
+function setEditorMedia({ img = null, slides = [], yt = null } = {}) {
+  editingImg = img;
+  editingSlides = yt || img ? [] : slides;
+  editingYt = img ? null : yt;
   $("eImgPreview").src = editingImg || "";
   $("eImgPreview").hidden = !editingImg;
   $("eImgClear").hidden = !editingImg;
+  const strip = $("eSlidesStrip");
+  strip.innerHTML = "";
+  editingSlides.forEach(u => { const im = el("img"); im.src = u; im.alt = ""; im.loading = "lazy"; strip.appendChild(im); });
+  strip.hidden = !editingSlides.length;
+  $("eMediaClear").hidden = !(editingSlides.length || editingYt);
+  mediaStatus(editingYt ? t("host.ytReady", { id: editingYt }) : editingSlides.length ? t("host.slidesReady", { n: editingSlides.length }) : "");
 }
+const setEditorImage = url => setEditorMedia({ img: url || null });
+const editorMedia = () => ({ img: editingImg, slides: editingSlides, yt: editingYt });
+const mediaStatus = msg => { $("eMediaStatus").textContent = msg || ""; };
 
 /* Resized and re-encoded client side so a phone photo (often several MB)
    never has to round-trip at full size. GIFs are read straight through
@@ -400,13 +415,14 @@ function readImageForUpload(file, maxDim = 900) {
   });
 }
 
+const postImage = async dataUrl => (await api("/uploads/image", { method: "POST", body: { dataUrl } })).url;
+
 async function uploadImage(dataUrl) {
   $("eImgPick").disabled = true;
   const label = $("eImgPick").textContent;
   $("eImgPick").textContent = t("host.uploading");
   try {
-    const { url } = await api("/uploads/image", { method: "POST", body: { dataUrl } });
-    setEditorImage(url);
+    setEditorImage(await postImage(dataUrl));
   } catch (err) {
     alert(err.message);
   } finally {
@@ -431,6 +447,128 @@ $("eImgFile").addEventListener("change", async e => {
   }
 });
 $("eImgClear").addEventListener("click", () => setEditorImage(null));
+$("eMediaClear").addEventListener("click", () => setEditorMedia());
+
+/* ---- slides (PDF) and YouTube ---- */
+const MAX_SLIDES = 20, MAX_PDF_BYTES = 25_000_000;
+
+/* pdf.js is vendored under /vendor and only loaded when a PDF is picked, so
+   hosts who never use slides never download it. Each page is drawn to a
+   canvas and uploaded as an ordinary compressed JPEG, so phones and the
+   self-paced page load slides exactly like pictures. */
+async function pdfToSlides(file) {
+  const pdfjs = await import("/vendor/pdfjs/pdf.min.mjs");
+  pdfjs.GlobalWorkerOptions.workerSrc = "/vendor/pdfjs/pdf.worker.min.mjs";
+  const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+  const n = Math.min(doc.numPages, MAX_SLIDES);
+  const urls = [];
+  for (let i = 1; i <= n; i++) {
+    mediaStatus(t("host.slidesProgress", { i, n }));
+    const page = await doc.getPage(i);
+    const base = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: 1280 / Math.max(base.width, base.height) });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff"; // PDF pages are transparent, JPEG has no alpha
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    let out = canvas.toDataURL("image/jpeg", 0.72);
+    if (out.length > 900_000) out = canvas.toDataURL("image/jpeg", 0.5);
+    urls.push(await postImage(out));
+  }
+  await doc.destroy();
+  return urls;
+}
+
+$("eSlidesPick").addEventListener("click", () => $("eSlidesFile").click());
+$("eSlidesFile").addEventListener("change", async e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  if (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) return mediaStatus(t("host.slidesNeedPdf"));
+  if (file.size > MAX_PDF_BYTES) return mediaStatus(t("host.slidesTooBig"));
+  $("eSlidesPick").disabled = true;
+  mediaStatus(t("host.slidesLoading"));
+  try {
+    setEditorMedia({ slides: await pdfToSlides(file) });
+  } catch (err) {
+    /* An upload error carries its own translated text; anything else came
+       from reading the PDF itself. */
+    mediaStatus(err?.name === "Error" && err.message ? err.message : t("host.slidesFail"));
+  } finally {
+    $("eSlidesPick").disabled = false;
+  }
+});
+
+function addYoutube() {
+  const id = Media.youtubeId($("eYtInput").value);
+  if (!id) return mediaStatus(t("host.ytBad"));
+  $("eYtInput").value = "";
+  setEditorMedia({ yt: id });
+}
+$("eYtAdd").addEventListener("click", addYoutube);
+$("eYtInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addYoutube(); } });
+
+/* ---- text formatting toolbar (markers are rendered by public/js/fmt.js) ---- */
+const FMT_MARKS = { bold: "**", italic: "*", underline: "__", strike: "~~", code: "`", sup: "^", sub: "~" };
+let fmtTarget = $("eQ");
+document.addEventListener("focusin", e => {
+  const n = e.target;
+  if (n.id === "eQ" || (n.matches?.("input.inp") && n.closest("#eOpts") && !n.readOnly)) fmtTarget = n;
+});
+
+function applyFormat(kind, node = fmtTarget) {
+  if (!node || node.readOnly) return;
+  const { selectionStart: a, selectionEnd: b, value } = node;
+  let next, caret;
+  if (kind === "list") {
+    if (node.tagName !== "TEXTAREA") return; // options are one line
+    const from = value.lastIndexOf("\n", a - 1) + 1;
+    const chunk = value.slice(from, b);
+    const lines = chunk.split("\n");
+    const on = lines.every(l => l.startsWith("- "));
+    next = value.slice(0, from) + lines.map(l => on ? l.slice(2) : "- " + l).join("\n") + value.slice(b);
+    caret = from + (on ? chunk.length - 2 * lines.length : chunk.length + 2 * lines.length);
+  } else {
+    const m = FMT_MARKS[kind];
+    const sel = value.slice(a, b);
+    const wrapped = sel.startsWith(m) && sel.endsWith(m) && sel.length >= 2 * m.length;
+    const inner = wrapped ? sel.slice(m.length, -m.length) : m + sel + m;
+    next = value.slice(0, a) + inner + value.slice(b);
+    caret = sel ? a + inner.length : a + m.length;
+  }
+  if (node.maxLength > 0 && next.length > node.maxLength) return;
+  node.value = next;
+  node.focus();
+  node.setSelectionRange(caret, caret);
+  node.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+/* mousedown would steal focus (and the selection) from the field. */
+$("eFmt").addEventListener("mousedown", e => e.preventDefault());
+$("eFmt").addEventListener("click", e => {
+  const b = e.target.closest("[data-fmt]");
+  if (b) applyFormat(b.dataset.fmt);
+});
+document.addEventListener("keydown", e => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || $("s-edit").hidden === true) return;
+  const kind = { b: "bold", i: "italic", u: "underline" }[e.key.toLowerCase()];
+  const n = e.target;
+  if (!kind || !(n.id === "eQ" || (n.matches?.("input.inp") && n.closest("#eOpts")))) return;
+  e.preventDefault();
+  applyFormat(kind, n);
+});
+
+/* Shows how the text will look once it has markers or several lines. */
+function updateQPreview() {
+  const v = $("eQ").value;
+  const needs = v.trim() && (Fmt.plain(v) !== v.trim() || v.includes("\n"));
+  $("eQPreview").hidden = !needs;
+  if (needs) Fmt.set($("eQPreview"), v);
+}
+$("eQ").addEventListener("input", updateQPreview);
 
 /* ---- GIF search (Giphy) ---- */
 $("eGifSearchToggle").addEventListener("click", () => {
@@ -491,7 +629,8 @@ function openEditor(i) {
   $("eShuffle").checked = Boolean(q.shuffle);
   $("eTarget").value = q.target ?? "";
   $("eTolerance").value = q.tolerance ?? 0;
-  setEditorImage(q.img || null);
+  setEditorMedia({ img: q.img || null, slides: q.slides || [], yt: q.yt || null });
+  updateQPreview();
   updateEditorVisibility();
   renderOpts(q.opts || ["", "", "", ""], q.correct);
   show("s-edit");
@@ -537,7 +676,7 @@ function renderOpts(opts, correct) {
        language at edit time, since players see options exactly as saved. */
     inp.value = count === 2 ? [t("common.true"), t("common.false")][i] : (opts[i] || "");
     inp.placeholder = t("common.optionX", { x: LETTERS[i] });
-    inp.maxLength = 120;
+    inp.maxLength = 160;
     if (count === 2) inp.readOnly = true;
     const lab = el("label", "correct");
     const box = el("input");
@@ -568,24 +707,24 @@ $("eSave").addEventListener("click", () => {
 
   let q;
   if (type === "text") {
-    q = { type, q: text, t: secs, img: editingImg };
+    q = { type, q: text, t: secs, ...editorMedia() };
   } else if (type === "numeric") {
     const target = Number($("eTarget").value);
     if (!Number.isFinite(target)) return alert(t("host.enterNumber"));
     const tolerance = Math.max(0, Number($("eTolerance").value) || 0);
-    q = { type, q: text, t: secs, img: editingImg, target, tolerance };
+    q = { type, q: text, t: secs, ...editorMedia(), target, tolerance };
   } else if (type === "multi") {
     const opts = currentOptVals().map(o => o.trim());
     if (opts.some(o => !o)) return alert(t("common.fillEveryOption"));
     const correct = currentCorrect();
     if (!correct.length) return alert(t("host.markAtLeastOne"));
-    q = { type, q: text, t: secs, img: editingImg, opts, correct, shuffle: $("eShuffle").checked };
+    q = { type, q: text, t: secs, ...editorMedia(), opts, correct, shuffle: $("eShuffle").checked };
   } else {
     const opts = currentOptVals().map(o => o.trim());
     if (opts.some(o => !o)) return alert(t("common.fillEveryOption"));
     const picked = $("eOpts").querySelector("input[type=radio]:checked");
     if (!picked) return alert(t("host.markOneAlert"));
-    q = { type: "single", q: text, t: secs, img: editingImg, opts, correct: Number(picked.value), shuffle: $("eShuffle").checked };
+    q = { type: "single", q: text, t: secs, ...editorMedia(), opts, correct: Number(picked.value), shuffle: $("eShuffle").checked };
   }
 
   if (S.editing >= 0) S.quiz.questions[S.editing] = q; else S.quiz.questions.push(q);
@@ -797,14 +936,13 @@ const TYPE_HINTS = { multi: "hint.selectAll", text: "hint.playersType", numeric:
 function renderQuestion(s) {
   $("pPin").textContent = S.pin;
   $("pQn").textContent = (s.qIndex + 1) + "/" + s.total;
-  $("pQ").textContent = s.question.q;
+  Fmt.set($("pQ"), s.question.q);
   $("pAnswered").textContent = "0";
   $("pFoot").textContent = t("host.lockedAsArrive");
   $("pNext").hidden = true;
   $("pSkip").hidden = false;
   $("pTimerWrap").hidden = false;
-  $("pImg").hidden = !s.question.img;
-  $("pImg").src = s.question.img || "";
+  Media.show($("pImg"), $("pMedia"), s.question, { keys: true });
   $("pFastest").hidden = true;
 
   const hint = TYPE_HINTS[s.question.type] ? t(TYPE_HINTS[s.question.type]) : "";
@@ -824,7 +962,7 @@ function renderQuestion(s) {
     s.question.opts.forEach((o, i) => {
       const b = el("div", "ans " + COLORS[i]);
       b.appendChild(shapeTag(i));
-      b.appendChild(el("span", "txt", o));
+      b.appendChild(Fmt.set(el("span", "txt"), o));
       b.append(el("span", "bar"), el("span", "n", ""));
       wrap.appendChild(b);
     });
@@ -1123,7 +1261,7 @@ async function openQuizSessions(groupKey) {
     .forEach(q => {
       const bar = el("div", "qbar");
       const head = el("div", "qb-head");
-      head.append(el("span", "qtxt", q.q), el("span", "qpct", q.accuracy != null ? q.accuracy + "%" : "—"));
+      head.append(el("span", "qtxt", Fmt.plain(q.q)), el("span", "qpct", q.accuracy != null ? q.accuracy + "%" : "—"));
       const track = el("div", "track sm");
       const fill = el("div", "fill" + accClass(q.accuracy));
       fill.style.width = (q.accuracy ?? 0) + "%";

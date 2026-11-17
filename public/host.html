@@ -10,6 +10,7 @@
 <script src="/js/locales.js"></script>
 <script src="/js/i18n.js"></script>
 <script src="/js/sound.js"></script>
+<script src="/js/fmt.js"></script>
 <script src="/js/changelog.js"></script>
 </head>
 <body>
@@ -157,7 +158,18 @@
       </div>
       <div class="field">
         <label data-i18n="common.question" for="eQ">Question</label>
-        <textarea class="inp" id="eQ" rows="2" maxlength="200" placeholder="What does FCR measure?" data-i18n-ph="host.questionPh"></textarea>
+        <div class="fmtbar" id="eFmt" role="toolbar" data-i18n-aria="host.fmtToolbar">
+          <button type="button" data-fmt="bold" data-i18n-title="host.fmtBold"><strong>B</strong></button>
+          <button type="button" data-fmt="italic" data-i18n-title="host.fmtItalic"><em>I</em></button>
+          <button type="button" data-fmt="underline" data-i18n-title="host.fmtUnderline"><u>U</u></button>
+          <button type="button" data-fmt="strike" data-i18n-title="host.fmtStrike"><s>S</s></button>
+          <button type="button" data-fmt="code" data-i18n-title="host.fmtCode">&lt;/&gt;</button>
+          <button type="button" data-fmt="sup" data-i18n-title="host.fmtSup">x<sup>2</sup></button>
+          <button type="button" data-fmt="sub" data-i18n-title="host.fmtSub">x<sub>2</sub></button>
+          <button type="button" data-fmt="list" data-i18n-title="host.fmtList">&bull;</button>
+        </div>
+        <textarea class="inp" id="eQ" rows="3" maxlength="300" placeholder="What does FCR measure?" data-i18n-ph="host.questionPh"></textarea>
+        <div class="fmtprev" id="eQPreview" hidden></div>
       </div>
       <div class="field">
         <label data-i18n="host.picture">Picture (optional, shown to the host screen and every player's phone)</label>
@@ -176,6 +188,21 @@
         </div>
         <img id="eImgPreview" class="qimg small" hidden alt="">
         <input type="file" id="eImgFile" accept="image/*" hidden>
+      </div>
+      <div class="field">
+        <label data-i18n="host.mediaLabel">Slides or video (optional, replaces the picture)</label>
+        <div class="row">
+          <button class="btn ghost" id="eSlidesPick" data-i18n="host.slidesPick">+ Add slides (PDF)</button>
+          <button class="btn ghost danger" id="eMediaClear" data-i18n="host.mediaRemove" hidden>Remove slides or video</button>
+        </div>
+        <p class="note" data-i18n="host.slidesHint">In PowerPoint use File, Export, PDF. Each page becomes a slide (up to 20).</p>
+        <div class="row">
+          <input class="inp" id="eYtInput" placeholder="Paste a YouTube link" data-i18n-ph="host.ytPh" maxlength="200">
+          <button class="btn ghost" id="eYtAdd" data-i18n="host.ytAdd">Add video</button>
+        </div>
+        <p class="note" id="eMediaStatus" role="status"></p>
+        <div class="slidestrip" id="eSlidesStrip" hidden></div>
+        <input type="file" id="eSlidesFile" accept="application/pdf,.pdf" hidden>
       </div>
       <div class="editgrid" id="eNumericFields" hidden>
         <div class="field">
@@ -256,6 +283,7 @@
     <p class="qtext" id="pQ">…</p>
     <p class="counter" id="pTypeHint" hidden></p>
     <img id="pImg" class="qimg" hidden alt="">
+    <div id="pMedia" class="qmedia" hidden></div>
     <div class="timerwrap" id="pTimerWrap"><div class="track"><div class="fill" id="pFill"></div></div><div class="clock" id="pClock">—</div><div class="anscount"><span class="v" id="pAnswered">0</span><span data-i18n="strip.answered" class="k">answered</span></div></div>
     <div class="answers" id="pAnswers"></div>
     <p class="counter" id="pFoot">—</p>
@@ -345,6 +373,7 @@
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="/js/avatar.js"></script>
+<script src="/js/media.js"></script>
 <script src="/js/host.js"></script>
 </body>
 </html>

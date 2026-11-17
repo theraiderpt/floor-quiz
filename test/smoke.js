@@ -1451,6 +1451,48 @@ const purged = store.sessions.purgeOlderThan(0);
 check("results past the retention period are deleted with their player rows",
   purged >= 1 && store.sessions.count() === 0 && store.sessions.get(anyGame.id) === null, "purged " + purged);
 
+/* ---- question media and text formatting ---- */
+{
+  const { publicQuestion } = await import("../server/game.js");
+  const { stripFormat } = await import("../server/fmt.js");
+  const vm = await import("node:vm");
+  const uid = c => "/uploads/" + [8, 4, 4, 4, 12].map(n => c.repeat(n)).join("-") + ".jpg";
+  const mq = sanitiseQuiz({ questions: [
+    { q: "video", t: 20, opts: ["a", "b"], correct: 0, yt: "dQw4w9WgXcQ", img: uid("1"), slides: [uid("2")] },
+    { q: "deck", t: 20, opts: ["a", "b"], correct: 0, slides: [uid("2"), "https://evil.example/x.jpg", "/uploads/../../etc/passwd", uid("3")], img: uid("1") },
+    { q: "bad id", t: 20, opts: ["a", "b"], correct: 0, yt: "<script>alert(1)</script>" },
+    { q: "many", t: 20, opts: ["a", "b"], correct: 0, slides: Array.from({ length: 40 }, () => uid("4")) }
+  ] }).questions;
+  check("a YouTube id wins over slides and a picture", mq[0].yt === "dQw4w9WgXcQ" && !mq[0].slides.length && !mq[0].img, JSON.stringify(mq[0]));
+  check("slides keep only our own uploads and win over a picture", mq[1].slides.length === 2 && !mq[1].img && !mq[1].yt, JSON.stringify(mq[1].slides));
+  check("a malformed YouTube id is dropped", mq[2].yt === null && !mq[2].slides.length && !mq[2].img, JSON.stringify(mq[2]));
+  check("a slide deck is capped at 20 slides", mq[3].slides.length === 20, String(mq[3].slides.length));
+  const pubV = publicQuestion(mq[0]), pubS = publicQuestion(mq[1]), pubP = publicQuestion(sanitiseQuiz({ questions: [{ q: "p", t: 20, opts: ["a", "b"], correct: 0 }] }).questions[0]);
+  check("media reaches players, and a plain question carries none", pubV.yt === "dQw4w9WgXcQ" && pubS.slides.length === 2 && pubP.yt === undefined && pubP.slides === undefined);
+  const long = sanitiseQuiz({ questions: [{ q: "x".repeat(400), t: 20, opts: ["y".repeat(300), "b"], correct: 0 }] }).questions[0];
+  check("formatted text gets room beyond the old 200 / 120 limits", long.q.length === 300 && long.opts[0].length === 160, long.q.length + "/" + long.opts[0].length);
+  check("markers are stripped for the CSV header", stripFormat("**Bold** and *italic*, H~2~O x^2^\n- item") === "Bold and italic, H2O x2 item", stripFormat("**Bold** and *italic*, H~2~O x^2^\n- item"));
+
+  /* The client renderer, run exactly as the browser loads it. */
+  const win = {};
+  vm.runInNewContext(fs.readFileSync(new URL("../public/js/fmt.js", import.meta.url), "utf8"), { window: win });
+  const F = win.Fmt;
+  check("bold, italic, underline, strike, sup and sub render", F.html("**a** *b* __c__ ~~d~~ x^2^ H~2~O") === "<strong>a</strong> <em>b</em> <u>c</u> <s>d</s> x<sup>2</sup> H<sub>2</sub>O", F.html("**a** *b* __c__ ~~d~~ x^2^ H~2~O"));
+  check("bullets and line breaks render", F.html("Intro\n- one\n- two\nEnd") === "Intro<br><ul><li>one</li><li>two</li></ul>End", F.html("Intro\n- one\n- two\nEnd"));
+  check("markers inside code stay literal", F.html("`**x**`") === "<code>**x**</code>", F.html("`**x**`"));
+  const evil = F.html('<img src=x onerror=alert(1)> **<script>alert(1)</script>** "q"');
+  check("host-typed HTML is escaped, never rendered", !/<(img|script)/i.test(evil) && evil.includes("&lt;script&gt;") && !/\sonerror=/.test(evil.replace(/&lt;[^&]*&gt;/g, "")), evil);
+  check("plain text strips markers and a lone asterisk survives", F.plain("**a** 2 * 3") === "a 2 * 3" && F.plain("- x\ny") === "x y", F.plain("**a** 2 * 3"));
+  check("client and server strip markers the same way", ["**a** *b* __c__", "x^2^ H~2~O ~~z~~", "- a\n- b", "2 * 3 * 4 ok"].every(x => F.plain(x) === stripFormat(x)));
+
+  /* Every new key exists in all seven languages. */
+  const loc = {};
+  vm.runInNewContext(fs.readFileSync(new URL("../public/js/locales.js", import.meta.url), "utf8"), { window: loc });
+  const need = Object.keys(loc.FQ_LOCALES.en).filter(k => /^(host\.(fmt|slides|yt|media)|media\.)/.test(k));
+  const missing = ["fr", "de", "es", "el", "pt", "ro"].flatMap(l => need.filter(k => !loc.FQ_LOCALES[l][k]).map(k => l + ":" + k));
+  check("media and formatting strings exist in all seven languages", need.length >= 28 && !missing.length, missing.join(", "));
+}
+
 /* ---- done ---- */
 players.forEach(p => p.socket.disconnect());
 hostSocket.disconnect();

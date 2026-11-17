@@ -11,6 +11,29 @@
    host's own language and falls back to English for anything missing. */
 const CHANGELOG = [
   {
+    date: "2026-11-17",
+    items: [
+      {
+        en: "Format your questions and answers: bold, italic, underline, strikethrough, code, superscript, subscript and bullet lists, from a toolbar above the question (Ctrl+B, Ctrl+I and Ctrl+U work too).",
+        fr: "Mettez en forme vos questions et réponses : gras, italique, souligné, barré, code, exposant, indice et listes à puces, depuis une barre d'outils au-dessus de la question (Ctrl+B, Ctrl+I et Ctrl+U fonctionnent aussi).",
+        de: "Formatiere Fragen und Antworten: fett, kursiv, unterstrichen, durchgestrichen, Code, hoch- und tiefgestellt sowie Aufzählungen, über eine Leiste über der Frage (Strg+B, Strg+I und Strg+U funktionieren ebenfalls).",
+        es: "Da formato a tus preguntas y respuestas: negrita, cursiva, subrayado, tachado, código, superíndice, subíndice y listas con viñetas, desde una barra sobre la pregunta (Ctrl+B, Ctrl+I y Ctrl+U también funcionan).",
+        el: "Μορφοποίησε ερωτήσεις και απαντήσεις: έντονα, πλάγια, υπογράμμιση, διαγραφή, κώδικας, εκθέτης, δείκτης και λίστες με κουκκίδες, από μια γραμμή εργαλείων πάνω από την ερώτηση (λειτουργούν και τα Ctrl+B, Ctrl+I και Ctrl+U).",
+        pt: "Formata as perguntas e respostas: negrito, itálico, sublinhado, rasurado, código, expoente, índice inferior e listas com marcadores, a partir de uma barra por cima da pergunta (Ctrl+B, Ctrl+I e Ctrl+U também funcionam).",
+        ro: "Formatează întrebările și răspunsurile: aldin, cursiv, subliniat, tăiat, cod, exponent, indice și liste cu buline, dintr-o bară deasupra întrebării (funcționează și Ctrl+B, Ctrl+I și Ctrl+U)."
+      },
+      {
+        en: "Add slides or a YouTube video to a question. Export your PowerPoint as a PDF and each page becomes a slide you can step through; a video plays on the main screen, and phones are pointed to it.",
+        fr: "Ajoutez un diaporama ou une vidéo YouTube à une question. Exportez votre PowerPoint en PDF et chaque page devient une diapositive que vous pouvez faire défiler ; la vidéo se lit sur l'écran principal et les téléphones y sont renvoyés.",
+        de: "Füge einer Frage Folien oder ein YouTube-Video hinzu. Exportiere dein PowerPoint als PDF, und jede Seite wird zu einer Folie zum Durchblättern; das Video läuft auf dem Hauptbildschirm, die Handys verweisen darauf.",
+        es: "Añade diapositivas o un vídeo de YouTube a una pregunta. Exporta tu PowerPoint a PDF y cada página será una diapositiva que se puede ir pasando; el vídeo se reproduce en la pantalla principal y los móviles remiten a ella.",
+        el: "Πρόσθεσε διαφάνειες ή βίντεο YouTube σε μια ερώτηση. Εξήγαγε το PowerPoint σε PDF και κάθε σελίδα γίνεται διαφάνεια που μπορείς να προχωράς· το βίντεο παίζει στην κύρια οθόνη και τα κινητά παραπέμπουν σε αυτήν.",
+        pt: "Adiciona diapositivos ou um vídeo do YouTube a uma pergunta. Exporta o PowerPoint para PDF e cada página passa a ser um diapositivo que podes ir avançando; o vídeo passa no ecrã principal e os telemóveis são encaminhados para lá.",
+        ro: "Adaugă diapozitive sau un videoclip YouTube la o întrebare. Exportă PowerPoint-ul în PDF și fiecare pagină devine un diapozitiv pe care îl poți parcurge; videoclipul rulează pe ecranul principal, iar telefoanele sunt îndrumate acolo."
+      }
+    ]
+  },
+  {
     date: "2026-11-09",
     items: [
       {

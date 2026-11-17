@@ -549,3 +549,28 @@ a.btn{text-decoration:none}
 
 /* privacy line under the join buttons */
 .note.privacy{max-width:340px;font-size:12px;text-align:center;margin:0 auto 64px}
+
+/* rich question text (public/js/fmt.js) */
+.qtext ul,.qprompt ul,.ans .txt ul,.fmtprev ul{margin:.2em 0;padding-left:1.2em;text-align:left;display:inline-block}
+.qtext code,.qprompt code,.ans .txt code,.fmtprev code{font-family:var(--mono);font-size:.9em;padding:0 .3em;border-radius:6px;background:rgba(16,34,63,.12)}
+.qtext s,.qprompt s,.ans .txt s{opacity:.75}
+
+/* editor: formatting toolbar and preview */
+.fmtbar{display:flex;flex-wrap:wrap;gap:6px}
+.fmtbar button{min-width:34px;height:34px;padding:0 8px;border:var(--bw) solid var(--line);border-radius:10px;background:var(--card);
+  color:var(--ink);font:inherit;font-weight:700;cursor:pointer;box-shadow:0 2px 0 var(--line)}
+.fmtbar button:hover,.fmtbar button:focus-visible{border-color:var(--a2)}
+.fmtprev{margin:0;padding:10px 12px;border:var(--bw) dashed var(--line);border-radius:12px;background:var(--card)}
+
+/* slides and video on a question */
+.qmedia{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
+.qmedia iframe{width:min(100%,71vh);aspect-ratio:16/9;height:auto;border:0;border-radius:12px;background:#000}
+.qmedia.compact iframe{width:min(100%,420px)}
+.slidebar{display:flex;align-items:center;gap:12px}
+.slidenav{font-size:1.4em;line-height:1;width:44px;height:44px}
+.slidenav:disabled{opacity:.35}
+.slidecount{font-family:var(--mono);font-variant-numeric:tabular-nums;min-width:4.5em;text-align:center}
+.slidestrip{display:flex;flex-wrap:wrap;gap:6px}
+.slidestrip img{height:54px;width:auto;border-radius:6px;border:2px solid var(--line);object-fit:cover}
+.qmedia .qimg{max-height:30vh}
+.qmedia.compact .qimg{max-height:18vh}

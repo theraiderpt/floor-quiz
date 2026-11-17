@@ -55,6 +55,9 @@ app.use(
            the public origin's ws/wss form explicitly rather than allowing
            every host. */
         connectSrc: ["'self'", ...(config.publicUrl ? [config.publicUrl.replace(/^http/, "ws")] : ["ws:", "wss:"])],
+        /* YouTube embeds in a question (the privacy-enhanced domain, which
+           sets no cookies until the video is played). Nothing else may frame. */
+        frameSrc: ["https://www.youtube-nocookie.com"],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"]
       }

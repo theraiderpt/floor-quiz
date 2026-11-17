@@ -11,7 +11,7 @@ Living note shared by Claude Code on the VPS and Claude Desktop. Read it at the 
 - **GitHub:** private `git@github.com:theraiderpt/floor-quiz.git`, branch `master`. Push after every deploy.
 
 ## 2. In progress (claims)
-Nothing claimed. Before starting anything bigger than a small fix, add a line here on your branch: `date | tool | branch | area`.
+2026-11-17 | Claude Desktop | `desktop/question-media-richtext` | question media (slides, YouTube) and text formatting. Pushed, not merged: remove this claim when it lands. Before starting anything bigger than a small fix, add a line here on your branch: `date | tool | branch | area`.
 
 ## 3. Owner decisions still open
 None recorded. Anything that changes game flow, scoring or the visual direction goes through the owner first.
@@ -31,6 +31,14 @@ None recorded. Anything that changes game flow, scoring or the visual direction 
 - Claude Desktop sessions cannot reach the VPS or its `~/.claude` notes: put what matters here.
 
 ## 6. Session log (newest first)
+### 2026-11-17 | Claude Desktop | `desktop/question-media-richtext`, pushed, not merged or deployed
+Owner asked for photos, PowerPoint and YouTube in a question, plus text formatting for hosts. Decisions with the owner: PowerPoint via PDF (no LibreOffice); YouTube as a direct embed (not click to load); formatting as light markers, never HTML.
+- **Formatting:** text stays plain with markers (`**bold**`, `*italic*`, `__underline__`, `~~strike~~`, `` `code` ``, `^sup^`, `~sub~`, `- ` bullets, newline). `public/js/fmt.js` escapes first and only emits a fixed set of tags, so no host HTML reaches the DOM; `server/fmt.js` strips markers for CSV headers (keep the two rule lists in step, smoke compares them). Toolbar and Ctrl+B/I/U in the editor (question and options), live preview under the question. Limits raised to 300 (question) and 160 (option) to leave room for markers. Quiz lists and "the answer was" lines show plain text.
+- **Media:** a question has at most one of `yt` (11 char id), `slides` (up to 20 `/uploads` URLs) or `img`, in that priority (`cleanMedia` in `server/game.js`). The PDF is rendered to JPEG pages in the host's browser with a vendored pdf.js (`public/vendor/pdfjs`, pdfjs-dist 4.10.38, Apache-2.0; to update, copy `build/pdf.min.mjs` and `build/pdf.worker.min.mjs` from the npm package) and each page goes through the existing `/api/uploads/image`, so quota, rate limit and the orphan sweep (which scans the quiz JSON) already cover slides. `public/js/media.js` shows them: host screen with arrows and keys, phones with their own prev/next.
+- **YouTube and privacy:** CSP now has `frame-src https://www.youtube-nocookie.com`. The embed loads from Google as soon as the question shows (owner chose this over click to load), on the host screen and the self-paced page. On live phones the video is not embedded, they see a pointer to the main screen. This is the one place the app contacts a third party again, after the font and Giphy work: say so in any privacy note.
+- **Not done:** `.pptx` upload (needs a converter), importing media through the JSON/CSV question import, the question bank (still plain text, 200/120 limits).
+- **Verified:** `npm run smoke` 276 checks pass (14 new: sanitising, caps, escaping, renderer, marker parity, all 7 languages). Headless Chromium against a throwaway server: formatting toolbar and shortcuts, YouTube link parsing, a 3 page PDF becomes 3 slides, saved with `yt` cleared, host and phone screens render, arrows work, no console errors. Not verified: a real YouTube playback (no outside network here), a real PowerPoint export, projector and phones.
+- **Left:** merge and deploy by the VPS session (backup, 0 games, restart; `public/vendor` and the CSP change need the restart).
 ### 2026-11-09 (deploy) | Claude Code on the VPS | `master` fast-forwarded to `desktop/review-privacy`, deployed, pushed
 Deployed on the owner's instruction. Backup first (code and database), smoke 262 green in a worktree, 0 games, restart, endpoints 200, startup jobs ran without errors in the logs. Branch `origin/desktop/review-privacy` is now merged and can be deleted.
 ### 2026-11-09 (later) | Claude Code on the web | `desktop/review-privacy`, pushed, not merged or deployed
