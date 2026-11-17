@@ -2,8 +2,9 @@
 
 Living note shared by Claude Code on the VPS and Claude Desktop. Read it at the start of a session, update it at the end (protocol at the end of `CLAUDE.md`). It holds state and decisions, not code. No secrets in here. Ground rules, operational facts and conventions are in `CLAUDE.md` and are authoritative.
 
-## 1. State (written 2026-11-09, VPS session; facts checked that day)
-- **`master` = `origin/master`, deployed 2026-11-09** (fast-forward of `desktop/review-privacy`: privacy hardening with self-hosted fonts, Giphy copies, retention and admin audit log; fixes; podium sounds; `/demo` on PIN 1234). PM2 `floor-quiz` restarted with 0 games, health ok, site, `/host`, `/demo`, `/fonts/fonts.css`, `/audio/cheer.mp3` all 200. Smoke 262 passed in a worktree before merging. Rollback copy (code and database): `/var/backups/floor-quiz-20261109-162613` (pre-merge code at `b266646`). `audit_log` table added at boot (additive).
+## 1. State (written 2026-11-17, VPS session; facts checked that day)
+- **`master` = `origin/master` at `3b32c2d`, deployed 2026-11-17** (fast-forward of `desktop/question-media-richtext`: question media with PDF slides via vendored pdf.js and YouTube embeds, text formatting markers for hosts, `server/fmt.js`). PM2 `floor-quiz` restarted with 0 games, health ok. Smoke 276 passed in a worktree before merging. Rollback copy (code, database, uploads): `/var/backups/floor-quiz-20261117-143822` (pre-merge commit `850f5bc`, in `PRE_MERGE_COMMIT`).
+- **Third party:** the CSP now allows `frame-src https://www.youtube-nocookie.com`; the YouTube embed loads from Google when a question shows. Say so in any privacy note.
 - **Retention:** `RETENTION_DAYS` is not set in `.env`, so the default of 365 days applies.
 - **Earlier releases:** 2026-11-06 avatars and host music; 2026-11-01 `lastRank`, nodemailer 10.3.1, `allowScripts`; 2026-10-26 "Sunny Sticker"; before that pictures and GIFs, Giphy, "What's new", 7 languages.
 - **Tests:** `npm run smoke` (throwaway database, safe against production).
@@ -11,7 +12,7 @@ Living note shared by Claude Code on the VPS and Claude Desktop. Read it at the 
 - **GitHub:** private `git@github.com:theraiderpt/floor-quiz.git`, branch `master`. Push after every deploy.
 
 ## 2. In progress (claims)
-2026-11-17 | Claude Desktop | `desktop/question-media-richtext` | question media (slides, YouTube) and text formatting. Pushed, not merged: remove this claim when it lands. Before starting anything bigger than a small fix, add a line here on your branch: `date | tool | branch | area`.
+None. Before starting anything bigger than a small fix, add a line here on your branch: `date | tool | branch | area`.
 
 ## 3. Owner decisions still open
 None recorded. Anything that changes game flow, scoring or the visual direction goes through the owner first.
@@ -31,6 +32,8 @@ None recorded. Anything that changes game flow, scoring or the visual direction 
 - Claude Desktop sessions cannot reach the VPS or its `~/.claude` notes: put what matters here.
 
 ## 6. Session log (newest first)
+### 2026-11-17 (deploy) | Claude Code on the VPS | `master` fast-forwarded to `desktop/question-media-richtext` (`3b32c2d`), deployed, pushed
+Deployed on the owner's instruction. Backup first (code, database, uploads), smoke 276 green in a worktree, 0 games, `pm2 restart floor-quiz`. Verified through `https://cxquiz.tech`: `/host`, `/demo`, `/vendor/pdfjs/pdf.min.mjs` and `pdf.worker.min.mjs` all 200, both `.mjs` served as `application/javascript` (Caddy needed no change), CSP on `/host` has `frame-src https://www.youtube-nocookie.com`, pm2 logs show a clean start (the only error-log line is an old mail failure from 2026-11-10). Not verified: a real PDF upload or YouTube playback on the live site, phones, projector. Branch `origin/desktop/question-media-richtext` is merged and can be deleted.
 ### 2026-11-17 | Claude Desktop | `desktop/question-media-richtext`, pushed, not merged or deployed
 Owner asked for photos, PowerPoint and YouTube in a question, plus text formatting for hosts. Decisions with the owner: PowerPoint via PDF (no LibreOffice); YouTube as a direct embed (not click to load); formatting as light markers, never HTML.
 - **Formatting:** text stays plain with markers (`**bold**`, `*italic*`, `__underline__`, `~~strike~~`, `` `code` ``, `^sup^`, `~sub~`, `- ` bullets, newline). `public/js/fmt.js` escapes first and only emits a fixed set of tags, so no host HTML reaches the DOM; `server/fmt.js` strips markers for CSV headers (keep the two rule lists in step, smoke compares them). Toolbar and Ctrl+B/I/U in the editor (question and options), live preview under the question. Limits raised to 300 (question) and 160 (option) to leave room for markers. Quiz lists and "the answer was" lines show plain text.
